@@ -31,6 +31,19 @@ Pour la régénérer : `POKEBANK_SAMPLE_OUT=chemin/fichier.sav dotnet test`.
    sauvegarde est écrite dans `Data/backups/<id utilisateur>/`, et la sauvegarde modifiée est téléchargée.
 4. L'utilisateur **remplace** sa sauvegarde par ce fichier.
 
+### Sauvegardes stockées (consultation)
+
+Dans « Mes sauvegardes », l'utilisateur peut aussi **stocker** une sauvegarde complète : le fichier reste sur le serveur
+et tous ses Pokémon (équipe, boîtes, pension, Boîte Combat…) apparaissent dans la collection **en lecture seule**
+(ni retrait vers un jeu, ni téléchargement `.pkX`). « Mettre à jour » remplace le fichier et tous ses Pokémon ;
+« Supprimer » renvoie d'abord le fichier à l'utilisateur. Une copie est gardée dans `Data/backups/` à chaque fois.
+
+- Une même partie ne peut être stockée **qu'une fois sur tout le serveur**, tous comptes confondus. Elle est reconnue
+  par génération + jeu + ID dresseur / ID secret + nom du dresseur (`SaveIdentity`) ; c'est dissuasif, pas infaillible
+  (PKHeX permet de modifier ces valeurs). Les jeux de 1re et 2e génération n'ont pas d'ID secret.
+- Tant qu'elle est stockée, la sauvegarde est **refusée dans « Ma banque »** (au chargement et à la validation).
+- Une mise à jour avec moins de temps de jeu que la version stockée demande confirmation (ancienne copie ?).
+
 Lors d'un retrait, PKHeX convertit le Pokémon au format du jeu si possible (ex. PK4 → PK5) et refuse ce qui
 est incompatible (espèce, attaques ou objets inexistants dans le jeu, conversion vers une génération antérieure).
 
@@ -42,8 +55,12 @@ est incompatible (espèce, attaques ou objets inexistants dans le jeu, conversio
 | `PokeBank/Services/BankService.cs` | Accès base, validation transactionnelle, copies de sécurité |
 | `PokeBank/Services/PokemonInfo.cs` | Noms français, sprites, légalité |
 | `PokeBank/Components/Pages/Bank.razor` | Page principale (boîtes, glisser-déposer, sélection multiple) |
-| `PokeBank/Components/Pages/Collection.razor` | Toute la banque sur une page, chargée au fil du défilement |
-| `PokeBank/Data/BankPokemon.cs` | Table des Pokémon stockés (octets bruts + métadonnées) |
+| `PokeBank/Components/Pages/Collection.razor` | Toute la collection sur une page (chargée au fil du défilement), filtre par origine |
+| `PokeBank/Components/Pages/Saves.razor` | Gestion des sauvegardes stockées (ajout, mise à jour, suppression) |
+| `PokeBank/Services/StoredSaveService.cs` | Stockage, mise à jour et suppression des sauvegardes stockées |
+| `PokeBank/Services/SaveIdentity.cs` | Empreinte d'une sauvegarde (unicité sur le serveur) |
+| `PokeBank/Data/BankPokemon.cs` | Table des Pokémon (octets bruts + métadonnées ; `StoredSaveId` si lecture seule) |
+| `PokeBank/Data/StoredSave.cs` | Table des sauvegardes stockées |
 
 Ajouter une migration après modification du modèle :
 

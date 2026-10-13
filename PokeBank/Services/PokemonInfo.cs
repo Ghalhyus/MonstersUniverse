@@ -31,6 +31,10 @@ public sealed class PokemonInfo
 
     public string GameName(GameVersion version) => Get(_strings.gamelist, (int)version, version.ToString());
 
+    /// <summary>Nom du jeu d'une sauvegarde ; certaines ne précisent pas la version exacte (« Any » pour PKHeX).</summary>
+    public string GameName(SaveFile sav) =>
+        sav.Version == GameVersion.Any ? $"Jeu de génération {sav.Generation}" : GameName(sav.Version);
+
     public static string SpriteUrl(ushort species, bool shiny) =>
         $"https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/{(shiny ? "shiny/" : "")}{species}.png";
 

@@ -94,6 +94,7 @@ h1:focus {
 .slot .lvl { position: absolute; bottom: 1px; right: 4px; font-size: .65rem; font-weight: 600; color: #234; }
 .slot .shiny { position: absolute; top: 0; left: 4px; font-size: .75rem; color: #d4a000; }
 .slot .lock { font-size: .9rem; }
+.slot .marker { position: absolute; top: 0; right: 2px; font-size: .65rem; line-height: 1; }
 
 .pokemon-card img { image-rendering: pixelated; }
 
@@ -153,6 +154,7 @@ h1:focus {
     background: #fff;
 }
 .collection-toolbar > input { max-width: 20rem; }
+.collection-filter { max-width: 16rem; }
 .collection-columns { display: flex; align-items: center; gap: .5rem; margin: 0; }
 .collection-columns .form-range { width: 10rem; }
 .collection-columns span { min-width: 1.5rem; }

@@ -244,6 +244,9 @@ namespace PokeBank.Migrations
                     b.Property<byte>("Level")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("Location")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Nickname")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -260,6 +263,9 @@ namespace PokeBank.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<int>("Position")
+                        .HasColumnType("INTEGER");
+
                     b.Property<ushort>("Species")
                         .HasColumnType("INTEGER");
 
@@ -267,11 +273,75 @@ namespace PokeBank.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<int?>("StoredSaveId")
+                        .HasColumnType("INTEGER");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("StoredSaveId");
 
                     b.HasIndex("OwnerId", "DepositedAt");
 
                     b.ToTable("BankPokemon");
+                });
+
+            modelBuilder.Entity("PokeBank.Data.StoredSave", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<byte[]>("Data")
+                        .IsRequired()
+                        .HasColumnType("BLOB");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("GameName")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<byte>("Generation")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("IdentityKey")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OwnerId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("PlayTimeSeconds")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("PokemonCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("TrainerId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TrainerName")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UploadedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IdentityKey")
+                        .IsUnique();
+
+                    b.HasIndex("OwnerId");
+
+                    b.ToTable("StoredSaves");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
@@ -326,6 +396,24 @@ namespace PokeBank.Migrations
                 });
 
             modelBuilder.Entity("PokeBank.Data.BankPokemon", b =>
+                {
+                    b.HasOne("PokeBank.Data.ApplicationUser", "Owner")
+                        .WithMany()
+                        .HasForeignKey("OwnerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("PokeBank.Data.StoredSave", "StoredSave")
+                        .WithMany()
+                        .HasForeignKey("StoredSaveId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.Navigation("Owner");
+
+                    b.Navigation("StoredSave");
+                });
+
+            modelBuilder.Entity("PokeBank.Data.StoredSave", b =>
                 {
                     b.HasOne("PokeBank.Data.ApplicationUser", "Owner")
                         .WithMany()

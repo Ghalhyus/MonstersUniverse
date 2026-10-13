@@ -28,4 +28,12 @@ public class BankPokemon
     public string OriginGame { get; set; } = "";
 
     public DateTime DepositedAt { get; set; }
+
+    /// <summary>Renseigné si le Pokémon vient d'une sauvegarde stockée : lecture seule, absent de « Ma banque ».</summary>
+    public int? StoredSaveId { get; set; }
+    public StoredSave? StoredSave { get; set; }
+    /// <summary>Emplacement dans la sauvegarde stockée (« Boîte 3, case 12 », « Équipe 1 »...).</summary>
+    public string? Location { get; set; }
+    /// <summary>Ordre d'affichage dans la sauvegarde stockée (équipe, puis boîtes, puis le reste).</summary>
+    public int Position { get; set; }
 }

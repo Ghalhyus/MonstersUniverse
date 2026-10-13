@@ -46,6 +46,7 @@ builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSe
 
 builder.Services.AddSingleton<PokemonInfo>();
 builder.Services.AddScoped<BankService>();
+builder.Services.AddScoped<StoredSaveService>();
 builder.Services.AddScoped<SaveSession>();
 
 var app = builder.Build();

@@ -8,6 +8,7 @@
 @using PokeBank.Services
 @inject SaveSession Session
 @inject BankService BankStore
+@inject StoredSaveService StoredSaves
 @inject PokemonInfo Info
 @inject IJSRuntime JS
 
@@ -54,7 +55,7 @@
         {
             var sav = Session.Save!;
             <div class="d-flex flex-wrap align-items-center gap-2 mb-2 small">
-                <span class="badge bg-secondary">@Info.GameName(sav.Version)</span>
+                <span class="badge bg-secondary">@Info.GameName(sav)</span>
                 <span>Dresseur : <strong>@sav.OT</strong> (@sav.DisplayTID.ToString("00000"))</span>
                 <span class="text-muted">@Session.FileName</span>
                 <button class="btn btn-sm btn-outline-secondary ms-auto" @onclick="CloseSave" disabled="@busy">Changer de fichier</button>
@@ -444,9 +445,17 @@
 
             if (Session.TryLoad(ms.ToArray(), e.File.Name, out var error))
             {
+                // Une sauvegarde stockée sur le serveur (par n'importe quel compte) est en lecture seule.
+                if (await StoredSaves.FindHolderAsync(SaveIdentity.Of(Session.Save!).Key) is { } holder)
+                {
+                    Session.Close();
+                    Show(StoredSaveService.AlreadyStoredMessage(holder, userId,
+                        "Supprime-la depuis « Ma collection » (elle te sera rendue) pour pouvoir l'utiliser ici."), isError: true);
+                    return;
+                }
                 currentBox = 0;
                 ClearSelection();
-                Show($"Sauvegarde chargée : {Info.GameName(Session.Save!.Version)}.");
+                Show($"Sauvegarde chargée : {Info.GameName(Session.Save!)}.");
             }
             else
             {

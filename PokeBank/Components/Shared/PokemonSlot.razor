@@ -20,6 +20,7 @@
         <img src="@Sprite" alt="@Title" loading="lazy" draggable="false" />
         @if (Shiny) { <span class="shiny" aria-label="Chromatique">★</span> }
         @if (Level > 0) { <span class="lvl">N.@Level</span> }
+        @if (Marker is not null) { <span class="marker" aria-hidden="true">@Marker</span> }
     }
     else if (Locked)
     {
@@ -35,6 +36,8 @@
     [Parameter] public bool Selected { get; set; }
     [Parameter] public bool Pending { get; set; }
     [Parameter] public bool Locked { get; set; }
+    /// <summary>Petit pictogramme dans le coin (ex. Pokémon d'une sauvegarde stockée) ; l'explication va dans <see cref="Title"/>.</summary>
+    [Parameter] public string? Marker { get; set; }
     /// <summary>Les touches Ctrl / Cmd / Maj servent à la sélection multiple.</summary>
     [Parameter] public EventCallback<MouseEventArgs> OnClick { get; set; }
 

@@ -1,7 +1,3 @@
-using Microsoft.Data.Sqlite;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging.Abstractions;
 using PokeBank.Data;
 using PokeBank.Services;
 
@@ -10,26 +6,20 @@ namespace PokeBank.Tests;
 /// <summary>Lecture paginée de la banque (page « Ma collection »), sur une base SQLite en mémoire.</summary>
 public sealed class BankServiceTests : IDisposable
 {
-    private readonly SqliteConnection _connection = new("DataSource=:memory:");
+    private readonly TestDatabase _db = new("sacha", "ondine");
     private readonly BankService _bank;
 
     public BankServiceTests()
     {
-        _connection.Open(); // la base en mémoire vit tant que la connexion reste ouverte
-        var options = new DbContextOptionsBuilder<ApplicationDbContext>().UseSqlite(_connection).Options;
-        using (var db = new ApplicationDbContext(options))
+        using (var db = _db.NewContext())
         {
-            db.Database.EnsureCreated();
-            db.Users.AddRange(new ApplicationUser { Id = "sacha", UserName = "sacha" }, new ApplicationUser { Id = "ondine", UserName = "ondine" });
-
             var start = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
             for (int i = 1; i <= 25; i++) // Id i déposé à start + i minutes
                 db.BankPokemon.Add(Entry(i, "sacha", i % 5 == 0 ? "Pikachu" : "Évoli", start.AddMinutes(i)));
             db.BankPokemon.Add(Entry(26, "ondine", "Pikachu", start));
             db.SaveChanges();
         }
-
-        _bank = new BankService(new Factory(options), new PokemonInfo(), new ConfigurationBuilder().Build(), null!, NullLogger<BankService>.Instance);
+        _bank = _db.Bank();
     }
 
     private static BankPokemon Entry(int id, string owner, string species, DateTime at) =>
@@ -67,10 +57,5 @@ public sealed class BankServiceTests : IDisposable
         Assert.Null(await _bank.GetAsync("sacha", 26));
     }
 
-    public void Dispose() => _connection.Dispose();
-
-    private sealed class Factory(DbContextOptions<ApplicationDbContext> options) : IDbContextFactory<ApplicationDbContext>
-    {
-        public ApplicationDbContext CreateDbContext() => new(options);
-    }
+    public void Dispose() => _db.Dispose();
 }

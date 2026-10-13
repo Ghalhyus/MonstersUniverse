@@ -6,20 +6,32 @@
 @using PokeBank.Data
 @using PokeBank.Services
 @inject BankService BankStore
+@inject StoredSaveService Saves
 @inject PokemonInfo Info
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 
 <PageTitle>Ma collection</PageTitle>
 
-@* Tous les Pokémon de la banque sur une seule page, sans boîtes. Seules les lignes visibles à l'écran
-   (plus une petite marge) sont rendues et lues en base : les autres arrivent au fil du défilement. *@
+@* Tous les Pokémon de l'utilisateur sur une seule page, sans boîtes : ceux de la banque et ceux des sauvegardes
+   stockées (lecture seule, gérées dans « Mes sauvegardes »). Seules les lignes visibles à l'écran (plus une petite marge) sont rendues et lues
+   en base : les autres arrivent au fil du défilement. *@
 
 <h1 class="mb-3">Ma collection <span class="badge bg-primary fs-6 align-middle">@total</span></h1>
 
 <div class="collection-toolbar">
     <input class="form-control form-control-sm" placeholder="Rechercher (espèce ou surnom)…"
            @bind="search" @bind:event="oninput" @bind:after="Reload" />
+    <select class="form-select form-select-sm collection-filter" aria-label="Origine des Pokémon"
+            @bind="source" @bind:after="SourceChanged">
+        <option value="">Tout</option>
+        <option value="@BankSource">Banque</option>
+        @foreach (var s in saves)
+        {
+            <option value="@s.Id">💾 @s.Label</option>
+        }
+    </select>
+    <a class="small" href="sauvegardes">Gérer mes sauvegardes</a>
     <label class="collection-columns small">
         Colonnes
         <input type="range" class="form-range" min="@MinColumns" max="@MaxColumns"
@@ -31,23 +43,25 @@
 @if (total == 0)
 {
     <p class="text-muted">
-        @(string.IsNullOrWhiteSpace(search) ? "Ta banque est vide pour l'instant. Dépose des Pokémon depuis « Ma banque »." : "Aucun Pokémon ne correspond à cette recherche.")
+        @(string.IsNullOrWhiteSpace(search) && source == "" ? "Ta collection est vide pour l'instant. Dépose des Pokémon depuis « Ma banque » ou ajoute une sauvegarde dans « Mes sauvegardes »." : "Aucun Pokémon ne correspond.")
     </p>
 }
 else
 {
     <div class="collection" style="--columns: @columns">
-        @* Changer de recherche ou de nombre de colonnes recrée la liste (et remonte en haut). *@
+        @* Changer de recherche, d'origine ou de nombre de colonnes recrée la liste (et remonte en haut). *@
         <Virtualize @key="listVersion" TItem="BankListItem[]" ItemsProvider="LoadRows" Context="row" ItemSize="60" OverscanCount="4">
             <ItemContent>
                 <div class="collection-row">
                     @foreach (var p in row)
                     {
                         var item = p;
+                        var stored = item.StoredSaveId is { } sid ? saves.FirstOrDefault(x => x.Id == sid) : null;
                         <PokemonSlot Sprite="@PokemonInfo.SpriteUrl(item.Species, item.IsShiny)"
-                                     Title="@($"{item.Nickname} ({item.SpeciesName}) N.{item.Level}")"
+                                     Title="@($"{item.Nickname} ({item.SpeciesName}) N.{item.Level}{(stored is null ? "" : $" — sauvegarde {stored.Label}")}")"
                                      Level="item.Level"
                                      Shiny="item.IsShiny"
+                                     Marker="@(item.StoredSaveId is null ? null : "💾")"
                                      Selected="@(selected?.Id == item.Id)"
                                      OnClick="() => Open(item)" />
                     }
@@ -72,9 +86,19 @@ else
     <div class="collection-dialog" role="dialog" aria-modal="true" aria-label="@selectedView.Nickname">
         <PokemonCard Pokemon="@selectedView">
             <div class="d-flex flex-wrap align-items-center gap-2">
-                <small class="text-muted">Déposé le @selected.DepositedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</small>
-                <button class="btn btn-outline-secondary btn-sm ms-auto" @onclick="DownloadPkm">Télécharger le fichier .@selected.Extension</button>
-                <button class="btn btn-secondary btn-sm" @onclick="Close">Fermer</button>
+                @if (selected.StoredSaveId is { } sid)
+                {
+                    @* Sauvegarde stockée : lecture seule, pas de fichier .pkX à télécharger. *@
+                    <small class="text-muted">
+                        💾 @(saves.FirstOrDefault(s => s.Id == sid)?.Label ?? "Sauvegarde stockée") · @selected.Location
+                    </small>
+                }
+                else
+                {
+                    <small class="text-muted">Déposé le @selected.DepositedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</small>
+                    <button class="btn btn-outline-secondary btn-sm ms-auto" @onclick="DownloadPkm">Télécharger le fichier .@selected.Extension</button>
+                }
+                <button class="btn btn-secondary btn-sm @(selected.StoredSaveId is null ? "" : "ms-auto")" @onclick="Close">Fermer</button>
             </div>
         </PokemonCard>
     </div>
@@ -82,54 +106,84 @@ else
 
 @code {
     private const int MinColumns = 3, MaxColumns = 20, DefaultColumns = 10;
+    private const string BankSource = "banque";
 
     [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = default!;
 
     /// <summary>Nombre de colonnes gardé dans l'adresse (?colonnes=12) pour survivre à un rechargement.</summary>
     [SupplyParameterFromQuery(Name = "colonnes")] private int? ColumnsFromQuery { get; set; }
+    /// <summary>Origine affichée, gardée dans l'adresse : vide (tout), « banque » ou l'identifiant d'une sauvegarde stockée.</summary>
+    [SupplyParameterFromQuery(Name = "source")] private string? SourceFromQuery { get; set; }
 
     private string userId = "";
     private string search = "";
+    private string source = "";
+    private bool sourceInitialized;
     private int columns = DefaultColumns;
     private int total;
     private int listVersion;   // clé de Virtualize : l'incrémenter recrée la liste
     private int reloadRequest;
 
+    private List<StoredSaveInfo> saves = []; // pour le filtre et l'origine affichée des Pokémon stockés
+
     private BankPokemon? selected;
     private PokemonView? selectedView;
+
+    private CollectionFilter Filter =>
+        source == BankSource ? CollectionFilter.Bank
+        : int.TryParse(source, out var id) ? CollectionFilter.Save(id)
+        : CollectionFilter.All;
 
     protected override async Task OnInitializedAsync()
     {
         userId = (await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
-        await Reload();
+        saves = await Saves.ListAsync(userId);
     }
 
-    protected override void OnParametersSet() =>
+    // Les paramètres d'adresse sont lus ici (et non dans OnInitialized) pour suivre aussi les navigations ultérieures.
+    protected override async Task OnParametersSetAsync()
+    {
         columns = Math.Clamp(ColumnsFromQuery ?? DefaultColumns, MinColumns, MaxColumns);
+        var fromQuery = SourceFromQuery ?? "";
+        if (!sourceInitialized || fromQuery != source)
+        {
+            sourceInitialized = true;
+            source = fromQuery;
+            await Reload();
+        }
+    }
 
     /// <summary>Appelé par Virtualize pour les lignes à afficher : on ne lit que ces Pokémon-là en base.</summary>
     private async ValueTask<ItemsProviderResult<BankListItem[]>> LoadRows(ItemsProviderRequest request)
     {
         var cols = columns;
-        var items = await BankStore.GetRangeAsync(userId, search, request.StartIndex * cols, request.Count * cols, request.CancellationToken);
+        var items = await BankStore.GetRangeAsync(userId, search, request.StartIndex * cols, request.Count * cols, Filter, request.CancellationToken);
         var rowCount = (total + cols - 1) / cols;
         return new ItemsProviderResult<BankListItem[]>(items.Chunk(cols), rowCount);
     }
 
-    /// <summary>Nouvelle recherche : recompte, puis recrée la liste.</summary>
+    /// <summary>Nouvelle recherche ou origine : recompte, puis recrée la liste.</summary>
     private async Task Reload()
     {
         var request = ++reloadRequest;
-        var count = await BankStore.CountAsync(userId, search);
-        if (request != reloadRequest) return; // une frappe plus récente a déjà relancé le chargement
+        var count = await BankStore.CountAsync(userId, search, Filter);
+        if (request != reloadRequest) return; // une demande plus récente a déjà relancé le chargement
         total = count;
         listVersion++;
+    }
+
+    private async Task SourceChanged()
+    {
+        Nav.NavigateTo(Nav.GetUriWithQueryParameter("source", source == "" ? null : source), replace: true);
+        await Reload();
     }
 
     private void ColumnsChanged() => listVersion++;
 
     private void RememberColumns() =>
         Nav.NavigateTo(Nav.GetUriWithQueryParameter("colonnes", columns == DefaultColumns ? null : columns), replace: true);
+
+    // ---------- Fiche ----------
 
     private async Task Open(BankListItem item)
     {
@@ -148,8 +202,13 @@ else
 
     private async Task DownloadPkm()
     {
-        if (selected is null) return;
-        using var streamRef = new DotNetStreamReference(new MemoryStream(selected.Data));
-        await JS.InvokeVoidAsync("downloadFileFromStream", $"{selected.Species:000} - {selected.Nickname}.{selected.Extension}", streamRef);
+        if (selected is null || selected.StoredSaveId is not null) return; // lecture seule pour les sauvegardes stockées
+        await Download($"{selected.Species:000} - {selected.Nickname}.{selected.Extension}", selected.Data);
+    }
+
+    private async Task Download(string fileName, byte[] data)
+    {
+        using var streamRef = new DotNetStreamReference(new MemoryStream(data));
+        await JS.InvokeVoidAsync("downloadFileFromStream", fileName, streamRef);
     }
 }
