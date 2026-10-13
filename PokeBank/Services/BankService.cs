@@ -4,6 +4,9 @@ using PokeBank.Data;
 
 namespace PokeBank.Services;
 
+/// <summary>Ce qu'il faut pour afficher un Pokémon de la banque dans une grille.</summary>
+public sealed record BankListItem(int Id, ushort Species, string SpeciesName, string Nickname, byte Level, bool IsShiny, bool IsEgg, bool IsLegal);
+
 public sealed class BankService(
     IDbContextFactory<ApplicationDbContext> dbFactory,
     PokemonInfo info,
@@ -14,13 +17,45 @@ public sealed class BankService(
     public async Task<List<BankPokemon>> ListAsync(string ownerId, string? search = null)
     {
         await using var db = await dbFactory.CreateDbContextAsync();
+        return await Query(db, ownerId, search).ToListAsync();
+    }
+
+    public async Task<int> CountAsync(string ownerId, string? search = null, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        return await Query(db, ownerId, search).CountAsync(ct);
+    }
+
+    /// <summary>
+    /// Une tranche de la banque, sans les octets du Pokémon (affichage seulement) :
+    /// la page « Ma collection » charge ainsi au fur et à mesure du défilement.
+    /// </summary>
+    public async Task<List<BankListItem>> GetRangeAsync(string ownerId, string? search, int skip, int take, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        return await Query(db, ownerId, search)
+            .Skip(skip)
+            .Take(take)
+            .Select(p => new BankListItem(p.Id, p.Species, p.SpeciesName, p.Nickname, p.Level, p.IsShiny, p.IsEgg, p.IsLegal))
+            .ToListAsync(ct);
+    }
+
+    public async Task<BankPokemon?> GetAsync(string ownerId, int id)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+        return await db.BankPokemon.AsNoTracking().FirstOrDefaultAsync(p => p.Id == id && p.OwnerId == ownerId);
+    }
+
+    /// <summary>Pokémon d'un utilisateur, filtrés par espèce / surnom, du plus récent au plus ancien.</summary>
+    private static IQueryable<BankPokemon> Query(ApplicationDbContext db, string ownerId, string? search)
+    {
         var query = db.BankPokemon.AsNoTracking().Where(p => p.OwnerId == ownerId);
         if (!string.IsNullOrWhiteSpace(search))
         {
             var s = $"%{search.Trim()}%";
             query = query.Where(p => EF.Functions.Like(p.SpeciesName, s) || EF.Functions.Like(p.Nickname, s));
         }
-        return await query.OrderByDescending(p => p.DepositedAt).ThenByDescending(p => p.Id).ToListAsync();
+        return query.OrderByDescending(p => p.DepositedAt).ThenByDescending(p => p.Id);
     }
 
     public static PKM? ToPkm(BankPokemon entry) =>

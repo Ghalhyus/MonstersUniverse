@@ -141,3 +141,43 @@ h1:focus {
     line-height: 1.4rem;
     text-align: center;
 }
+
+/* ---------- Ma collection ---------- */
+.collection-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .5rem 1.5rem;
+    padding: .5rem 0;
+    margin-bottom: .5rem;
+    background: #fff;
+}
+.collection-toolbar > input { max-width: 20rem; }
+.collection-columns { display: flex; align-items: center; gap: .5rem; margin: 0; }
+.collection-columns .form-range { width: 10rem; }
+.collection-columns span { min-width: 1.5rem; }
+@media (min-width: 641px) {
+    /* reste visible sous la barre du haut pendant le défilement */
+    .collection-toolbar { position: sticky; top: 3.5rem; z-index: 2; }
+}
+
+.collection { padding: 8px 8px 4px; border-radius: 10px; background: #6fa5da; }
+.collection-row {
+    display: grid;
+    grid-template-columns: repeat(var(--columns), minmax(0, 1fr));
+    gap: 4px;
+    padding-bottom: 4px; /* dans la ligne (et non en marge) pour que Virtualize mesure la bonne hauteur */
+}
+
+.collection-backdrop { position: fixed; inset: 0; z-index: 1040; background: rgba(0, 0, 0, .4); }
+.collection-dialog {
+    position: fixed;
+    z-index: 1050;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: min(28rem, calc(100vw - 2rem));
+    max-height: calc(100vh - 2rem);
+    overflow-y: auto;
+}
+

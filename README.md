@@ -41,7 +41,8 @@ est incompatible (espèce, attaques ou objets inexistants dans le jeu, conversio
 | `PokeBank/Services/SaveSession.cs` | Sauvegarde chargée + dépôts/retraits en attente (PKHeX) |
 | `PokeBank/Services/BankService.cs` | Accès base, validation transactionnelle, copies de sécurité |
 | `PokeBank/Services/PokemonInfo.cs` | Noms français, sprites, légalité |
-| `PokeBank/Components/Pages/Bank.razor` | Page principale |
+| `PokeBank/Components/Pages/Bank.razor` | Page principale (boîtes, glisser-déposer, sélection multiple) |
+| `PokeBank/Components/Pages/Collection.razor` | Toute la banque sur une page, chargée au fil du défilement |
 | `PokeBank/Data/BankPokemon.cs` | Table des Pokémon stockés (octets bruts + métadonnées) |
 
 Ajouter une migration après modification du modèle :
