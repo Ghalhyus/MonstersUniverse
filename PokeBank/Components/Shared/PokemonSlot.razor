@@ -1,0 +1,62 @@
+@* Une case de boîte : sprite + niveau, cliquable, et glissable / zone de dépôt pour le glisser-déposer.
+   Un <div> plutôt qu'un <button> : Firefox ne sait pas faire glisser un bouton. *@
+
+<div class="slot @(Selected ? "selected" : "") @(Pending ? "pending" : "") @(Locked ? "locked" : "") @(Sprite is null ? "empty" : "") @(DropTarget ? "drop-target" : "") @(Dragging ? "dragging" : "")"
+     role="button"
+     tabindex="@(IsClickable ? 0 : -1)"
+     aria-disabled="@(!IsClickable)"
+     aria-pressed="@Selected"
+     title="@Title"
+     draggable="@(CanDrag ? "true" : "false")"
+     data-drag-count="@(DragCount > 1 ? DragCount : null)"
+     @onclick="Click"
+     @onkeydown="KeyDown"
+     @ondragstart="OnDragStart"
+     @ondragend="OnDragEnd"
+     @ondrop="OnDrop"
+     @ondrop:stopPropagation="DropTarget">
+    @if (Sprite is not null)
+    {
+        <img src="@Sprite" alt="@Title" loading="lazy" draggable="false" />
+        @if (Shiny) { <span class="shiny" aria-label="Chromatique">★</span> }
+        @if (Level > 0) { <span class="lvl">N.@Level</span> }
+    }
+    else if (Locked)
+    {
+        <span class="lock" aria-label="Verrouillé">🔒</span>
+    }
+</div>
+
+@code {
+    [Parameter] public string? Sprite { get; set; }
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public int Level { get; set; }
+    [Parameter] public bool Shiny { get; set; }
+    [Parameter] public bool Selected { get; set; }
+    [Parameter] public bool Pending { get; set; }
+    [Parameter] public bool Locked { get; set; }
+    /// <summary>Les touches Ctrl / Cmd / Maj servent à la sélection multiple.</summary>
+    [Parameter] public EventCallback<MouseEventArgs> OnClick { get; set; }
+
+    /// <summary>La case peut être prise et déplacée.</summary>
+    [Parameter] public bool Draggable { get; set; }
+    /// <summary>C'est la case en cours de glissement.</summary>
+    [Parameter] public bool Dragging { get; set; }
+    /// <summary>Nombre de Pokémon emportés si on glisse cette case (sélection multiple) : affiché sur l'image de glissement.</summary>
+    [Parameter] public int DragCount { get; set; } = 1;
+    /// <summary>La case accepte le Pokémon en cours de glissement.</summary>
+    [Parameter] public bool DropTarget { get; set; }
+    [Parameter] public EventCallback OnDragStart { get; set; }
+    [Parameter] public EventCallback OnDragEnd { get; set; }
+    [Parameter] public EventCallback OnDrop { get; set; }
+
+    private bool IsClickable => Sprite is not null || Locked;
+    private bool CanDrag => Draggable && Sprite is not null && !Locked;
+
+    private Task Click(MouseEventArgs e) => IsClickable ? OnClick.InvokeAsync(e) : Task.CompletedTask;
+
+    private Task KeyDown(KeyboardEventArgs e) =>
+        e.Key is "Enter" or " "
+            ? Click(new MouseEventArgs { CtrlKey = e.CtrlKey, MetaKey = e.MetaKey, ShiftKey = e.ShiftKey })
+            : Task.CompletedTask;
+}

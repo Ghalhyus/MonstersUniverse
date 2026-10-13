@@ -1,0 +1,10 @@
+bin/
+obj/
+.vs/
+*.user
+PokeBank/Data/app.db*
+PokeBank/Data/backups/
+
+.claude/
+*.zip
+*.sav

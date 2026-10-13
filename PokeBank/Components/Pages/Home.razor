@@ -1,0 +1,25 @@
+@page "/"
+
+<PageTitle>PokeBank</PageTitle>
+
+<h1>PokeBank</h1>
+<p class="lead">La banque Pokémon de la bande, propulsée par <a href="https://github.com/kwsch/PKHeX" target="_blank" rel="noopener">PKHeX</a>.</p>
+
+<AuthorizeView>
+    <Authorized>
+        <a class="btn btn-primary btn-lg" href="banque">Ouvrir ma banque</a>
+    </Authorized>
+    <NotAuthorized>
+        <a class="btn btn-primary" href="Account/Login">Se connecter</a>
+        <a class="btn btn-outline-primary" href="Account/Register">Créer un compte (code d'invitation requis)</a>
+    </NotAuthorized>
+</AuthorizeView>
+
+<h2 class="h5 mt-5">Comment ça marche ?</h2>
+<ol>
+    <li>Récupère ta sauvegarde (émulateur, ou console via un outil de sauvegarde homebrew).</li>
+    <li>Charge-la dans « Ma banque » et choisis les Pokémon à déposer ou à retirer.</li>
+    <li>Clique sur « Valider et télécharger » : la banque est mise à jour et tu récupères la sauvegarde modifiée.</li>
+    <li><strong>Remplace</strong> ta sauvegarde par ce fichier avant de relancer le jeu.</li>
+</ol>
+<p class="text-muted small">Jeux actuellement testés : Pokémon Noir 2 / Blanc 2. Une copie de la sauvegarde avant/après chaque validation est conservée sur le serveur.</p>
