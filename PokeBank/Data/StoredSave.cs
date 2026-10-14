@@ -13,7 +13,7 @@ public class StoredSave
 
     /// <summary>
     /// Empreinte du dresseur (type de sauvegarde, jeu, ID dresseur + ID secret, nom), unique sur tout le serveur :
-    /// une même sauvegarde ne peut être stockée qu'une fois, et elle est refusée dans « Ma banque » tant qu'elle l'est.
+    /// une même sauvegarde ne peut être stockée qu'une fois, et elle est refusée dans « Transfert » tant qu'elle l'est.
     /// </summary>
     public string IdentityKey { get; set; } = "";
 

@@ -25,7 +25,7 @@ Pour la régénérer : `POKEBANK_SAMPLE_OUT=chemin/fichier.sav dotnet test`.
 
 ## Fonctionnement
 
-1. L'utilisateur charge sa sauvegarde (`.sav`, `.dsv`…) dans « Ma banque ».
+1. L'utilisateur charge sa sauvegarde (`.sav`, `.dsv`…) dans « Transfert ».
 2. Il dépose / retire des Pokémon : les changements restent **en attente** (en mémoire) et sont annulables.
 3. « Valider et télécharger » : la base est mise à jour dans une transaction, une copie *avant/après* de la
    sauvegarde est écrite dans `Data/backups/<id utilisateur>/`, et la sauvegarde modifiée est téléchargée.
@@ -41,7 +41,7 @@ et tous ses Pokémon (équipe, boîtes, pension, Boîte Combat…) apparaissent 
 - Une même partie ne peut être stockée **qu'une fois sur tout le serveur**, tous comptes confondus. Elle est reconnue
   par génération + jeu + ID dresseur / ID secret + nom du dresseur (`SaveIdentity`) ; c'est dissuasif, pas infaillible
   (PKHeX permet de modifier ces valeurs). Les jeux de 1re et 2e génération n'ont pas d'ID secret.
-- Tant qu'elle est stockée, la sauvegarde est **refusée dans « Ma banque »** (au chargement et à la validation).
+- Tant qu'elle est stockée, la sauvegarde est **refusée dans « Transfert »** (au chargement et à la validation).
 - Une mise à jour avec moins de temps de jeu que la version stockée demande confirmation (ancienne copie ?).
 
 ### Inventaire (Pokédollars)
@@ -58,9 +58,9 @@ pas infaillible : rien n'oblige le joueur à remplacer réellement sa sauvegarde
 
 ### Taille de la collection
 
-Chaque compte a une limite de Pokémon dans sa collection (banque + sauvegardes stockées, œufs compris) : 1 000 au
+Chaque compte a une limite de Pokémon dans sa collection (stockage interne + sauvegardes stockées, œufs compris) : 1 000 au
 départ, y compris pour les comptes créés avant cette règle. Toute opération qui fait grossir la collection au-delà
-est refusée **en entière** avec un message qui chiffre le manque : dépôt en banque (vérifié dès le glisser-déposer,
+est refusée **en entière** avec un message qui chiffre le manque : dépôt dans le stockage interne (vérifié dès le glisser-déposer,
 puis à la validation), ajout ou mise à jour d'une sauvegarde stockée. Ce qui réduit la collection n'est jamais bloqué :
 un compte au-dessus de sa limite garde tout, mais ne peut plus rien ajouter.
 
@@ -77,7 +77,7 @@ est incompatible (espèce, attaques ou objets inexistants dans le jeu, conversio
 | `PokeBank/Services/SaveSession.cs` | Sauvegarde chargée + dépôts/retraits en attente (PKHeX) |
 | `PokeBank/Services/BankService.cs` | Accès base, validation transactionnelle, copies de sécurité |
 | `PokeBank/Services/PokemonInfo.cs` | Noms français, sprites, légalité |
-| `PokeBank/Components/Pages/Bank.razor` | Page principale (boîtes, glisser-déposer, sélection multiple) |
+| `PokeBank/Components/Pages/Bank.razor` | Page « Transfert et stockage interne » (`/transfert`) : boîtes, glisser-déposer, sélection multiple |
 | `PokeBank/Components/Pages/Collection.razor` | Toute la collection sur une page (chargée au fil du défilement), filtre par origine |
 | `PokeBank/Components/Pages/Saves.razor` | Gestion des sauvegardes stockées (ajout, mise à jour, suppression) |
 | `PokeBank/Services/StoredSaveService.cs` | Stockage, mise à jour et suppression des sauvegardes stockées |
@@ -138,4 +138,4 @@ Réglages avancés (variables d'environnement, jamais de secret dans `appsetting
 - Les sprites viennent du dépôt GitHub de PokéAPI (chargés par le navigateur).
 - Usage privé uniquement.
 - Sur Noir 2 / Blanc 2, PKHeX accepte les Pokémon de génération 5 ou antérieure ; un Pokémon de génération 6+
-  déposé depuis un autre jeu restera dans la banque.
+  déposé depuis un autre jeu restera dans le stockage interne.

@@ -13,7 +13,7 @@
 
 <PageTitle>Ma collection</PageTitle>
 
-@* Tous les Pokémon de l'utilisateur sur une seule page, sans boîtes : ceux de la banque et ceux des sauvegardes
+@* Tous les Pokémon de l'utilisateur sur une seule page, sans boîtes : ceux du stockage interne et ceux des sauvegardes
    stockées (lecture seule, gérées dans « Mes sauvegardes »). Seules les lignes visibles à l'écran (plus une petite marge) sont rendues et lues
    en base : les autres arrivent au fil du défilement. *@
 
@@ -27,7 +27,7 @@
     </div>
 }
 
-@* ---------- Taille de la collection (banque + sauvegardes stockées) ---------- *@
+@* ---------- Taille de la collection (stockage interne + sauvegardes stockées) ---------- *@
 <CollectionGauge Usage="usage" OnPurchase="OnPurchase" />
 
 <div class="collection-toolbar">
@@ -36,7 +36,7 @@
     <select class="form-select form-select-sm collection-filter" aria-label="Origine des Pokémon"
             @bind="source" @bind:after="SourceChanged">
         <option value="">Tout</option>
-        <option value="@BankSource">Banque</option>
+        <option value="@BankSource">Stockage interne</option>
         @foreach (var s in saves)
         {
             <option value="@s.Id">💾 @s.Label</option>
@@ -54,7 +54,7 @@
 @if (total == 0)
 {
     <p class="text-muted">
-        @(string.IsNullOrWhiteSpace(search) && source == "" ? "Ta collection est vide pour l'instant. Dépose des Pokémon depuis « Ma banque » ou ajoute une sauvegarde dans « Mes sauvegardes »." : "Aucun Pokémon ne correspond.")
+        @(string.IsNullOrWhiteSpace(search) && source == "" ? "Ta collection est vide pour l'instant. Dépose des Pokémon depuis « Transfert » ou ajoute une sauvegarde dans « Mes sauvegardes »." : "Aucun Pokémon ne correspond.")
     </p>
 }
 else

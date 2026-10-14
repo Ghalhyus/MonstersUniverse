@@ -3,11 +3,11 @@
 @inject InventoryService InventoryStore
 @inject BankService BankStore
 @inject WalletState Wallet
-@* Jauge d'occupation de la collection (banque + sauvegardes stockées), avec son bouton « Agrandir » qui ouvre la
-   fenêtre d'achat d'emplacements. Même composant sur « Ma banque », « Ma collection » et « Mes sauvegardes ». *@
+@* Jauge d'occupation de la collection (stockage interne + sauvegardes stockées), avec son bouton « Agrandir » qui ouvre la
+   fenêtre d'achat d'emplacements. Même composant sur « Transfert », « Ma collection » et « Mes sauvegardes ». *@
 
 @{
-    var projected = Usage.Used + Pending; // avec les dépôts / retraits en attente de « Ma banque »
+    var projected = Usage.Used + Pending; // avec les dépôts / retraits en attente de « Transfert »
     var percent = Usage.Limit == 0 ? 100 : Math.Clamp(projected * 100 / Usage.Limit, 0, 100);
 }
 <div class="capacity mb-3">
@@ -88,7 +88,7 @@
     [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = default!;
 
     [Parameter, EditorRequired] public CollectionUsage Usage { get; set; }
-    /// <summary>Variation en attente de validation (dépôts − retraits dans « Ma banque ») ; 0 ailleurs.</summary>
+    /// <summary>Variation en attente de validation (dépôts − retraits dans « Transfert ») ; 0 ailleurs.</summary>
     [Parameter] public int Pending { get; set; }
     /// <summary>Fin d'un achat (réussi ou non) : la page affiche le message et relit son occupation.</summary>
     [Parameter] public EventCallback<PurchaseResult> OnPurchase { get; set; }

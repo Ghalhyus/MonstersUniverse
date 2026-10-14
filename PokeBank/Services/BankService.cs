@@ -23,7 +23,7 @@ public sealed class BankService(
     IWebHostEnvironment env,
     ILogger<BankService> logger)
 {
-    /// <summary>Pokémon de la banque (hors sauvegardes stockées) : ceux que « Ma banque » peut retirer.</summary>
+    /// <summary>Pokémon de la banque (hors sauvegardes stockées) : ceux que « Transfert » peut retirer.</summary>
     public async Task<List<BankPokemon>> ListAsync(string ownerId, string? search = null)
     {
         await using var db = await dbFactory.CreateDbContextAsync();
@@ -120,17 +120,17 @@ public sealed class BankService(
         await using var db = await dbFactory.CreateDbContextAsync();
         await using var tx = await db.Database.BeginTransactionAsync();
 
-        // La sauvegarde a pu être stockée (depuis un autre onglet) après son chargement dans « Ma banque ».
+        // La sauvegarde a pu être stockée (depuis un autre onglet) après son chargement dans « Transfert ».
         var key = SaveIdentity.Of(sav).Key;
         if (await db.StoredSaves.AnyAsync(s => s.IdentityKey == key))
-            throw new InvalidOperationException("Cette sauvegarde est maintenant stockée sur le serveur : elle ne peut plus être utilisée dans la banque.");
+            throw new InvalidOperationException("Cette sauvegarde est maintenant stockée sur le serveur : elle ne peut plus être utilisée dans « Transfert ».");
 
         foreach (var w in session.Withdrawals)
         {
             // Jamais un Pokémon de sauvegarde stockée : ils sont en lecture seule.
             var deleted = await db.BankPokemon.Where(p => p.Id == w.BankId && p.OwnerId == ownerId && p.StoredSaveId == null).ExecuteDeleteAsync();
             if (deleted == 0)
-                throw new InvalidOperationException("Un des Pokémon retirés n'est plus dans la banque (retiré depuis un autre onglet ?). Annule et recommence.");
+                throw new InvalidOperationException("Un des Pokémon retirés n'est plus dans le stockage interne (retiré depuis un autre onglet ?). Annule et recommence.");
         }
 
         // Taille de la collection, vérifiée dans la transaction : les retraits viennent de libérer leur place.

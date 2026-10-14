@@ -1,3 +1,5 @@
+@page "/transfert"
+@* Ancienne adresse de la page (« Ma banque »), gardée pour les favoris. *@
 @page "/banque"
 @attribute [Authorize]
 @using System.Security.Claims
@@ -12,9 +14,9 @@
 @inject PokemonInfo Info
 @inject IJSRuntime JS
 
-<PageTitle>Ma banque</PageTitle>
+<PageTitle>Transfert et stockage interne</PageTitle>
 
-<h1 class="mb-3">Ma banque</h1>
+<h1 class="mb-3">Transfert et stockage interne</h1>
 
 <CollectionGauge Usage="usage" Pending="@(Session.Deposits.Count - Session.Withdrawals.Count)" OnPurchase="OnPurchase" />
 
@@ -63,7 +65,7 @@
                 <button class="btn btn-sm btn-outline-secondary ms-auto" @onclick="CloseSave" disabled="@busy">Changer de fichier</button>
             </div>
 
-            @* Pendant un glissement depuis la banque, survoler les flèches change de boîte (comme dans les jeux). *@
+            @* Pendant un glissement depuis le stockage interne, survoler les flèches change de boîte (comme dans les jeux). *@
             <div class="box-nav">
                 <button class="btn btn-sm btn-light" @onclick="() => ChangeBox(-1)" @ondragenter="() => DragOverArrow(-1)" aria-label="Boîte précédente">◀</button>
                 <select class="form-select form-select-sm" @bind="currentBox">
@@ -102,7 +104,7 @@
                                  OnDrop="() => DropOnSave(slot)" />
                 }
             </div>
-            <p class="small text-muted mt-1 mb-0">Astuce : glisse un Pokémon (ou toute ta sélection) vers la banque pour le déposer, ou de la banque vers une case pour le retirer.</p>
+            <p class="small text-muted mt-1 mb-0">Astuce : glisse un Pokémon (ou toute ta sélection) vers le stockage interne pour le déposer, ou du stockage interne vers une case pour le retirer.</p>
 
             @if (Session.HasChanges)
             {
@@ -140,23 +142,23 @@
         }
     </section>
 
-    @* ---------- Banque ---------- *@
+    @* ---------- Stockage interne ---------- *@
     @* Toute la colonne sert de zone de dépôt quand on glisse un Pokémon de la sauvegarde. *@
     <section class="col-xl-4 col-lg-6 bank-zone @(dragSource == DragSource.Save ? "drop-active" : "")"
              @ondrop="DropOnBank">
-        <h2 class="h4">Pokémon en banque <span class="badge bg-primary">@bankEntries.Count</span></h2>
+        <h2 class="h4">Stockage interne <span class="badge bg-primary">@bankEntries.Count</span></h2>
 
         <input class="form-control form-control-sm mb-2" placeholder="Rechercher (espèce ou surnom)…"
                @bind="search" @bind:event="oninput" @bind:after="LoadBank" />
 
         @if (dragSource == DragSource.Save)
         {
-            <div class="drop-hint">⬆ Lâche ici pour déposer dans la banque</div>
+            <div class="drop-hint">⬆ Lâche ici pour déposer dans le stockage interne</div>
         }
 
         @if (bankEntries.Count == 0)
         {
-            <p class="text-muted">La banque est vide. Glisse ici un Pokémon de ta sauvegarde, ou sélectionne-le puis « Déposer ».</p>
+            <p class="text-muted">Le stockage interne est vide. Glisse ici un Pokémon de ta sauvegarde, ou sélectionne-le puis « Déposer ».</p>
         }
         else
         {
@@ -209,7 +211,7 @@
                     </ul>
                     <div class="d-grid gap-2">
                         <button class="btn btn-success" @onclick="() => DepositMany(saveSelection)" disabled="@busy">
-                            ⬆ Déposer les @saveSelection.Count dans la banque
+                            ⬆ Déposer les @saveSelection.Count dans le stockage interne
                         </button>
                         <button class="btn btn-outline-secondary btn-sm" @onclick="ClearSelection">Désélectionner</button>
                     </div>
@@ -220,7 +222,7 @@
         {
             <PokemonCard Pokemon="@Describe(savePk)">
                 <button class="btn btn-success w-100" @onclick="() => DepositMany([sel])" disabled="@(busy || Session.IsLocked(sel.Box, sel.Slot))">
-                    ⬆ Déposer dans la banque
+                    ⬆ Déposer dans le stockage interne
                 </button>
             </PokemonCard>
         }
@@ -649,7 +651,7 @@
             ClearSelection();
             await LoadBank();
             usage = await BankStore.GetUsageAsync(userId);
-            Show("Banque mise à jour. Remplace maintenant ta sauvegarde par le fichier téléchargé.");
+            Show("Stockage interne mis à jour. Remplace maintenant ta sauvegarde par le fichier téléchargé.");
         }
         catch (Exception ex)
         {

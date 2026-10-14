@@ -16,7 +16,7 @@
 <h1 class="mb-2">Mes sauvegardes <span class="badge bg-primary fs-6 align-middle">@saves.Count</span></h1>
 <p class="small text-muted">
     Les Pokémon d'une sauvegarde stockée apparaissent dans « Ma collection » en lecture seule (💾) : ils ne peuvent pas être
-    transférés, et la sauvegarde est refusée dans « Ma banque » tant qu'elle est stockée. Tous les jeux lus par PKHeX sont
+    transférés, et la sauvegarde est refusée dans « Transfert » tant qu'elle est stockée. Tous les jeux lus par PKHeX sont
     acceptés ; seuls Noir 2 / Blanc 2 ont été testés.
 </p>
 
@@ -99,7 +99,7 @@ else
                 {
                     <div class="alert alert-danger small mt-2 mb-0">
                         La sauvegarde va être <strong>téléchargée sur ton appareil</strong>, puis retirée du serveur avec ses
-                        @s.PokemonCount Pokémon. Tu pourras ensuite l'utiliser dans « Ma banque ».
+                        @s.PokemonCount Pokémon. Tu pourras ensuite l'utiliser dans « Transfert ».
                         <div class="d-flex gap-2 mt-2">
                             <button class="btn btn-sm btn-danger" @onclick="() => DeleteSave(s)" disabled="@busy">Télécharger et supprimer</button>
                             <button class="btn btn-sm btn-outline-secondary" @onclick="() => confirmDeleteId = null">Annuler</button>

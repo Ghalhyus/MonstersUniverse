@@ -29,7 +29,7 @@ public class BankPokemon
 
     public DateTime DepositedAt { get; set; }
 
-    /// <summary>Renseigné si le Pokémon vient d'une sauvegarde stockée : lecture seule, absent de « Ma banque ».</summary>
+    /// <summary>Renseigné si le Pokémon vient d'une sauvegarde stockée : lecture seule, absent de « Transfert ».</summary>
     public int? StoredSaveId { get; set; }
     public StoredSave? StoredSave { get; set; }
     /// <summary>Emplacement dans la sauvegarde stockée (« Boîte 3, case 12 », « Équipe 1 »...).</summary>
