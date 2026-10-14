@@ -71,23 +71,39 @@ dotnet ef migrations add NomDeLaMigration --project PokeBank
 
 ## Mise en ligne sur un serveur
 
-Configuration via variables d'environnement (jamais de secret dans `appsettings.json`) :
+Sur un VPS Ubuntu / Debian, avec Docker : l'application tourne derrière **Caddy**, qui reçoit les visiteurs et gère
+seul le certificat HTTPS (Let's Encrypt). Il faut un nom de domaine dont l'enregistrement DNS (type A) pointe vers
+l'IP du VPS.
 
-| Variable | Exemple |
+| Fichier | Rôle |
 |---|---|
-| `Bank__InviteCode` | un code long et aléatoire, à donner à tes amis |
-| `ConnectionStrings__DefaultConnection` | `DataSource=/app/Data/app.db;Cache=Shared` |
-| `Bank__BackupPath` | `/app/Data/backups` |
+| `Dockerfile` | Image de l'application |
+| `docker-compose.yml` | Application + Caddy, volume de données `pokebank_pokebank-data` |
+| `Caddyfile` | Réglages de Caddy (le domaine vient de `.env`) |
+| `.env.example` | Modèle des réglages : `DOMAIN` et `INVITE_CODE` (le vrai `.env` est créé sur le serveur) |
+| `deploy/publier.cmd` (`publier.ps1`) | Depuis Windows : envoie le code sur le VPS et le met à jour |
+| `deploy/installer-serveur.sh` | Sur le VPS, une seule fois : pare-feu, Docker, `.env`, sauvegarde nocturne, démarrage |
+| `deploy/sauvegarder.sh` | Sauvegarde du volume de données (lancée chaque nuit par cron, gardée 14 jours) |
 
-Avec Docker :
+**Première installation**
 
-```bash
-docker build -t pokebank .
-docker run -d -p 8080:8080 -v pokebank-data:/app/Data -e Bank__InviteCode=change-moi pokebank
-```
+1. Depuis Windows, dans le dossier du projet : `deploy\publier.cmd ubuntu@IP_DU_VPS`
+2. Sur le VPS (`ssh ubuntu@IP_DU_VPS`) : `bash ~/pokebank/deploy/installer-serveur.sh`
+   (demande le nom de domaine, génère le code d'invitation et l'affiche à la fin).
 
-Mettre un reverse proxy HTTPS devant (Caddy, Nginx, Traefik…) — Blazor Server utilise des WebSockets,
-le proxy doit les laisser passer. Penser à sauvegarder le volume `Data` (base + copies de sauvegardes).
+**Mises à jour** : `deploy\publier.cmd ubuntu@IP_DU_VPS` suffit. Les migrations de la base s'appliquent au démarrage ;
+les données restent dans le volume Docker.
+
+**Sauvegardes** : la sauvegarde de l'hébergeur ne couvre souvent que 24 h, or la base est le seul endroit où sont les
+Pokémon déposés. `deploy/sauvegarder.sh` archive chaque nuit le volume dans `~/sauvegardes` sur le VPS ; en garder aussi
+une copie ailleurs, par exemple : `scp -r ubuntu@IP_DU_VPS:~/sauvegardes C:\Sauvegardes\PokeBank`.
+Pour restaurer une archive : `docker compose stop pokebank`, puis
+`docker run --rm -v pokebank_pokebank-data:/data -v ~/sauvegardes:/backup alpine sh -c "rm -rf /data/* && tar xzf /backup/ARCHIVE.tgz -C /data"`,
+puis `docker compose start pokebank`.
+
+Réglages avancés (variables d'environnement, jamais de secret dans `appsettings.json`) : `Bank__InviteCode`,
+`ConnectionStrings__DefaultConnection`, `Bank__BackupPath`, `Bank__KeysPath` (clés de connexion ; par défaut dans
+`Data/keys`, donc dans le volume).
 
 ## Points de vigilance
 

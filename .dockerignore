@@ -1,0 +1,12 @@
+**/bin/
+**/obj/
+**/.vs/
+.claude/
+.git/
+.env
+PokeBank/Data/app.db*
+PokeBank/Data/backups/
+PokeBank/Data/keys/
+PokeBank.Tests/
+deploy/
+*.sav

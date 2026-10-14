@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using PokeBank.Components;
@@ -43,6 +44,13 @@ builder.Services.AddIdentityCore<ApplicationUser>(options => options.SignIn.Requ
     .AddDefaultTokenProviders();
 
 builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSender>();
+
+// Clés qui chiffrent les cookies (connexion, formulaires) : gardées avec les données (volume Docker),
+// sinon chaque mise à jour du conteneur en crée de nouvelles et déconnecte tout le monde.
+var keysPath = Path.Combine(builder.Environment.ContentRootPath, builder.Configuration["Bank:KeysPath"] ?? "Data/keys");
+builder.Services.AddDataProtection()
+    .SetApplicationName("PokeBank")
+    .PersistKeysToFileSystem(new DirectoryInfo(keysPath));
 
 builder.Services.AddSingleton<PokemonInfo>();
 builder.Services.AddScoped<BankService>();

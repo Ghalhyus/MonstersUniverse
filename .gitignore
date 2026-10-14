@@ -8,3 +8,7 @@ PokeBank/Data/backups/
 .claude/
 *.zip
 *.sav
+
+# Déploiement : réglages du serveur (code d'invitation) et clés de connexion locales
+.env
+PokeBank/Data/keys/

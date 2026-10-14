@@ -1,0 +1,7 @@
+# Scripts et réglages lus sur le serveur Linux : toujours en fins de ligne LF
+*.sh text eol=lf
+Caddyfile text eol=lf
+docker-compose.yml text eol=lf
+.env.example text eol=lf
+# Lanceurs Windows : fins de ligne Windows
+*.cmd text eol=crlf
