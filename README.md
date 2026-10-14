@@ -56,6 +56,17 @@ bloquée tant qu'elle n'a pas été téléchargée (bouton « Télécharger » d
 avec **plus** de temps de jeu (l'ancienne sauvegarde du jeu, qui contient encore l'argent, est refusée). Dissuasif,
 pas infaillible : rien n'oblige le joueur à remplacer réellement sa sauvegarde.
 
+### Taille de la collection
+
+Chaque compte a une limite de Pokémon dans sa collection (banque + sauvegardes stockées, œufs compris) : 1 000 au
+départ, y compris pour les comptes créés avant cette règle. Toute opération qui fait grossir la collection au-delà
+est refusée **en entière** avec un message qui chiffre le manque : dépôt en banque (vérifié dès le glisser-déposer,
+puis à la validation), ajout ou mise à jour d'une sauvegarde stockée. Ce qui réduit la collection n'est jamais bloqué :
+un compte au-dessus de sa limite garde tout, mais ne peut plus rien ajouter.
+
+« Agrandir » (page « Ma collection ») achète des lots de 100 emplacements pour 10 000 ₽ avec le porte-monnaie ;
+l'achat apparaît dans le journal de l'inventaire. Valeurs dans `Services/CollectionCapacity.cs`.
+
 Lors d'un retrait, PKHeX convertit le Pokémon au format du jeu si possible (ex. PK4 → PK5) et refuse ce qui
 est incompatible (espèce, attaques ou objets inexistants dans le jeu, conversion vers une génération antérieure).
 
@@ -71,7 +82,8 @@ est incompatible (espèce, attaques ou objets inexistants dans le jeu, conversio
 | `PokeBank/Components/Pages/Saves.razor` | Gestion des sauvegardes stockées (ajout, mise à jour, suppression) |
 | `PokeBank/Services/StoredSaveService.cs` | Stockage, mise à jour et suppression des sauvegardes stockées |
 | `PokeBank/Services/SaveIdentity.cs` | Empreinte d'une sauvegarde (unicité sur le serveur) |
-| `PokeBank/Services/InventoryService.cs` | Porte-monnaie : retrait de Pokédollars d'une sauvegarde stockée, journal |
+| `PokeBank/Services/InventoryService.cs` | Porte-monnaie : retrait de Pokédollars d'une sauvegarde stockée, achat d'emplacements, journal |
+| `PokeBank/Services/CollectionCapacity.cs` | Taille maximale de la collection : règles, occupation, messages |
 | `PokeBank/Components/Pages/Inventory.razor` | Page « Inventaire » (solde, journal, fenêtre de retrait) |
 | `PokeBank/Data/BankPokemon.cs` | Table des Pokémon (octets bruts + métadonnées ; `StoredSaveId` si lecture seule) |
 | `PokeBank/Data/StoredSave.cs` | Table des sauvegardes stockées |

@@ -13,6 +13,8 @@ public enum WalletOperationKind
 {
     /// <summary>Pokédollars retirés d'une sauvegarde stockée et crédités sur le porte-monnaie.</summary>
     WithdrawFromSave = 1,
+    /// <summary>Achat d'emplacements de collection, payé avec le porte-monnaie.</summary>
+    BuyCollectionSlots = 2,
 }
 
 /// <summary>Ligne du journal des opérations du porte-monnaie (jamais modifiée ni supprimée).</summary>
@@ -33,4 +35,6 @@ public class WalletOperation
     public int? StoredSaveId { get; set; }
     public StoredSave? StoredSave { get; set; }
     public string SaveLabel { get; set; } = "";
+    /// <summary>Précision affichée dans le journal (ex. « +200 emplacements (1 000 → 1 200) »).</summary>
+    public string Details { get; set; } = "";
 }

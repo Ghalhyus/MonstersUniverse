@@ -3,7 +3,9 @@
 @using System.Security.Claims
 @using Microsoft.AspNetCore.Authorization
 @using PokeBank.Services
+@using PokeBank.Components.Shared
 @inject StoredSaveService StoredSaves
+@inject BankService BankStore
 @inject IJSRuntime JS
 
 <PageTitle>Mes sauvegardes</PageTitle>
@@ -11,18 +13,22 @@
 @* Sauvegardes stockées sur le serveur pour consultation : leurs Pokémon apparaissent dans « Ma collection »
    en lecture seule. Ajout, mise à jour (même partie uniquement) et suppression (qui rend le fichier). *@
 
-<div class="d-flex flex-wrap align-items-center gap-2 mb-2">
-    <h1 class="mb-0">Mes sauvegardes <span class="badge bg-primary fs-6 align-middle">@saves.Count</span></h1>
-    <label class="btn btn-primary mb-0 ms-auto @(busy ? "disabled" : "")">
-        + Ajouter une sauvegarde
-        <InputFile @key="fileInputVersion" class="d-none" OnChange="AddSave" disabled="@busy" />
-    </label>
-</div>
+<h1 class="mb-2">Mes sauvegardes <span class="badge bg-primary fs-6 align-middle">@saves.Count</span></h1>
 <p class="small text-muted">
     Les Pokémon d'une sauvegarde stockée apparaissent dans « Ma collection » en lecture seule (💾) : ils ne peuvent pas être
     transférés, et la sauvegarde est refusée dans « Ma banque » tant qu'elle est stockée. Tous les jeux lus par PKHeX sont
     acceptés ; seuls Noir 2 / Blanc 2 ont été testés.
 </p>
+
+@* Les sauvegardes comptent dans la taille de la collection : on voit ici ce qu'il reste avant d'en ajouter une. *@
+<CollectionGauge Usage="usage" OnPurchase="OnPurchase" />
+
+<div class="d-flex justify-content-end mb-3">
+    <label class="btn btn-primary mb-0 @(busy ? "disabled" : "")">
+        + Ajouter une sauvegarde
+        <InputFile @key="fileInputVersion" class="d-none" OnChange="AddSave" disabled="@busy" />
+    </label>
+</div>
 
 @if (message is not null)
 {
@@ -110,6 +116,7 @@ else
 
     private string userId = "";
     private List<StoredSaveInfo> saves = [];
+    private CollectionUsage usage = new(0, CollectionCapacity.DefaultLimit);
     private bool busy;
     private int fileInputVersion; // recrée les champs fichier : renvoyer le même fichier redéclenche l'envoi
     private int? confirmDeleteId;
@@ -123,7 +130,7 @@ else
     protected override async Task OnInitializedAsync()
     {
         userId = (await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
-        saves = await StoredSaves.ListAsync(userId);
+        await RefreshAsync();
     }
 
     private Task AddSave(InputFileChangeEventArgs e) =>
@@ -131,7 +138,7 @@ else
         {
             var result = await StoredSaves.AddAsync(userId, e.File.Name, await ReadFile(e));
             Show(result.Message, !result.Ok);
-            if (result.Ok) saves = await StoredSaves.ListAsync(userId);
+            if (result.Ok) await RefreshAsync();
         });
 
     private Task UpdateSave(StoredSaveInfo save, InputFileChangeEventArgs e) =>
@@ -154,7 +161,7 @@ else
         }
         pendingUpdate = null;
         Show(result.Message, !result.Ok);
-        if (result.Ok) saves = await StoredSaves.ListAsync(userId);
+        if (result.Ok) await RefreshAsync();
     }
 
     /// <summary>« Supprimer » rend d'abord le fichier à l'utilisateur, pour qu'il ne perde pas sa sauvegarde.</summary>
@@ -169,7 +176,7 @@ else
                 Show($"Sauvegarde « {file.FileName} » téléchargée et retirée du serveur ({save.PokemonCount} Pokémon).");
             }
             else Show("Cette sauvegarde n'existe plus.", isError: true);
-            saves = await StoredSaves.ListAsync(userId);
+            await RefreshAsync();
         });
 
     /// <summary>Récupère le fichier actuel (avec les modifications du serveur) sans supprimer la sauvegarde.</summary>
@@ -184,8 +191,22 @@ else
                     Show("Sauvegarde téléchargée : remplace celle de ton jeu par ce fichier. La mise à jour est de nouveau possible.");
             }
             else Show("Cette sauvegarde n'existe plus.", isError: true);
-            saves = await StoredSaves.ListAsync(userId);
+            await RefreshAsync();
         });
+
+    /// <summary>Fin d'un achat d'emplacements (fenêtre de la jauge).</summary>
+    private async Task OnPurchase(PurchaseResult result)
+    {
+        Show(result.Message, !result.Ok);
+        await RefreshAsync();
+    }
+
+    /// <summary>Liste des sauvegardes et occupation de la collection, relues après chaque opération.</summary>
+    private async Task RefreshAsync()
+    {
+        saves = await StoredSaves.ListAsync(userId);
+        usage = await BankStore.GetUsageAsync(userId);
+    }
 
     private async Task RunBusy(Func<Task> action)
     {

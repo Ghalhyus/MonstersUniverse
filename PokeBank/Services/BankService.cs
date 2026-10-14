@@ -50,6 +50,13 @@ public sealed class BankService(
             .ToListAsync(ct);
     }
 
+    /// <summary>Occupation de la collection (banque + sauvegardes stockées) et sa limite.</summary>
+    public async Task<CollectionUsage> GetUsageAsync(string ownerId)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+        return await CollectionCapacity.GetUsageAsync(db, ownerId);
+    }
+
     public async Task<BankPokemon?> GetAsync(string ownerId, int id)
     {
         await using var db = await dbFactory.CreateDbContextAsync();
@@ -125,6 +132,12 @@ public sealed class BankService(
             if (deleted == 0)
                 throw new InvalidOperationException("Un des Pokémon retirés n'est plus dans la banque (retiré depuis un autre onglet ?). Annule et recommence.");
         }
+
+        // Taille de la collection, vérifiée dans la transaction : les retraits viennent de libérer leur place.
+        var afterWithdrawals = await CollectionCapacity.GetUsageAsync(db, ownerId);
+        var before = afterWithdrawals with { Used = afterWithdrawals.Used + session.Withdrawals.Count };
+        if (CollectionCapacity.Exceeds(before, afterWithdrawals.Used + session.Deposits.Count))
+            throw new InvalidOperationException(CollectionCapacity.BankFullMessage(before, session.Deposits.Count - session.Withdrawals.Count));
 
         var now = DateTime.UtcNow;
         foreach (var d in session.Deposits)

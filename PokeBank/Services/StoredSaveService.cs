@@ -15,7 +15,7 @@ public sealed record StoredSaveInfo(
     public string Label => $"{GameName} — {TrainerName}";
 }
 
-public enum StoreStatus { Ok, Invalid, AlreadyStored, NotFound, WrongTrainer, OlderPlayTime, ModifiedOnServer, Conflict }
+public enum StoreStatus { Ok, Invalid, AlreadyStored, NotFound, WrongTrainer, OlderPlayTime, ModifiedOnServer, Conflict, CollectionFull }
 
 /// <param name="OldPlayTime">Pour <see cref="StoreStatus.OlderPlayTime"/> : temps de jeu de la version stockée (secondes).</param>
 /// <param name="NewPlayTime">Pour <see cref="StoreStatus.OlderPlayTime"/> : temps de jeu du fichier envoyé (secondes).</param>
@@ -90,13 +90,18 @@ public sealed class StoredSaveService(
         if (CheckServerModification(modification, identity, sav) is { } refused)
             return refused;
 
+        var pokemon = ReadAllPokemon(sav).ToList();
+        var usage = await CollectionCapacity.GetUsageAsync(db, ownerId);
+        if (CollectionCapacity.Exceeds(usage, usage.Used + pokemon.Count))
+            return new(StoreStatus.CollectionFull, CollectionCapacity.SaveFullMessage(usage, pokemon.Count));
+
         var now = DateTime.UtcNow;
         var save = new StoredSave { OwnerId = ownerId, IdentityKey = identity.Key, UploadedAt = now };
         Fill(save, sav, identity, fileName, data, now);
         save.DownloadedSinceModification = modification is not null; // c'est la version rendue par le serveur
         ClearIfMoreAdvanced(db, modification, identity, save);
         db.StoredSaves.Add(save);
-        AddPokemon(db, save, sav, ownerId, now);
+        AddPokemon(db, save, pokemon, ownerId, now);
 
         try
         {
@@ -145,14 +150,20 @@ public sealed class StoredSaveService(
                 $"Ce fichier a moins de temps de jeu que la version stockée ({SaveIdentity.FormatPlayTime(save.PlayTimeSeconds)} → {SaveIdentity.FormatPlayTime(identity.PlayTimeSeconds)}) : c'est peut-être une ancienne copie.",
                 save.PlayTimeSeconds, identity.PlayTimeSeconds);
 
-        await WriteBackupAsync(ownerId, save, "remplacee");
-
         await using var tx = await db.Database.BeginTransactionAsync();
+
+        // Seule la différence avec la version stockée compte ; une version avec moins de Pokémon passe toujours.
+        var pokemon = ReadAllPokemon(sav).ToList();
+        var usage = await CollectionCapacity.GetUsageAsync(db, ownerId);
+        if (CollectionCapacity.Exceeds(usage, usage.Used - save.PokemonCount + pokemon.Count))
+            return new(StoreStatus.CollectionFull, CollectionCapacity.SaveFullMessage(usage, pokemon.Count, save.PokemonCount));
+
+        await WriteBackupAsync(ownerId, save, "remplacee");
         await db.BankPokemon.Where(p => p.StoredSaveId == save.Id).ExecuteDeleteAsync();
         var now = DateTime.UtcNow;
         Fill(save, sav, identity, fileName, data, now);
         ClearIfMoreAdvanced(db, modification, identity, save);
-        AddPokemon(db, save, sav, ownerId, now);
+        AddPokemon(db, save, pokemon, ownerId, now);
         try
         {
             await db.SaveChangesAsync();
@@ -313,10 +324,10 @@ public sealed class StoredSaveService(
         save.Version++;
     }
 
-    private void AddPokemon(ApplicationDbContext db, StoredSave save, SaveFile sav, string ownerId, DateTime now)
+    private void AddPokemon(ApplicationDbContext db, StoredSave save, IEnumerable<(PKM Pokemon, string Location)> pokemon, string ownerId, DateTime now)
     {
         int position = 0;
-        foreach (var (pk, location) in ReadAllPokemon(sav))
+        foreach (var (pk, location) in pokemon)
         {
             var entry = BankService.CreateEntry(info, pk, ownerId, now);
             entry.StoredSave = save;

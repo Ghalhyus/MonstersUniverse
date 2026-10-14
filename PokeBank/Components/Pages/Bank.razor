@@ -16,6 +16,8 @@
 
 <h1 class="mb-3">Ma banque</h1>
 
+<CollectionGauge Usage="usage" Pending="@(Session.Deposits.Count - Session.Withdrawals.Count)" OnPurchase="OnPurchase" />
+
 @if (message is not null)
 {
     <div class="alert @messageClass alert-dismissible" role="alert">
@@ -299,11 +301,15 @@
     private string messageClass = "alert-success";
     private List<string> messageDetails = [];
 
+    /// <summary>Occupation de la collection en base (hors dépôts / retraits en attente), relue après chaque validation.</summary>
+    private CollectionUsage usage = new(0, CollectionCapacity.DefaultLimit);
+
     protected override async Task OnInitializedAsync()
     {
         var user = (await AuthState).User;
         userId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
         await LoadBank();
+        usage = await BankStore.GetUsageAsync(userId);
     }
 
     private async Task LoadBank()
@@ -481,8 +487,24 @@
     }
 
     /// <summary>Dépose les Pokémon de ces cases dans la banque (en attente de validation).</summary>
+    /// <summary>Fin d'un achat d'emplacements (fenêtre de la jauge).</summary>
+    private async Task OnPurchase(PurchaseResult result)
+    {
+        Show(result.Message, !result.Ok);
+        usage = await BankStore.GetUsageAsync(userId);
+    }
+
     private void DepositMany(IReadOnlyList<(int Box, int Slot)> slots)
     {
+        // Taille de la collection, en tenant compte de ce qui est déjà en attente : le groupe entier passe ou rien.
+        // Remettre en banque un Pokémon tout juste retiré compte aussi (il réoccupe sa place).
+        var current = usage with { Used = usage.Used + Session.Deposits.Count - Session.Withdrawals.Count };
+        if (CollectionCapacity.Exceeds(current, current.Used + slots.Count))
+        {
+            Show(CollectionCapacity.BankFullMessage(current, slots.Count), isError: true);
+            return;
+        }
+
         var errors = new List<string>();
         int deposited = 0, cancelled = 0;
         foreach (var (box, slot) in slots)
@@ -626,6 +648,7 @@
             bankViews.Clear();
             ClearSelection();
             await LoadBank();
+            usage = await BankStore.GetUsageAsync(userId);
             Show("Banque mise à jour. Remplace maintenant ta sauvegarde par le fichier téléchargé.");
         }
         catch (Exception ex)

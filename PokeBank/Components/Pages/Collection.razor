@@ -19,6 +19,17 @@
 
 <h1 class="mb-3">Ma collection <span class="badge bg-primary fs-6 align-middle">@total</span></h1>
 
+@if (message is not null)
+{
+    <div class="alert @(messageIsError ? "alert-danger" : "alert-success") alert-dismissible" role="alert">
+        @message
+        <button type="button" class="btn-close" aria-label="Fermer" @onclick="() => message = null"></button>
+    </div>
+}
+
+@* ---------- Taille de la collection (banque + sauvegardes stockées) ---------- *@
+<CollectionGauge Usage="usage" OnPurchase="OnPurchase" />
+
 <div class="collection-toolbar">
     <input class="form-control form-control-sm" placeholder="Rechercher (espèce ou surnom)…"
            @bind="search" @bind:event="oninput" @bind:after="Reload" />
@@ -126,6 +137,11 @@ else
 
     private List<StoredSaveInfo> saves = []; // pour le filtre et l'origine affichée des Pokémon stockés
 
+    private CollectionUsage usage = new(0, CollectionCapacity.DefaultLimit);
+
+    private string? message;
+    private bool messageIsError;
+
     private BankPokemon? selected;
     private PokemonView? selectedView;
 
@@ -138,6 +154,7 @@ else
     {
         userId = (await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
         saves = await Saves.ListAsync(userId);
+        usage = await BankStore.GetUsageAsync(userId);
     }
 
     // Les paramètres d'adresse sont lus ici (et non dans OnInitialized) pour suivre aussi les navigations ultérieures.
@@ -182,6 +199,14 @@ else
 
     private void RememberColumns() =>
         Nav.NavigateTo(Nav.GetUriWithQueryParameter("colonnes", columns == DefaultColumns ? null : columns), replace: true);
+
+    /// <summary>Fin d'un achat d'emplacements (fenêtre de la jauge).</summary>
+    private async Task OnPurchase(PurchaseResult result)
+    {
+        message = result.Message;
+        messageIsError = !result.Ok;
+        usage = await BankStore.GetUsageAsync(userId);
+    }
 
     // ---------- Fiche ----------
 

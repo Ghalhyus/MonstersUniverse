@@ -8,9 +8,11 @@ namespace PokeBank.Services;
 /// <param name="Money">Argent dans le fichier stocké ; null si PKHeX ne sait pas le lire pour ce jeu.</param>
 public sealed record MoneySource(int SaveId, string Label, string TrainerId, long? Money);
 
-public sealed record WalletOperationView(DateTime At, WalletOperationKind Kind, long Amount, long BalanceAfter, string SaveLabel);
+public sealed record WalletOperationView(DateTime At, WalletOperationKind Kind, long Amount, long BalanceAfter, string SaveLabel, string Details);
 
 public sealed record WithdrawResult(bool Ok, string Message, long Balance = 0);
+
+public sealed record PurchaseResult(bool Ok, string Message, int Limit = 0, long Balance = 0);
 
 /// <summary>
 /// Inventaire du site : pour l'instant un porte-monnaie de Pokédollars, alimenté en retirant de l'argent des sauvegardes
@@ -39,8 +41,57 @@ public sealed class InventoryService(
             .Where(o => o.OwnerId == ownerId)
             .OrderByDescending(o => o.At).ThenByDescending(o => o.Id)
             .Take(take)
-            .Select(o => new WalletOperationView(o.At, o.Kind, o.Amount, o.BalanceAfter, o.SaveLabel))
+            .Select(o => new WalletOperationView(o.At, o.Kind, o.Amount, o.BalanceAfter, o.SaveLabel, o.Details))
             .ToListAsync();
+    }
+
+    /// <summary>
+    /// Achète <paramref name="lots"/> lots d'emplacements de collection (<see cref="CollectionCapacity.SlotsPerLot"/> chacun,
+    /// <see cref="CollectionCapacity.LotPrice"/> l'un) : débit, nouvelle limite et ligne de journal en une seule opération.
+    /// </summary>
+    public async Task<PurchaseResult> BuyCollectionSlotsAsync(string ownerId, int lots)
+    {
+        if (lots <= 0)
+            return new(false, "Choisis au moins un lot.");
+        if (lots > 100_000)
+            return new(false, "Trop de lots en une seule fois.");
+
+        long cost = lots * CollectionCapacity.LotPrice;
+        int slots = lots * CollectionCapacity.SlotsPerLot;
+
+        await using var db = await dbFactory.CreateDbContextAsync();
+        await using var tx = await db.Database.BeginTransactionAsync();
+
+        // Débit conditionnel et atomique : deux achats simultanés ne peuvent pas rendre le solde négatif.
+        var debited = await db.Wallets.Where(w => w.OwnerId == ownerId && w.Money >= cost)
+            .ExecuteUpdateAsync(w => w.SetProperty(x => x.Money, x => x.Money - cost));
+        if (debited == 0)
+        {
+            var available = await db.Wallets.Where(w => w.OwnerId == ownerId).Select(w => w.Money).FirstOrDefaultAsync();
+            return new(false, $"{lots} lot{(lots > 1 ? "s" : "")} coûte{(lots > 1 ? "nt" : "")} {FormatMoney(cost)}, ton porte-monnaie contient {FormatMoney(available)} : " +
+                              $"il manque {FormatMoney(cost - available)}. Retire de l'argent d'une sauvegarde depuis « Inventaire ».");
+        }
+
+        var limitBefore = await db.Users.Where(u => u.Id == ownerId).Select(u => u.CollectionLimit).FirstAsync();
+        await db.Users.Where(u => u.Id == ownerId)
+            .ExecuteUpdateAsync(u => u.SetProperty(x => x.CollectionLimit, x => x.CollectionLimit + slots));
+        var limit = limitBefore + slots;
+        var balance = await db.Wallets.Where(w => w.OwnerId == ownerId).Select(w => w.Money).FirstAsync();
+
+        db.WalletOperations.Add(new WalletOperation
+        {
+            OwnerId = ownerId,
+            At = DateTime.UtcNow,
+            Kind = WalletOperationKind.BuyCollectionSlots,
+            Amount = -cost,
+            BalanceAfter = balance,
+            Details = $"+{CollectionCapacity.FormatCount(slots)} emplacements ({CollectionCapacity.FormatCount(limitBefore)} → {CollectionCapacity.FormatCount(limit)})",
+        });
+        await db.SaveChangesAsync();
+        await tx.CommitAsync();
+
+        logger.LogInformation("Utilisateur {User} : {Slots} emplacements achetés pour {Cost} ₽ (limite {Limit}).", ownerId, slots, cost, limit);
+        return new(true, $"Collection agrandie : {CollectionCapacity.FormatCount(limit)} emplacements. Solde : {FormatMoney(balance)}.", limit, balance);
     }
 
     /// <summary>Sauvegardes stockées de l'utilisateur, avec l'argent que contient chacune (lu dans le fichier).</summary>

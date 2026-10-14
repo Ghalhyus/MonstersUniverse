@@ -1,0 +1,147 @@
+@using System.Security.Claims
+@using PokeBank.Services
+@inject InventoryService InventoryStore
+@inject BankService BankStore
+@inject WalletState Wallet
+@* Jauge d'occupation de la collection (banque + sauvegardes stockées), avec son bouton « Agrandir » qui ouvre la
+   fenêtre d'achat d'emplacements. Même composant sur « Ma banque », « Ma collection » et « Mes sauvegardes ». *@
+
+@{
+    var projected = Usage.Used + Pending; // avec les dépôts / retraits en attente de « Ma banque »
+    var percent = Usage.Limit == 0 ? 100 : Math.Clamp(projected * 100 / Usage.Limit, 0, 100);
+}
+<div class="capacity mb-3">
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-1 small">
+        <span>
+            Emplacements : <strong>@CollectionCapacity.FormatUsage(Usage)</strong>
+            @if (Pending != 0)
+            {
+                <span class="text-muted ms-1">(@(Pending > 0 ? "+" : "−")@Math.Abs(Pending) en attente)</span>
+            }
+        </span>
+        @if (projected > Usage.Limit)
+        {
+            <span class="text-danger">· limite dépassée : plus aucun ajout possible</span>
+        }
+        else if (projected >= Usage.Limit)
+        {
+            <span class="text-danger">· collection pleine</span>
+        }
+        <button class="btn btn-sm btn-outline-primary ms-auto" @onclick="OpenPurchase">Agrandir</button>
+    </div>
+    <div class="progress" role="progressbar" aria-label="Emplacements utilisés" aria-valuenow="@projected" aria-valuemin="0" aria-valuemax="@Usage.Limit">
+        <div class="progress-bar @(percent >= 100 ? "bg-danger" : percent >= 90 ? "bg-warning" : "")" style="width: @(percent)%"></div>
+    </div>
+</div>
+
+@* ---------- Achat d'emplacements : nombre de lots → confirmation ---------- *@
+@if (step != PurchaseStep.Closed)
+{
+    <div class="dialog-backdrop" @onclick="ClosePurchase"></div>
+    <div class="dialog-panel card" role="dialog" aria-modal="true" aria-label="Agrandir la collection">
+        <div class="card-body">
+            @if (step == PurchaseStep.Lots)
+            {
+                <h5>Agrandir la collection <small class="text-muted">· 1/2</small></h5>
+                <p class="small">
+                    Un lot = <strong>@CollectionCapacity.SlotsPerLot emplacements</strong> pour <strong>@InventoryService.FormatMoney(CollectionCapacity.LotPrice)</strong>.
+                    Ton porte-monnaie contient <strong>@InventoryService.FormatMoney(balance)</strong>.
+                </p>
+                <label class="form-label" for="purchase-lots">Nombre de lots</label>
+                <input id="purchase-lots" type="number" class="form-control mb-1" min="1" step="1" @bind="lots" @bind:event="oninput" />
+                @if (LotsError is { } error)
+                {
+                    <div class="small text-danger">@error</div>
+                }
+                else
+                {
+                    <div class="small text-muted">
+                        @CollectionCapacity.FormatCount(lots!.Value * CollectionCapacity.SlotsPerLot) emplacements pour @InventoryService.FormatMoney(lots.Value * CollectionCapacity.LotPrice)
+                    </div>
+                }
+                <div class="d-flex justify-content-end gap-2 mt-3">
+                    <button class="btn btn-outline-secondary" @onclick="ClosePurchase">Annuler</button>
+                    <button class="btn btn-primary" @onclick="() => step = PurchaseStep.Confirm" disabled="@(LotsError is not null)">Suivant</button>
+                </div>
+            }
+            else
+            {
+                var count = lots ?? 0;
+                var cost = count * CollectionCapacity.LotPrice;
+                var newLimit = current.Limit + count * CollectionCapacity.SlotsPerLot;
+                <h5>Agrandir la collection <small class="text-muted">· 2/2</small></h5>
+                <p>Acheter <strong>@count lot@(count > 1 ? "s" : "")</strong> pour <strong>@InventoryService.FormatMoney(cost)</strong> ?</p>
+                <ul class="small">
+                    <li>Emplacements : @CollectionCapacity.FormatCount(current.Limit) → @CollectionCapacity.FormatCount(newLimit)</li>
+                    <li>Porte-monnaie : @InventoryService.FormatMoney(balance) → @InventoryService.FormatMoney(balance - cost)</li>
+                </ul>
+                <div class="d-flex justify-content-end gap-2">
+                    <button class="btn btn-outline-secondary" @onclick="() => step = PurchaseStep.Lots" disabled="@busy">Retour</button>
+                    <button class="btn btn-primary" @onclick="ConfirmPurchase" disabled="@busy">Confirmer l'achat</button>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = default!;
+
+    [Parameter, EditorRequired] public CollectionUsage Usage { get; set; }
+    /// <summary>Variation en attente de validation (dépôts − retraits dans « Ma banque ») ; 0 ailleurs.</summary>
+    [Parameter] public int Pending { get; set; }
+    /// <summary>Fin d'un achat (réussi ou non) : la page affiche le message et relit son occupation.</summary>
+    [Parameter] public EventCallback<PurchaseResult> OnPurchase { get; set; }
+
+    private enum PurchaseStep { Closed, Lots, Confirm }
+
+    private PurchaseStep step;
+    private int? lots;
+    private bool busy;
+    private long balance;
+    private CollectionUsage current; // relue à l'ouverture de la fenêtre
+    private string userId = "";
+
+    private string? LotsError =>
+        lots is not { } n || n < 1 ? "Indique un nombre de lots (au moins 1)."
+        : n > 100_000 ? "Trop de lots en une seule fois."
+        : n * CollectionCapacity.LotPrice > balance
+            ? $"Il te faut {InventoryService.FormatMoney(n * CollectionCapacity.LotPrice)}, ton porte-monnaie contient {InventoryService.FormatMoney(balance)} : il manque {InventoryService.FormatMoney(n * CollectionCapacity.LotPrice - balance)}. Retire de l'argent d'une sauvegarde depuis « Inventaire »."
+        : null;
+
+    private async Task OpenPurchase()
+    {
+        userId = (await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
+        lots = null; // rien de prérempli : pas d'achat par accident
+        balance = await InventoryStore.GetBalanceAsync(userId);
+        current = await BankStore.GetUsageAsync(userId);
+        step = PurchaseStep.Lots;
+    }
+
+    private void ClosePurchase()
+    {
+        if (!busy) step = PurchaseStep.Closed;
+    }
+
+    private async Task ConfirmPurchase()
+    {
+        if (lots is not { } count) return;
+        busy = true;
+        PurchaseResult result;
+        try
+        {
+            result = await InventoryStore.BuyCollectionSlotsAsync(userId, count);
+            await Wallet.RefreshAsync(userId); // solde du menu
+        }
+        catch (Exception ex)
+        {
+            result = new PurchaseResult(false, $"Achat impossible : {ex.Message}");
+        }
+        finally
+        {
+            busy = false;
+            step = PurchaseStep.Closed;
+        }
+        await OnPurchase.InvokeAsync(result);
+    }
+}

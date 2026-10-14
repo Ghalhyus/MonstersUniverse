@@ -42,7 +42,7 @@ else
     <div class="table-responsive">
         <table class="table table-sm align-middle">
             <thead>
-                <tr><th>Date</th><th>Opération</th><th>Sauvegarde</th><th class="text-end">Montant</th><th class="text-end">Solde</th></tr>
+                <tr><th>Date</th><th>Opération</th><th>Détail</th><th class="text-end">Montant</th><th class="text-end">Solde</th></tr>
             </thead>
             <tbody>
                 @foreach (var op in operations)
@@ -50,7 +50,7 @@ else
                     <tr>
                         <td class="text-nowrap">@op.At.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
                         <td>@KindLabel(op.Kind)</td>
-                        <td>@op.SaveLabel</td>
+                        <td>@(string.IsNullOrEmpty(op.Details) ? op.SaveLabel : op.Details)</td>
                         <td class="text-end text-nowrap @(op.Amount >= 0 ? "text-success" : "text-danger")">
                             @(op.Amount >= 0 ? "+" : "")@InventoryService.FormatMoney(op.Amount)
                         </td>
@@ -178,6 +178,7 @@ else
     private static string KindLabel(WalletOperationKind kind) => kind switch
     {
         WalletOperationKind.WithdrawFromSave => "Retrait d'une sauvegarde",
+        WalletOperationKind.BuyCollectionSlots => "Achat d'emplacements",
         _ => kind.ToString(),
     };
 
