@@ -5,14 +5,17 @@ using PokeBank.Data;
 namespace PokeBank.Services;
 
 /// <summary>Sauvegarde stockée, telle qu'affichée dans « Mes sauvegardes » (sans le fichier).</summary>
+/// <param name="ModifiedOnServer">Le serveur a modifié le fichier (retrait de Pokédollars) depuis le dernier envoi.</param>
+/// <param name="MustDownloadBeforeUpdate">Modifiée sur le serveur et pas encore téléchargée : « Mettre à jour » est bloqué.</param>
 public sealed record StoredSaveInfo(
     int Id, string FileName, string GameName, byte Generation, string TrainerName, string TrainerId,
-    int PlayTimeSeconds, int PokemonCount, DateTime UploadedAt, DateTime UpdatedAt)
+    int PlayTimeSeconds, int PokemonCount, DateTime UploadedAt, DateTime UpdatedAt,
+    bool ModifiedOnServer, bool MustDownloadBeforeUpdate, long WithdrawnOnServer)
 {
     public string Label => $"{GameName} — {TrainerName}";
 }
 
-public enum StoreStatus { Ok, Invalid, AlreadyStored, NotFound, WrongTrainer, OlderPlayTime }
+public enum StoreStatus { Ok, Invalid, AlreadyStored, NotFound, WrongTrainer, OlderPlayTime, ModifiedOnServer, Conflict }
 
 /// <param name="OldPlayTime">Pour <see cref="StoreStatus.OlderPlayTime"/> : temps de jeu de la version stockée (secondes).</param>
 /// <param name="NewPlayTime">Pour <see cref="StoreStatus.OlderPlayTime"/> : temps de jeu du fichier envoyé (secondes).</param>
@@ -40,11 +43,15 @@ public sealed class StoredSaveService(
     public async Task<List<StoredSaveInfo>> ListAsync(string ownerId)
     {
         await using var db = await dbFactory.CreateDbContextAsync();
-        return await db.StoredSaves.AsNoTracking()
-            .Where(s => s.OwnerId == ownerId)
-            .OrderBy(s => s.UploadedAt)
-            .Select(s => new StoredSaveInfo(s.Id, s.FileName, s.GameName, s.Generation, s.TrainerName, s.TrainerId,
-                s.PlayTimeSeconds, s.PokemonCount, s.UploadedAt, s.UpdatedAt))
+        return await (
+                from s in db.StoredSaves.AsNoTracking()
+                where s.OwnerId == ownerId
+                join m in db.SaveModifications on s.IdentityKey equals m.IdentityKey into mods
+                from m in mods.DefaultIfEmpty()
+                orderby s.UploadedAt
+                select new StoredSaveInfo(s.Id, s.FileName, s.GameName, s.Generation, s.TrainerName, s.TrainerId,
+                    s.PlayTimeSeconds, s.PokemonCount, s.UploadedAt, s.UpdatedAt,
+                    m != null, m != null && !s.DownloadedSinceModification, m != null ? m.Withdrawn : 0))
             .ToListAsync();
     }
 
@@ -78,9 +85,16 @@ public sealed class StoredSaveService(
         if (holder is not null)
             return new(StoreStatus.AlreadyStored, AlreadyStoredMessage(holder, ownerId, "Utilise « Mettre à jour » pour la remplacer."));
 
+        // Partie déjà modifiée par le serveur, puis supprimée : on ne peut la renvoyer que dans la version rendue ou plus avancée.
+        var modification = await db.SaveModifications.FindAsync(identity.Key);
+        if (CheckServerModification(modification, identity, sav) is { } refused)
+            return refused;
+
         var now = DateTime.UtcNow;
         var save = new StoredSave { OwnerId = ownerId, IdentityKey = identity.Key, UploadedAt = now };
         Fill(save, sav, identity, fileName, data, now);
+        save.DownloadedSinceModification = modification is not null; // c'est la version rendue par le serveur
+        ClearIfMoreAdvanced(db, modification, identity, save);
         db.StoredSaves.Add(save);
         AddPokemon(db, save, sav, ownerId, now);
 
@@ -101,6 +115,8 @@ public sealed class StoredSaveService(
     /// <summary>
     /// Remplace une sauvegarde stockée par une version plus récente de la même partie, et ses Pokémon par ceux du fichier.
     /// Si le fichier a moins de temps de jeu (vieille copie ?), rien n'est fait sans <paramref name="acceptOlder"/>.
+    /// Si le serveur a modifié la partie (retrait de Pokédollars), il faut l'avoir téléchargée, et le fichier doit être
+    /// plus avancé que la version modifiée, sans exception (voir <see cref="CheckServerModification"/>).
     /// </summary>
     public async Task<StoreResult> UpdateAsync(string ownerId, int saveId, string fileName, byte[] data, bool acceptOlder = false)
     {
@@ -115,7 +131,16 @@ public sealed class StoredSaveService(
         if (identity.Key != save.IdentityKey)
             return new(StoreStatus.WrongTrainer,
                 $"Ce fichier n'est pas la même partie : dresseur {identity.TrainerName} ({identity.TrainerId}) au lieu de {save.TrainerName} ({save.TrainerId}).");
-        if (identity.PlayTimeSeconds < save.PlayTimeSeconds && !acceptOlder)
+        var modification = await db.SaveModifications.FindAsync(save.IdentityKey);
+        if (modification is not null)
+        {
+            if (!save.DownloadedSinceModification)
+                return new(StoreStatus.ModifiedOnServer,
+                    $"Un retrait de {InventoryService.FormatMoney(modification.Withdrawn)} a modifié cette sauvegarde sur le serveur : télécharge-la et remplace celle de ton jeu avant de la mettre à jour.");
+            if (CheckServerModification(modification, identity, sav) is { } refused)
+                return refused;
+        }
+        else if (identity.PlayTimeSeconds < save.PlayTimeSeconds && !acceptOlder)
             return new(StoreStatus.OlderPlayTime,
                 $"Ce fichier a moins de temps de jeu que la version stockée ({SaveIdentity.FormatPlayTime(save.PlayTimeSeconds)} → {SaveIdentity.FormatPlayTime(identity.PlayTimeSeconds)}) : c'est peut-être une ancienne copie.",
                 save.PlayTimeSeconds, identity.PlayTimeSeconds);
@@ -126,13 +151,69 @@ public sealed class StoredSaveService(
         await db.BankPokemon.Where(p => p.StoredSaveId == save.Id).ExecuteDeleteAsync();
         var now = DateTime.UtcNow;
         Fill(save, sav, identity, fileName, data, now);
+        ClearIfMoreAdvanced(db, modification, identity, save);
         AddPokemon(db, save, sav, ownerId, now);
-        await db.SaveChangesAsync();
+        try
+        {
+            await db.SaveChangesAsync();
+        }
+        catch (DbUpdateConcurrencyException) // modifiée au même moment (retrait depuis un autre onglet...)
+        {
+            return ConflictResult();
+        }
         await tx.CommitAsync();
 
         logger.LogInformation("Utilisateur {User} : sauvegarde {Id} mise à jour ({Count} Pokémon).", ownerId, save.Id, save.PokemonCount);
         return new(StoreStatus.Ok, $"Sauvegarde mise à jour : {save.PokemonCount} Pokémon.");
     }
+
+    /// <summary>
+    /// Fichier actuel d'une sauvegarde stockée (avec les éventuelles modifications du serveur), sans la supprimer.
+    /// Lève le blocage de « Mettre à jour » posé après un retrait. Null si elle n'existe pas.
+    /// </summary>
+    public async Task<(string FileName, byte[] Data)?> DownloadAsync(string ownerId, int saveId)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+        var save = await db.StoredSaves.FirstOrDefaultAsync(s => s.Id == saveId && s.OwnerId == ownerId);
+        if (save is null)
+            return null;
+        if (!save.DownloadedSinceModification && await db.SaveModifications.AnyAsync(m => m.IdentityKey == save.IdentityKey))
+        {
+            save.DownloadedSinceModification = true;
+            save.Version++;
+            await db.SaveChangesAsync(); // jeton de concurrence : échoue si un retrait vient de modifier le fichier
+        }
+        return (save.FileName, save.Data);
+    }
+
+    /// <summary>
+    /// Refuse le fichier d'une partie modifiée par le serveur s'il n'est pas plus avancé que la version modifiée :
+    /// c'est alors l'ancienne sauvegarde du jeu, qui contient encore l'argent retiré. Seule exception, la version
+    /// modifiée elle-même (même temps de jeu, pas plus d'argent), rendue au joueur par « Télécharger » ou la suppression.
+    /// </summary>
+    private static StoreResult? CheckServerModification(SaveModification? modification, SaveIdentity identity, SaveFile sav)
+    {
+        if (modification is null || identity.PlayTimeSeconds > modification.PlayTimeSeconds)
+            return null;
+        if (identity.PlayTimeSeconds == modification.PlayTimeSeconds && sav.Money <= modification.MoneyAfter)
+            return null;
+        return new(StoreStatus.ModifiedOnServer,
+            $"Un retrait de {InventoryService.FormatMoney(modification.Withdrawn)} a modifié cette partie sur le serveur, et ce fichier n'est pas plus avancé " +
+            $"({SaveIdentity.FormatPlayTime(modification.PlayTimeSeconds)} → {SaveIdentity.FormatPlayTime(identity.PlayTimeSeconds)}) : c'est sans doute l'ancienne " +
+            "sauvegarde de ton jeu, qui contient encore l'argent retiré. Utilise la version rendue par PokeBank (« Télécharger » ou suppression), joue un peu, puis réessaie.");
+    }
+
+    /// <summary>Le joueur a envoyé une partie plus avancée que la version modifiée : la trace est levée, tout redevient normal.</summary>
+    private static void ClearIfMoreAdvanced(ApplicationDbContext db, SaveModification? modification, SaveIdentity identity, StoredSave save)
+    {
+        if (modification is null || identity.PlayTimeSeconds <= modification.PlayTimeSeconds)
+            return;
+        db.SaveModifications.Remove(modification);
+        save.DownloadedSinceModification = false;
+    }
+
+    public static StoreResult ConflictResult() =>
+        new(StoreStatus.Conflict, "Cette sauvegarde vient d'être modifiée ailleurs (autre onglet ?) : recharge la page et recommence.");
 
     /// <summary>
     /// Retire une sauvegarde stockée et tous ses Pokémon, après en avoir gardé une copie de sécurité.
@@ -205,7 +286,7 @@ public sealed class StoredSaveService(
         _ => type.ToString(),
     };
 
-    private static bool TryRead(byte[] data, string fileName, out SaveFile sav)
+    internal static bool TryRead(byte[] data, string fileName, out SaveFile sav)
     {
         // PKHeX peut modifier le tableau : on lui passe une copie pour stocker le fichier d'origine intact.
         if (SaveUtil.TryGetSaveFile(data.ToArray(), out var parsed, fileName) && parsed is not null)
@@ -229,6 +310,7 @@ public sealed class StoredSaveService(
         save.TrainerId = identity.TrainerId;
         save.PlayTimeSeconds = identity.PlayTimeSeconds;
         save.UpdatedAt = now;
+        save.Version++;
     }
 
     private void AddPokemon(ApplicationDbContext db, StoredSave save, SaveFile sav, string ownerId, DateTime now)
@@ -245,7 +327,7 @@ public sealed class StoredSaveService(
         save.PokemonCount = position;
     }
 
-    private async Task WriteBackupAsync(string ownerId, StoredSave save, string suffix)
+    internal async Task WriteBackupAsync(string ownerId, StoredSave save, string suffix)
     {
         var dir = BankService.BackupDirectory(config, env, ownerId);
         var stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");

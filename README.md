@@ -44,6 +44,18 @@ et tous ses Pokémon (équipe, boîtes, pension, Boîte Combat…) apparaissent 
 - Tant qu'elle est stockée, la sauvegarde est **refusée dans « Ma banque »** (au chargement et à la validation).
 - Une mise à jour avec moins de temps de jeu que la version stockée demande confirmation (ancienne copie ?).
 
+### Inventaire (Pokédollars)
+
+La page « Inventaire » affiche le porte-monnaie du compte et le journal de ses opérations. « Retirer de l'argent »
+ouvre une fenêtre en trois étapes (sauvegarde stockée → montant libre → confirmation) : la somme est retirée **de la
+copie stockée sur le serveur** et créditée sur le porte-monnaie, en une seule transaction (copie avant/après dans
+`Data/backups/`). Il n'y a pas encore de transfert du porte-monnaie vers une sauvegarde.
+
+Le jeu du joueur a toujours cet argent : la sauvegarde est donc marquée « modifiée sur le serveur ». Sa mise à jour est
+bloquée tant qu'elle n'a pas été téléchargée (bouton « Télécharger » de « Mes sauvegardes »), puis n'accepte qu'un fichier
+avec **plus** de temps de jeu (l'ancienne sauvegarde du jeu, qui contient encore l'argent, est refusée). Dissuasif,
+pas infaillible : rien n'oblige le joueur à remplacer réellement sa sauvegarde.
+
 Lors d'un retrait, PKHeX convertit le Pokémon au format du jeu si possible (ex. PK4 → PK5) et refuse ce qui
 est incompatible (espèce, attaques ou objets inexistants dans le jeu, conversion vers une génération antérieure).
 
@@ -59,8 +71,11 @@ est incompatible (espèce, attaques ou objets inexistants dans le jeu, conversio
 | `PokeBank/Components/Pages/Saves.razor` | Gestion des sauvegardes stockées (ajout, mise à jour, suppression) |
 | `PokeBank/Services/StoredSaveService.cs` | Stockage, mise à jour et suppression des sauvegardes stockées |
 | `PokeBank/Services/SaveIdentity.cs` | Empreinte d'une sauvegarde (unicité sur le serveur) |
+| `PokeBank/Services/InventoryService.cs` | Porte-monnaie : retrait de Pokédollars d'une sauvegarde stockée, journal |
+| `PokeBank/Components/Pages/Inventory.razor` | Page « Inventaire » (solde, journal, fenêtre de retrait) |
 | `PokeBank/Data/BankPokemon.cs` | Table des Pokémon (octets bruts + métadonnées ; `StoredSaveId` si lecture seule) |
 | `PokeBank/Data/StoredSave.cs` | Table des sauvegardes stockées |
+| `PokeBank/Data/Wallet.cs` | Tables du porte-monnaie et du journal des opérations |
 
 Ajouter une migration après modification du modèle :
 

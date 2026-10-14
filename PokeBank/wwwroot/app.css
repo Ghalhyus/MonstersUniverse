@@ -183,3 +183,19 @@ h1:focus {
     overflow-y: auto;
 }
 
+/* ---------- Fenêtres (inventaire) ---------- */
+.dialog-backdrop { position: fixed; inset: 0; z-index: 1040; background: rgba(0, 0, 0, .4); }
+.dialog-panel {
+    position: fixed;
+    z-index: 1050;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: min(32rem, calc(100vw - 2rem));
+    max-height: calc(100vh - 2rem);
+    overflow-y: auto;
+}
+
+/* ---------- Inventaire ---------- */
+.wallet-balance { font-size: 2rem; font-weight: 600; line-height: 1.2; }
+

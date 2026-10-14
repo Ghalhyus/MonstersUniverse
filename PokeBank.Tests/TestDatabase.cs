@@ -40,6 +40,9 @@ public sealed class TestDatabase : IDisposable
     public StoredSaveService StoredSaves() =>
         new(Factory, new PokemonInfo(), Config, new FakeEnvironment(), NullLogger<StoredSaveService>.Instance);
 
+    public InventoryService Inventory() =>
+        new(Factory, StoredSaves(), NullLogger<InventoryService>.Instance);
+
     public void Dispose()
     {
         _connection.Dispose();

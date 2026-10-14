@@ -1,6 +1,9 @@
 ﻿@implements IDisposable
 
+@using System.Security.Claims
+@using PokeBank.Services
 @inject NavigationManager NavigationManager
+@inject WalletState Wallet
 
 <div class="top-row ps-3 navbar navbar-dark">
     <div class="container-fluid">
@@ -30,6 +33,15 @@
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="sauvegardes">
                 <span class="bi bi-save-nav-menu" aria-hidden="true"></span> Mes sauvegardes
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="inventaire">
+                <span class="bi bi-bag-nav-menu" aria-hidden="true"></span> Inventaire
+                @if (Wallet.Balance is { } balance)
+                {
+                    <span class="nav-balance">· @InventoryService.FormatMoney(balance)</span>
+                }
             </NavLink>
         </div>
 
@@ -67,13 +79,22 @@
 </div>
 
 @code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
     private string? currentUrl;
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         currentUrl = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
         NavigationManager.LocationChanged += OnLocationChanged;
+        Wallet.Changed += OnWalletChanged;
+
+        // Solde du porte-monnaie pour l'utilisateur connecté (rafraîchi par « Inventaire » après un retrait).
+        if (AuthState is not null && (await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier) is { } userId)
+            await Wallet.RefreshAsync(userId);
     }
+
+    private void OnWalletChanged() => InvokeAsync(StateHasChanged);
 
     private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
     {
@@ -84,6 +105,7 @@
     public void Dispose()
     {
         NavigationManager.LocationChanged -= OnLocationChanged;
+        Wallet.Changed -= OnWalletChanged;
     }
 }
 

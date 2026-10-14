@@ -285,6 +285,28 @@ namespace PokeBank.Migrations
                     b.ToTable("BankPokemon");
                 });
 
+            modelBuilder.Entity("PokeBank.Data.SaveModification", b =>
+                {
+                    b.Property<string>("IdentityKey")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("ModifiedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("MoneyAfter")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("PlayTimeSeconds")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Withdrawn")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("IdentityKey");
+
+                    b.ToTable("SaveModifications");
+                });
+
             modelBuilder.Entity("PokeBank.Data.StoredSave", b =>
                 {
                     b.Property<int>("Id")
@@ -294,6 +316,9 @@ namespace PokeBank.Migrations
                     b.Property<byte[]>("Data")
                         .IsRequired()
                         .HasColumnType("BLOB");
+
+                    b.Property<bool>("DownloadedSinceModification")
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("FileName")
                         .IsRequired()
@@ -334,6 +359,10 @@ namespace PokeBank.Migrations
                     b.Property<DateTime>("UploadedAt")
                         .HasColumnType("TEXT");
 
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
                     b.HasKey("Id");
 
                     b.HasIndex("IdentityKey")
@@ -342,6 +371,57 @@ namespace PokeBank.Migrations
                     b.HasIndex("OwnerId");
 
                     b.ToTable("StoredSaves");
+                });
+
+            modelBuilder.Entity("PokeBank.Data.Wallet", b =>
+                {
+                    b.Property<string>("OwnerId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Money")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("OwnerId");
+
+                    b.ToTable("Wallets");
+                });
+
+            modelBuilder.Entity("PokeBank.Data.WalletOperation", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Amount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("At")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("BalanceAfter")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("OwnerId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SaveLabel")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("StoredSaveId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StoredSaveId");
+
+                    b.HasIndex("OwnerId", "At");
+
+                    b.ToTable("WalletOperations");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
@@ -422,6 +502,35 @@ namespace PokeBank.Migrations
                         .IsRequired();
 
                     b.Navigation("Owner");
+                });
+
+            modelBuilder.Entity("PokeBank.Data.Wallet", b =>
+                {
+                    b.HasOne("PokeBank.Data.ApplicationUser", "Owner")
+                        .WithOne()
+                        .HasForeignKey("PokeBank.Data.Wallet", "OwnerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Owner");
+                });
+
+            modelBuilder.Entity("PokeBank.Data.WalletOperation", b =>
+                {
+                    b.HasOne("PokeBank.Data.ApplicationUser", "Owner")
+                        .WithMany()
+                        .HasForeignKey("OwnerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("PokeBank.Data.StoredSave", "StoredSave")
+                        .WithMany()
+                        .HasForeignKey("StoredSaveId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Owner");
+
+                    b.Navigation("StoredSave");
                 });
 #pragma warning restore 612, 618
         }

@@ -1,0 +1,227 @@
+@page "/inventaire"
+@attribute [Authorize]
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Authorization
+@using PokeBank.Data
+@using PokeBank.Services
+@inject InventoryService InventoryStore
+@inject WalletState Wallet
+
+<PageTitle>Inventaire</PageTitle>
+
+@* Inventaire du site : pour l'instant le porte-monnaie de Pokédollars et son journal. L'argent vient des sauvegardes
+   stockées ; seule la copie du serveur est modifiée (la mise à jour de la sauvegarde est ensuite encadrée). *@
+
+<h1 class="mb-3">Inventaire</h1>
+
+@if (message is not null)
+{
+    <div class="alert @(messageIsError ? "alert-danger" : "alert-success") alert-dismissible" role="alert">
+        @message
+        <button type="button" class="btn-close" aria-label="Fermer" @onclick="() => message = null"></button>
+    </div>
+}
+
+<div class="card mb-4">
+    <div class="card-body d-flex flex-wrap align-items-center gap-3">
+        <div>
+            <div class="small text-muted">Porte-monnaie</div>
+            <div class="wallet-balance">@InventoryService.FormatMoney(balance)</div>
+        </div>
+        <button class="btn btn-primary ms-auto" @onclick="OpenWithdraw">Retirer de l'argent d'une sauvegarde</button>
+    </div>
+</div>
+
+<h2 class="h5">Journal des opérations</h2>
+@if (operations.Count == 0)
+{
+    <p class="text-muted">Aucune opération pour l'instant.</p>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-sm align-middle">
+            <thead>
+                <tr><th>Date</th><th>Opération</th><th>Sauvegarde</th><th class="text-end">Montant</th><th class="text-end">Solde</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var op in operations)
+                {
+                    <tr>
+                        <td class="text-nowrap">@op.At.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                        <td>@KindLabel(op.Kind)</td>
+                        <td>@op.SaveLabel</td>
+                        <td class="text-end text-nowrap @(op.Amount >= 0 ? "text-success" : "text-danger")">
+                            @(op.Amount >= 0 ? "+" : "")@InventoryService.FormatMoney(op.Amount)
+                        </td>
+                        <td class="text-end text-nowrap">@InventoryService.FormatMoney(op.BalanceAfter)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@* ---------- Fenêtre de retrait : sauvegarde → montant → confirmation ---------- *@
+@if (step != WithdrawStep.Closed)
+{
+    <div class="dialog-backdrop" @onclick="CloseWithdraw"></div>
+    <div class="dialog-panel card" role="dialog" aria-modal="true" aria-label="Retirer de l'argent">
+        <div class="card-body">
+            @switch (step)
+            {
+                case WithdrawStep.ChooseSave:
+                    <h5>Retirer de l'argent <small class="text-muted">· 1/3</small></h5>
+                    <p class="small text-muted">Choisis la sauvegarde stockée d'où retirer les Pokédollars.</p>
+                    @if (sources is null)
+                    {
+                        <p class="text-muted">Chargement…</p>
+                    }
+                    else if (sources.Count == 0)
+                    {
+                        <p>Aucune sauvegarde stockée. Ajoutes-en une dans <a href="sauvegardes">Mes sauvegardes</a>.</p>
+                    }
+                    else
+                    {
+                        <div class="list-group mb-3">
+                            @foreach (var source in sources)
+                            {
+                                var s = source;
+                                <button type="button" class="list-group-item list-group-item-action d-flex align-items-center gap-2"
+                                        disabled="@(s.Money is null or 0)" @onclick="() => ChooseSave(s)">
+                                    <span><strong>@s.Label</strong> <span class="small text-muted">(@s.TrainerId)</span></span>
+                                    <span class="ms-auto text-nowrap">@(s.Money is { } m ? InventoryService.FormatMoney(m) : "argent illisible")</span>
+                                </button>
+                            }
+                        </div>
+                    }
+                    <div class="d-flex justify-content-end">
+                        <button class="btn btn-outline-secondary" @onclick="CloseWithdraw">Annuler</button>
+                    </div>
+                    break;
+
+                case WithdrawStep.Amount:
+                    <h5>Retirer de l'argent <small class="text-muted">· 2/3</small></h5>
+                    <p class="small">« @chosen!.Label » contient <strong>@InventoryService.FormatMoney(chosen.Money ?? 0)</strong>.</p>
+                    <label class="form-label" for="withdraw-amount">Montant à retirer (₽)</label>
+                    <input id="withdraw-amount" type="number" class="form-control mb-1" min="1" max="@chosen.Money" step="1"
+                           @bind="amount" @bind:event="oninput" />
+                    @if (AmountError is { } error)
+                    {
+                        <div class="small text-danger">@error</div>
+                    }
+                    <div class="d-flex justify-content-end gap-2 mt-3">
+                        <button class="btn btn-outline-secondary" @onclick="() => step = WithdrawStep.ChooseSave">Retour</button>
+                        <button class="btn btn-primary" @onclick="() => step = WithdrawStep.Confirm" disabled="@(AmountError is not null)">Suivant</button>
+                    </div>
+                    break;
+
+                case WithdrawStep.Confirm:
+                    var value = amount ?? 0;
+                    <h5>Retirer de l'argent <small class="text-muted">· 3/3</small></h5>
+                    <p>Retirer <strong>@InventoryService.FormatMoney(value)</strong> de « @chosen!.Label » ?</p>
+                    <ul class="small">
+                        <li>Sauvegarde stockée : @InventoryService.FormatMoney(chosen.Money ?? 0) → @InventoryService.FormatMoney((chosen.Money ?? 0) - value)</li>
+                        <li>Porte-monnaie : @InventoryService.FormatMoney(balance) → @InventoryService.FormatMoney(balance + value)</li>
+                    </ul>
+                    <div class="alert alert-warning small">
+                        Seule la copie du serveur est modifiée : <strong>ton jeu a toujours cet argent</strong>. Pour ne pas l'avoir
+                        en double, télécharge la sauvegarde depuis « Mes sauvegardes » et remplace celle de ton jeu.
+                        Sa mise à jour reste bloquée en attendant.
+                    </div>
+                    <div class="d-flex justify-content-end gap-2">
+                        <button class="btn btn-outline-secondary" @onclick="() => step = WithdrawStep.Amount" disabled="@busy">Retour</button>
+                        <button class="btn btn-primary" @onclick="ConfirmWithdraw" disabled="@busy">Confirmer le retrait</button>
+                    </div>
+                    break;
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = default!;
+
+    private enum WithdrawStep { Closed, ChooseSave, Amount, Confirm }
+
+    private string userId = "";
+    private long balance;
+    private List<WalletOperationView> operations = [];
+
+    private WithdrawStep step;
+    private List<MoneySource>? sources;
+    private MoneySource? chosen;
+    private long? amount;
+    private bool busy;
+
+    private string? message;
+    private bool messageIsError;
+
+    private string? AmountError =>
+        amount is not { } a ? "Indique un montant."
+        : a <= 0 ? "Le montant doit être supérieur à 0."
+        : a > (chosen?.Money ?? 0) ? $"La sauvegarde ne contient que {InventoryService.FormatMoney(chosen?.Money ?? 0)}."
+        : null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        userId = (await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
+        await LoadWallet();
+    }
+
+    private async Task LoadWallet()
+    {
+        balance = await InventoryStore.GetBalanceAsync(userId);
+        operations = await InventoryStore.ListOperationsAsync(userId);
+    }
+
+    private static string KindLabel(WalletOperationKind kind) => kind switch
+    {
+        WalletOperationKind.WithdrawFromSave => "Retrait d'une sauvegarde",
+        _ => kind.ToString(),
+    };
+
+    private async Task OpenWithdraw()
+    {
+        message = null;
+        chosen = null;
+        amount = null;
+        sources = null;
+        step = WithdrawStep.ChooseSave;
+        sources = await InventoryStore.ListMoneySourcesAsync(userId);
+    }
+
+    private void ChooseSave(MoneySource source)
+    {
+        chosen = source;
+        amount = null; // pas de montant prérempli : rien n'est retiré par accident
+        step = WithdrawStep.Amount;
+    }
+
+    private void CloseWithdraw()
+    {
+        if (!busy) step = WithdrawStep.Closed;
+    }
+
+    private async Task ConfirmWithdraw()
+    {
+        if (chosen is null || amount is not { } value) return;
+        busy = true;
+        try
+        {
+            var result = await InventoryStore.WithdrawFromSaveAsync(userId, chosen.SaveId, value);
+            message = result.Message;
+            messageIsError = !result.Ok;
+            step = WithdrawStep.Closed;
+            await LoadWallet();
+            await Wallet.RefreshAsync(userId); // solde du menu
+        }
+        catch (Exception ex)
+        {
+            message = $"Retrait impossible : {ex.Message}";
+            messageIsError = true;
+            step = WithdrawStep.Closed;
+        }
+        finally { busy = false; }
+    }
+}

@@ -53,14 +53,32 @@ else
                     </div>
                     <div class="ms-auto d-flex flex-wrap gap-2">
                         <a class="btn btn-sm btn-outline-secondary" href="collection?source=@s.Id">Voir ses Pokémon</a>
-                        <label class="btn btn-sm btn-outline-primary mb-0 @(busy ? "disabled" : "")">
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="() => DownloadSave(s)" disabled="@busy">Télécharger</button>
+                        @* Après un retrait d'argent sur le serveur : bloqué tant que la version modifiée n'a pas été téléchargée. *@
+                        <label class="btn btn-sm btn-outline-primary mb-0 @(busy || s.MustDownloadBeforeUpdate ? "disabled" : "")"
+                               title="@(s.MustDownloadBeforeUpdate ? "Télécharge d'abord la version modifiée sur le serveur" : null)">
                             Mettre à jour
-                            <InputFile @key="fileInputVersion" class="d-none" OnChange="e => UpdateSave(s, e)" disabled="@busy" />
+                            <InputFile @key="fileInputVersion" class="d-none" OnChange="e => UpdateSave(s, e)" disabled="@(busy || s.MustDownloadBeforeUpdate)" />
                         </label>
                         <button class="btn btn-sm btn-outline-danger" @onclick="() => { confirmDeleteId = s.Id; pendingUpdate = null; }" disabled="@busy">Supprimer</button>
                     </div>
                 </div>
 
+                @if (s.ModifiedOnServer)
+                {
+                    <div class="alert alert-info small mt-2 mb-0">
+                        Un retrait de @InventoryService.FormatMoney(s.WithdrawnOnServer) a modifié cette sauvegarde sur le serveur :
+                        ton jeu a toujours cet argent.
+                        @if (s.MustDownloadBeforeUpdate)
+                        {
+                            <text><strong>Télécharge-la et remplace celle de ton jeu</strong> ; la mise à jour est bloquée en attendant.</text>
+                        }
+                        else
+                        {
+                            <text>Remplace celle de ton jeu par la version téléchargée ; la prochaine mise à jour devra avoir plus de temps de jeu.</text>
+                        }
+                    </div>
+                }
                 @if (pendingUpdate is { } pending && pending.Save.Id == s.Id)
                 {
                     <div class="alert alert-warning small mt-2 mb-0">
@@ -149,6 +167,21 @@ else
                 using var streamRef = new DotNetStreamReference(new MemoryStream(file.Data));
                 await JS.InvokeVoidAsync("downloadFileFromStream", file.FileName, streamRef);
                 Show($"Sauvegarde « {file.FileName} » téléchargée et retirée du serveur ({save.PokemonCount} Pokémon).");
+            }
+            else Show("Cette sauvegarde n'existe plus.", isError: true);
+            saves = await StoredSaves.ListAsync(userId);
+        });
+
+    /// <summary>Récupère le fichier actuel (avec les modifications du serveur) sans supprimer la sauvegarde.</summary>
+    private Task DownloadSave(StoredSaveInfo save) =>
+        RunBusy(async () =>
+        {
+            if (await StoredSaves.DownloadAsync(userId, save.Id) is { } file)
+            {
+                using var streamRef = new DotNetStreamReference(new MemoryStream(file.Data));
+                await JS.InvokeVoidAsync("downloadFileFromStream", file.FileName, streamRef);
+                if (save.MustDownloadBeforeUpdate)
+                    Show("Sauvegarde téléchargée : remplace celle de ton jeu par ce fichier. La mise à jour est de nouveau possible.");
             }
             else Show("Cette sauvegarde n'existe plus.", isError: true);
             saves = await StoredSaves.ListAsync(userId);
