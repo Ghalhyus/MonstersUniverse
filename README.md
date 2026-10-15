@@ -59,8 +59,13 @@ et tous ses Pokémon (équipe, boîtes, pension, Boîte Combat…) apparaissent 
 La page « Inventaire » affiche le porte-monnaie du compte et le « Stockage » de ses objets : un onglet par catégorie
 (objets, Pokéballs, médicaments, baies, CT / DT, « Objets » ouvert par défaut ; l'onglet choisi est gardé dans l'adresse,
 `?onglet=baies`), avec la quantité totale de chacune, en liste (par défaut) ou en grille (choix retenu par le navigateur). La
-recherche porte sur tout l'inventaire : chaque onglet affiche alors le nombre d'objets trouvés. Le bouton « Journal » ouvre
-le journal des opérations dans un panneau à droite (un tiers de la page, fermé à chaque arrivée) qui réduit la largeur de la
+recherche porte sur toute la source affichée : chaque onglet affiche alors le nombre d'objets trouvés. Un sélecteur choisit
+la source (gardée dans l'adresse, `?source=tout`) : l'inventaire « Interne » (par défaut), « Tout » (l'interne et toutes les
+sauvegardes additionnés) ou le sac d'une sauvegarde, en **lecture seule** (les transferts passent par les fenêtres de
+retrait et de dépôt). Pour une sauvegarde, une CT porte son numéro dans le jeu (« CT26 Séisme ») ; pour « Tout », le numéro
+de chaque jeu (« Séisme — CT26 (Platine), DT10 (Épée) »), et un clic sur un objet ouvre à droite le détail de l'endroit où il
+se trouve. Les sauvegardes illisibles ou non prises en charge sont signalées au-dessus de la liste. Le bouton « Journal » ouvre
+le journal des opérations dans ce même panneau à droite (un tiers de la page, fermé à chaque arrivée) qui réduit la largeur de la
 page ; sur un téléphone, il recouvre l'écran. « Retirer de l'argent »
 ouvre une fenêtre en trois étapes (sauvegarde stockée → montant libre → confirmation) : la somme est retirée **de la
 copie stockée sur le serveur** et créditée sur le porte-monnaie, en une seule transaction (copie avant/après dans
@@ -135,7 +140,7 @@ est incompatible (espèce, attaques ou objets inexistants dans le jeu, conversio
 | `PokeBank/Services/InventoryService.cs` | Inventaire : retrait de Pokédollars, retrait et dépôt d'objets (sauvegardes stockées), achat d'emplacements, journal |
 | `PokeBank/Services/SaveBag.cs` | Objets du sac d'une sauvegarde (objets, Pokéballs, médicaments, baies, CT/DT par capacité ; jamais les objets rares, Lettres ni CS) : lecture, retrait, dépôt (PKHeX) |
 | `PokeBank/Services/CollectionCapacity.cs` | Taille maximale de la collection : règles, occupation, messages |
-| `PokeBank/Components/Pages/Inventory.razor` | Page « Inventaire » (solde, stockage en onglets avec recherche et liste/grille, journal en panneau latéral, fenêtre de retrait d'argent) |
+| `PokeBank/Components/Pages/Inventory.razor` | Page « Inventaire » (solde, stockage en onglets avec recherche, liste/grille et choix de la source — interne, tout, une sauvegarde —, journal et détail d'un objet en panneau latéral, fenêtre de retrait d'argent) |
 | `PokeBank/Components/Shared/ItemTransferDialog.razor` | Fenêtre de retrait / dépôt d'objets (toutes catégories en une opération) |
 | `PokeBank/Data/BankPokemon.cs` | Table des Pokémon (octets bruts + métadonnées ; `StoredSaveId` si lecture seule) |
 | `PokeBank/Data/StoredSave.cs` | Table des sauvegardes stockées |

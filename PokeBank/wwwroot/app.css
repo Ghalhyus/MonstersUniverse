@@ -240,3 +240,7 @@ h1:focus {
         border-radius: 0;
     }
 }
+.inventory-source { max-width: 18rem; }
+/* Vignette cliquable (source « Tout ») : ouvre le détail de l'objet */
+.item-tile-button { width: 100%; text-align: left; color: inherit; font: inherit; cursor: pointer; }
+.item-tile-button:hover, .item-tile-button.selected { border-color: var(--bs-primary); }

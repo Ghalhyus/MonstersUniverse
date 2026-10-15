@@ -15,15 +15,17 @@
 @* Inventaire du site : le porte-monnaie de Pokédollars, le stockage des objets (objets ordinaires, Pokéballs, médicaments,
    baies, CT et DT) et le journal. L'argent et les objets viennent des sauvegardes stockées (les objets peuvent aussi y
    retourner) ; seule la copie du serveur est modifiée (la mise à jour de la sauvegarde est ensuite encadrée).
-   Le journal s'ouvre dans un panneau à droite, qui réduit la largeur de la page (il la recouvre sur un téléphone). *@
+   Le stockage peut aussi montrer, en lecture seule, le sac d'une sauvegarde ou le total de tout (interne + sauvegardes).
+   Le journal et le détail d'un objet s'ouvrent dans un panneau à droite, qui réduit la largeur de la page (il la recouvre
+   sur un téléphone). *@
 
 <div class="inventory-layout">
 <div class="inventory-main">
     <div class="d-flex align-items-center gap-2 mb-3">
         <h1 class="mb-0">Inventaire</h1>
-        <button class="btn btn-outline-secondary ms-auto" aria-expanded="@(journalOpen ? "true" : "false")" aria-controls="journal"
-                @onclick="() => journalOpen = !journalOpen">
-            @(journalOpen ? "Fermer le journal" : "Journal")
+        <button class="btn btn-outline-secondary ms-auto" aria-expanded="@(panel == SidePanel.Journal ? "true" : "false")" aria-controls="journal"
+                @onclick="ToggleJournal">
+            @(panel == SidePanel.Journal ? "Fermer le journal" : "Journal")
         </button>
     </div>
 
@@ -45,7 +47,7 @@
         </div>
     </div>
 
-    @* Stockage des objets : un onglet par catégorie (les objets ordinaires d'abord), une recherche sur tout l'inventaire, en
+    @* Stockage des objets : un onglet par catégorie (les objets ordinaires d'abord), une recherche dans la source affichée, en
        liste ou en grille. Une même opération peut déplacer des objets de toutes les catégories. *@
     <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
         <h2 class="h5 mb-0">Stockage</h2>
@@ -55,11 +57,14 @@
         </div>
     </div>
 
+    @{
+        var view = ViewItems();
+    }
     <ul class="nav nav-tabs mb-2" role="tablist">
         @foreach (var category in ItemCategories.All)
         {
             var c = category.Category;
-            var stacks = items.Where(i => i.Category == c).ToList();
+            var stacks = view.Where(i => i.Category == c).ToList();
             <li class="nav-item" role="presentation">
                 <button type="button" role="tab" class="nav-link @(tab == c ? "active" : "")" aria-selected="@(tab == c ? "true" : "false")"
                         @onclick="() => ShowTab(c)">
@@ -79,8 +84,20 @@
     </ul>
 
     <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
-        <input type="search" class="form-control form-control-sm inventory-search" placeholder="Rechercher dans tout l'inventaire…"
-               aria-label="Rechercher dans tout l'inventaire" @bind="search" @bind:event="oninput" />
+        @* Source affichée : l'inventaire interne (par défaut), tout, ou le sac d'une sauvegarde (lecture seule). *@
+        <select class="form-select form-select-sm inventory-source" aria-label="Objets affichés" value="@source" @onchange="ChangeSource">
+            <option value="@InternalSource">Interne</option>
+            <option value="@AllSource">Tout (interne et sauvegardes)</option>
+            @if (saves is not null)
+            {
+                @foreach (var save in saves)
+                {
+                    <option value="@SaveSource(save.SaveId)">@save.Label</option>
+                }
+            }
+        </select>
+        <input type="search" class="form-control form-control-sm inventory-search" placeholder="Rechercher par nom…"
+               aria-label="Rechercher par nom" @bind="search" @bind:event="oninput" />
         <div class="btn-group btn-group-sm ms-auto" role="group" aria-label="Affichage">
             <button type="button" class="btn @(grid ? "btn-outline-secondary" : "btn-secondary")" aria-pressed="@(grid ? "false" : "true")"
                     @onclick="() => SetView(grid: false)">Liste</button>
@@ -89,14 +106,39 @@
         </div>
     </div>
 
+    @if (source != InternalSource && saves is not null)
+    {
+        var ignored = SourceSaves().Where(s => s.Unsupported is not null).ToList();
+        @if (ignored.Count > 0)
+        {
+            <p class="small text-muted mb-2">
+                @(ignored.Count == 1 ? "1 sauvegarde ignorée" : $"{ignored.Count} sauvegardes ignorées") :
+                @string.Join(" ; ", ignored.Select(s => $"{s.Label} ({s.Unsupported!.TrimEnd('.')})")).
+            </p>
+        }
+        @if (source == AllSource)
+        {
+            <p class="small text-muted mb-2">Lecture seule : clique sur un objet pour voir où il se trouve.</p>
+        }
+        else
+        {
+            <p class="small text-muted mb-2">Lecture seule : copie de cette sauvegarde sur le serveur.</p>
+        }
+    }
+
     @{
         var current = ItemCategories.All.First(c => c.Category == tab);
-        var all = items.Where(i => i.Category == tab).ToList();
+        var all = view.Where(i => i.Category == tab).ToList();
         var shown = all.Where(Matches).ToList();
+        var clickable = source == AllSource;
     }
-    @if (all.Count == 0)
+    @if (source != InternalSource && saves is null)
     {
-        <p class="text-muted small">@current.Empty</p>
+        <p class="text-muted small">Chargement des sauvegardes…</p>
+    }
+    else if (all.Count == 0)
+    {
+        <p class="text-muted small">@EmptyText(current)</p>
     }
     else if (shown.Count == 0)
     {
@@ -107,11 +149,24 @@
         <div class="item-grid">
             @foreach (var item in shown)
             {
-                <div class="item-tile" title="@item.Name">
-                    <img src="@item.SpriteUrl" alt="" width="32" height="32" class="item-sprite" />
-                    <span class="item-name">@item.Name</span>
-                    <span class="item-count">× @CollectionCapacity.FormatCount(item.Count)</span>
-                </div>
+                var i = item;
+                @if (clickable)
+                {
+                    <button type="button" class="item-tile item-tile-button @(detail?.ItemId == i.ItemId ? "selected" : "")" title="@i.Name"
+                            @onclick="() => ShowDetail(i)">
+                        <img src="@i.SpriteUrl" alt="" width="32" height="32" class="item-sprite" />
+                        <span class="item-name">@i.Name</span>
+                        <span class="item-count">× @CollectionCapacity.FormatCount(i.Count)</span>
+                    </button>
+                }
+                else
+                {
+                    <div class="item-tile" title="@i.Name">
+                        <img src="@i.SpriteUrl" alt="" width="32" height="32" class="item-sprite" />
+                        <span class="item-name">@i.Name</span>
+                        <span class="item-count">× @CollectionCapacity.FormatCount(i.Count)</span>
+                    </div>
+                }
             }
         </div>
     }
@@ -124,12 +179,20 @@
             <tbody>
                 @foreach (var item in shown)
                 {
-                    <tr>
+                    var i = item;
+                    <tr class="@(detail?.ItemId == i.ItemId ? "table-active" : "")">
                         <td>
-                            <img src="@item.SpriteUrl" alt="" width="24" height="24" class="item-sprite" />
-                            @item.Name
+                            <img src="@i.SpriteUrl" alt="" width="24" height="24" class="item-sprite" />
+                            @if (clickable)
+                            {
+                                <button type="button" class="btn btn-link p-0 align-baseline text-start" @onclick="() => ShowDetail(i)">@i.Name</button>
+                            }
+                            else
+                            {
+                                @i.Name
+                            }
                         </td>
-                        <td class="text-end">@CollectionCapacity.FormatCount(item.Count)</td>
+                        <td class="text-end">@CollectionCapacity.FormatCount(i.Count)</td>
                     </tr>
                 }
             </tbody>
@@ -137,13 +200,13 @@
     }
 </div>
 
-@if (journalOpen)
+@if (panel == SidePanel.Journal)
 {
     @* Journal : une opération sur deux lignes (date, nature, montant ; puis sauvegarde, détail, solde). *@
     <aside id="journal" class="journal-panel card" aria-label="Journal des opérations">
         <div class="card-header d-flex align-items-center">
             <h2 class="h6 mb-0">Journal des opérations</h2>
-            <button type="button" class="btn-close ms-auto" aria-label="Fermer le journal" @onclick="() => journalOpen = false"></button>
+            <button type="button" class="btn-close ms-auto" aria-label="Fermer le journal" @onclick="ClosePanel"></button>
         </div>
         @if (operations.Count == 0)
         {
@@ -177,6 +240,30 @@
                 }
             </ul>
         }
+    </aside>
+}
+else if (panel == SidePanel.Detail && detail is { } d)
+{
+    @* Détail d'un objet (source « Tout ») : où il se trouve, avec le numéro de la CT dans chaque jeu. *@
+    <aside class="journal-panel card" aria-label="@($"Détail : {d.Name}")">
+        <div class="card-header d-flex align-items-center gap-2">
+            <img src="@d.SpriteUrl" alt="" width="24" height="24" class="item-sprite" />
+            <h2 class="h6 mb-0">@BaseName(d)</h2>
+            <button type="button" class="btn-close ms-auto" aria-label="Fermer le détail" @onclick="ClosePanel"></button>
+        </div>
+        <ul class="list-group list-group-flush">
+            @foreach (var (label, count) in DetailRows(d.ItemId))
+            {
+                <li class="list-group-item d-flex gap-2">
+                    <span>@label</span>
+                    <span class="ms-auto fw-semibold text-nowrap">× @CollectionCapacity.FormatCount(count)</span>
+                </li>
+            }
+            <li class="list-group-item d-flex gap-2 fw-semibold">
+                <span>Total</span>
+                <span class="ms-auto text-nowrap">× @CollectionCapacity.FormatCount(d.Count)</span>
+            </li>
+        </ul>
     </aside>
 }
 </div>
@@ -269,7 +356,16 @@
     /// <summary>Onglet du stockage dans l'adresse (« ?onglet=baies ») : une actualisation garde l'onglet ouvert.</summary>
     [SupplyParameterFromQuery(Name = "onglet")] private string? TabSlug { get; set; }
 
+    /// <summary>Source du stockage dans l'adresse (« ?source=tout », « ?source=sauvegarde-3 ») ; l'inventaire interne par défaut.</summary>
+    [SupplyParameterFromQuery(Name = "source")] private string? SourceParam { get; set; }
+
     private enum WithdrawStep { Closed, ChooseSave, Amount, Confirm }
+
+    /// <summary>Panneau à droite : le journal, ou le détail d'un objet (source « Tout ») ; un seul à la fois.</summary>
+    private enum SidePanel { None, Journal, Detail }
+
+    private const string InternalSource = "interne", AllSource = "tout";
+    private static string SaveSource(int saveId) => $"sauvegarde-{saveId}";
 
     /// <summary>Nom de chaque onglet dans l'adresse ; « Objets » par défaut.</summary>
     private static readonly IReadOnlyDictionary<ItemCategory, string> TabSlugs = new Dictionary<ItemCategory, string>
@@ -289,7 +385,10 @@
     private ItemCategory tab = ItemCategory.Items;
     private string search = "";
     private bool grid; // liste par défaut
-    private bool journalOpen; // fermé à chaque arrivée sur la page
+    private string source = InternalSource;
+    private List<ItemSource>? saves; // sacs des sauvegardes stockées, lus après le premier affichage
+    private SidePanel panel; // fermé à chaque arrivée sur la page
+    private ItemStack? detail; // objet dont le détail est affiché (source « Tout »)
 
     private string userId = "";
     private long balance;
@@ -318,8 +417,16 @@
         await LoadWallet();
     }
 
-    protected override void OnParametersSet() =>
+    protected override void OnParametersSet()
+    {
         tab = TabSlugs.FirstOrDefault(t => t.Value == TabSlug, new(ItemCategory.Items, "objets")).Key;
+        var wanted = string.IsNullOrEmpty(SourceParam) ? InternalSource : SourceParam;
+        if (wanted != source)
+        {
+            source = wanted;
+            CloseDetail();
+        }
+    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -327,16 +434,15 @@
             return;
         try
         {
-            if (await JS.InvokeAsync<string?>("localStorage.getItem", ViewStorageKey) == "grille")
-            {
-                grid = true;
-                StateHasChanged();
-            }
+            grid = await JS.InvokeAsync<string?>("localStorage.getItem", ViewStorageKey) == "grille";
         }
         catch (JSException)
         {
             // stockage du navigateur indisponible (navigation privée...) : on reste sur la liste
         }
+        // Lecture des sacs après le premier affichage : l'inventaire interne s'affiche sans attendre les fichiers.
+        saves = await InventoryStore.ListItemSourcesAsync(userId);
+        StateHasChanged();
     }
 
     private bool Searching => !string.IsNullOrWhiteSpace(search);
@@ -348,7 +454,100 @@
     private void ShowTab(ItemCategory category)
     {
         tab = category;
-        Navigation.NavigateTo($"inventaire?onglet={TabSlugs[category]}", replace: true);
+        Navigation.NavigateTo(Navigation.GetUriWithQueryParameter("onglet", TabSlugs[category]), replace: true);
+    }
+
+    private void ChangeSource(ChangeEventArgs e)
+    {
+        source = e.Value?.ToString() ?? InternalSource;
+        CloseDetail();
+        Navigation.NavigateTo(Navigation.GetUriWithQueryParameter("source", source == InternalSource ? null : source), replace: true);
+    }
+
+    /// <summary>Sauvegardes de la source affichée : toutes pour « Tout », une seule pour le sac d'une sauvegarde.</summary>
+    private IEnumerable<ItemSource> SourceSaves() =>
+        saves is null || source == InternalSource ? []
+        : source == AllSource ? saves
+        : saves.Where(s => SaveSource(s.SaveId) == source);
+
+    /// <summary>
+    /// Objets de la source affichée, dans l'ordre de l'inventaire. Pour une sauvegarde, une CT porte son numéro dans le jeu
+    /// (« CT26 Séisme ») ; pour « Tout », les quantités sont additionnées et une CT porte le numéro de chaque jeu
+    /// (« Séisme — CT26 (Platine), DT10 (Épée) »). Une sauvegarde inconnue (supprimée entre-temps) revient à l'interne.
+    /// </summary>
+    private List<ItemStack> ViewItems()
+    {
+        if (source == InternalSource || saves is null)
+            return items;
+        if (source != AllSource)
+        {
+            var save = saves.FirstOrDefault(s => SaveSource(s.SaveId) == source);
+            if (save is null)
+                return items;
+            return save.Items.Select(i => save.MachineLabels.TryGetValue(i.ItemId, out var label) ? i with { Name = $"{label} {i.Name}" } : i).ToList();
+        }
+
+        var merged = new Dictionary<int, ItemStack>();
+        foreach (var stack in items.Concat(saves.SelectMany(s => s.Items)))
+            merged[stack.ItemId] = merged.TryGetValue(stack.ItemId, out var seen) ? seen with { Count = seen.Count + stack.Count } : stack;
+        return merged.Values
+            .OrderBy(i => i.Category)
+            .ThenBy(i => i.Category == ItemCategory.Machines ? i.Name : "", StringComparer.Create(System.Globalization.CultureInfo.GetCultureInfo("fr-FR"), ignoreCase: true))
+            .ThenBy(i => i.ItemId)
+            .Select(i => MachineNumbers(i.ItemId) is { Length: > 0 } numbers ? i with { Name = $"{i.Name} — {numbers}" } : i)
+            .ToList();
+    }
+
+    /// <summary>Numéros d'une CT dans les jeux des sauvegardes qui l'ont : « CT26 (Platine), DT10 (Épée) ».</summary>
+    private string MachineNumbers(int itemId) =>
+        string.Join(", ", (saves ?? []).Where(s => s.CountOf(itemId) > 0 && s.MachineLabels.ContainsKey(itemId))
+            .Select(s => $"{s.MachineLabels[itemId]} ({s.GameName})").Distinct());
+
+    /// <summary>Nom d'un objet sans les numéros de CT ajoutés pour « Tout ».</summary>
+    private static string BaseName(ItemStack item) => item.Name.Split(" — ")[0];
+
+    /// <summary>Où se trouve un objet (source « Tout ») : l'inventaire interne puis chaque sauvegarde qui en a.</summary>
+    private IEnumerable<(string Label, int Count)> DetailRows(int itemId)
+    {
+        if (items.FirstOrDefault(i => i.ItemId == itemId) is { } owned)
+            yield return ("Interne", owned.Count);
+        foreach (var save in saves ?? [])
+        {
+            if (save.CountOf(itemId) is var count and > 0)
+                yield return (save.MachineLabels.TryGetValue(itemId, out var label) ? $"{save.Label} ({label})" : save.Label, count);
+        }
+    }
+
+    private string EmptyText(ItemCategories category) => source switch
+    {
+        InternalSource => category.Empty,
+        AllSource => "Rien dans cette catégorie, ni dans l'inventaire interne ni dans tes sauvegardes.",
+        _ => "Rien dans cette catégorie dans le sac de cette sauvegarde.",
+    };
+
+    private void ShowDetail(ItemStack item)
+    {
+        detail = item;
+        panel = SidePanel.Detail;
+    }
+
+    private void CloseDetail()
+    {
+        detail = null;
+        if (panel == SidePanel.Detail)
+            panel = SidePanel.None;
+    }
+
+    private void ToggleJournal()
+    {
+        detail = null;
+        panel = panel == SidePanel.Journal ? SidePanel.None : SidePanel.Journal;
+    }
+
+    private void ClosePanel()
+    {
+        detail = null;
+        panel = SidePanel.None;
     }
 
     private async Task SetView(bool grid)
@@ -394,7 +593,9 @@
         message = result.Message;
         messageIsError = !result.Ok;
         itemDialog = null;
+        CloseDetail();
         await LoadWallet();
+        saves = await InventoryStore.ListItemSourcesAsync(userId); // les sacs ont changé
     }
 
     private async Task OpenWithdraw()
