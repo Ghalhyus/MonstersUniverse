@@ -15,3 +15,6 @@ PokeBank/Data/keys/
 
 # Archives des données du serveur rapatriées sur le PC (comptes et Pokémon de tout le monde)
 /Backups/
+
+# Vraies sauvegardes de jeu pour les tests : versionnées malgré la règle *.sav, pour les avoir sur chaque poste
+!/PokeBank.Tests/Sauvegardes/**

@@ -5,3 +5,5 @@ docker-compose.yml text eol=lf
 .env.example text eol=lf
 # Lanceurs Windows : fins de ligne Windows
 *.cmd text eol=crlf
+# Sauvegardes de jeu : fichiers binaires, jamais de conversion des fins de ligne
+*.sav binary

@@ -25,6 +25,11 @@ Ce fichier ne garde que ce que le README ne dit pas.
   `SaveModification` : règle anti-copie, voir le README).
 - Tests : xUnit, base SQLite temporaire via `TestDatabase` ; sauvegardes fabriquées en mémoire (`SaveSessionTests.CreateBw2Save`,
   `CreatePlatinumSave`, `GiveItems`).
+- Vraies sauvegardes de l'utilisateur dans `PokeBank.Tests/Sauvegardes/` (versionnées, exception à `*.sav` dans `.gitignore`) :
+  `RealSavesTests` les passe toutes. Quand il en ajoute (fichiers bruts d'un émulateur, souvent sans extension), les y
+  ranger sous un nom clair en `.sav` (`rubis-omega.sav`), les inspecter, lancer les tests et s'en servir pour les essais
+  dans le navigateur ; mettre à jour la liste du README.
+  **`git status` ne montre pas les `.sav`** (ignorés) : chercher les fichiers déposés avec `ls`, pas avec Git.
 
 ## Compiler et tester pendant que l'appli tourne
 

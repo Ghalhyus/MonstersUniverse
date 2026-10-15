@@ -19,6 +19,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Vraies sauvegardes de jeu (RealSavesTests) -->
+    <None Include="Sauvegardes\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\PokeBank\PokeBank.csproj" />
   </ItemGroup>
 

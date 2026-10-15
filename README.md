@@ -33,6 +33,14 @@ deux CS (Coupe, Surf), le Vélo (objet rare) et une Lettre Herbe.
 Pour simuler « j'ai rejoué un peu » et passer la règle anti-copie de « Mes sauvegardes » (voir l'inventaire plus bas),
 `POKEBANK_ADD_PLAYTIME=chemin/fichier.sav dotnet test` ajoute une heure de jeu au fichier, modifié sur place (n'importe quel jeu). Pour la régénérer : `POKEBANK_SAMPLE_PT_OUT=chemin/fichier.sav dotnet test`.
 
+**Vraies sauvegardes de test** : les fichiers déposés dans `PokeBank.Tests/Sauvegardes/` (versionnés, malgré la règle `*.sav`) passent tout le parcours du site dans `RealSavesTests` : lecture et réécriture à l'identique,
+dépôt d'un Pokémon puis retour au même emplacement, stockage (tous ses Pokémon dans la collection), retrait d'argent,
+retrait de tous les objets du sac puis dépôt de retour (objets rares et Cristaux Z intacts). Il suffit d'y ajouter un
+fichier pour qu'il soit testé ; sans le dossier, ces tests ne vérifient rien. Actuellement : Rouge, Bleu, Noir, Rubis Oméga,
+Ultra-Soleil, Épée. En 1re et 2e génération, le fichier réécrit n'est pas identique octet pour octet (le contenu l'est) :
+le jeu ne prépare ses boîtes qu'au premier changement de boîte et PKHeX les écrit vides en règle ; et une boîte y est une
+liste sans trou, tassée à l'écriture comme le fait le jeu (un Pokémon déposé dans la banque laisse sa place au suivant).
+
 ## Fonctionnement
 
 1. L'utilisateur charge sa sauvegarde (`.sav`, `.dsv`…) dans « Transfert ».
