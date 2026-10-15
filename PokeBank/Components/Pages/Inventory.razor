@@ -10,8 +10,8 @@
 
 <PageTitle>Inventaire</PageTitle>
 
-@* Inventaire du site : le porte-monnaie de Pokédollars, les Pokéballs et le journal. L'argent et les Balls viennent des
-   sauvegardes stockées (les Balls peuvent aussi y retourner) ; seule la copie du serveur est modifiée (la mise à jour de la
+@* Inventaire du site : le porte-monnaie de Pokédollars, les objets (Pokéballs, médicaments) et le journal. L'argent et les
+   objets viennent des sauvegardes stockées (les objets peuvent aussi y retourner) ; seule la copie du serveur est modifiée (la mise à jour de la
    sauvegarde est ensuite encadrée). *@
 
 <h1 class="mb-3">Inventaire</h1>
@@ -34,39 +34,47 @@
     </div>
 </div>
 
-<div class="card mb-4">
-    <div class="card-body">
-        <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
-            <div>
-                <div class="small text-muted">Pokéballs</div>
-                <div class="fw-semibold">@CollectionCapacity.FormatCount(balls.Sum(b => b.Count)) Ball@(balls.Sum(b => b.Count) > 1 ? "s" : "")</div>
-            </div>
-            <div class="ms-auto d-flex flex-wrap gap-2">
-                <button class="btn btn-outline-primary" @onclick="() => OpenBalls(deposit: false)">Retirer d'une sauvegarde</button>
-                <button class="btn btn-outline-primary" @onclick="() => OpenBalls(deposit: true)" disabled="@(balls.Count == 0)">Déposer dans une sauvegarde</button>
-            </div>
-        </div>
-        @if (balls.Count == 0)
-        {
-            <p class="text-muted small mb-0">Aucune Pokéball pour l'instant : retires-en du sac d'une de tes sauvegardes stockées.</p>
-        }
-        else
-        {
-            <div class="ball-grid">
-                @foreach (var ball in balls)
-                {
-                    <div class="ball-tile" title="@ball.Name">
-                        <img src="@ball.SpriteUrl" alt="" width="32" height="32" class="ball-sprite" />
-                        <span class="ball-name">@ball.Name</span>
-                        <span class="ball-count">× @CollectionCapacity.FormatCount(ball.Count)</span>
-                    </div>
-                }
-            </div>
-        }
+@* Objets : une carte par catégorie ; une même opération peut déplacer des objets de toutes les catégories. *@
+<div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+    <h2 class="h5 mb-0">Objets</h2>
+    <div class="ms-auto d-flex flex-wrap gap-2">
+        <button class="btn btn-outline-primary" @onclick="() => OpenItems(deposit: false)">Retirer d'une sauvegarde</button>
+        <button class="btn btn-outline-primary" @onclick="() => OpenItems(deposit: true)" disabled="@(items.Count == 0)">Déposer dans une sauvegarde</button>
     </div>
 </div>
 
-<h2 class="h5">Journal des opérations</h2>
+@foreach (var category in ItemCategories.All)
+{
+    var stacks = items.Where(i => i.Category == category.Category).ToList();
+    var total = stacks.Sum(i => i.Count);
+    <div class="card mb-3">
+        <div class="card-body">
+            <div class="d-flex align-items-baseline gap-2 mb-2">
+                <span class="small text-muted">@category.Title</span>
+                <span class="fw-semibold">@CollectionCapacity.FormatCount(total)</span>
+            </div>
+            @if (stacks.Count == 0)
+            {
+                <p class="text-muted small mb-0">@category.Empty</p>
+            }
+            else
+            {
+                <div class="item-grid">
+                    @foreach (var item in stacks)
+                    {
+                        <div class="item-tile" title="@item.Name">
+                            <img src="@item.SpriteUrl" alt="" width="32" height="32" class="item-sprite" />
+                            <span class="item-name">@item.Name</span>
+                            <span class="item-count">× @CollectionCapacity.FormatCount(item.Count)</span>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+}
+
+<h2 class="h5 mt-4">Journal des opérations</h2>
 @if (operations.Count == 0)
 {
     <p class="text-muted">Aucune opération pour l'instant.</p>
@@ -85,7 +93,7 @@ else
                         <td class="text-nowrap">@op.At.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
                         <td>@KindLabel(op.Kind)</td>
                         <td>@string.Join(" · ", new[] { op.SaveLabel, op.Details }.Where(t => !string.IsNullOrEmpty(t)))</td>
-                        @if (IsBallOperation(op.Kind))
+                        @if (IsItemOperation(op.Kind))
                         {
                             <td class="text-end text-muted">—</td>
                         }
@@ -180,9 +188,9 @@ else
     </div>
 }
 
-@if (ballDialog is { } deposit)
+@if (itemDialog is { } deposit)
 {
-    <BallTransferDialog Deposit="deposit" UserId="@userId" Stock="balls" OnDone="BallsDone" OnCancel="() => ballDialog = null" />
+    <ItemTransferDialog Deposit="deposit" UserId="@userId" Stock="items" OnDone="ItemsDone" OnCancel="() => itemDialog = null" />
 }
 
 @code {
@@ -193,8 +201,8 @@ else
     private string userId = "";
     private long balance;
     private List<WalletOperationView> operations = [];
-    private List<ItemStack> balls = [];
-    private bool? ballDialog; // fenêtre des Pokéballs : null fermée, true dépôt, false retrait
+    private List<ItemStack> items = [];
+    private bool? itemDialog; // fenêtre des objets : null fermée, true dépôt, false retrait
 
     private WithdrawStep step;
     private List<MoneySource>? sources;
@@ -221,32 +229,32 @@ else
     {
         balance = await InventoryStore.GetBalanceAsync(userId);
         operations = await InventoryStore.ListOperationsAsync(userId);
-        balls = await InventoryStore.GetBallsAsync(userId);
+        items = await InventoryStore.GetItemsAsync(userId);
     }
 
     private static string KindLabel(WalletOperationKind kind) => kind switch
     {
         WalletOperationKind.WithdrawFromSave => "Retrait d'une sauvegarde",
         WalletOperationKind.BuyCollectionSlots => "Achat d'emplacements",
-        WalletOperationKind.WithdrawBallsFromSave => "Pokéballs retirées d'une sauvegarde",
-        WalletOperationKind.DepositBallsToSave => "Pokéballs déposées dans une sauvegarde",
+        WalletOperationKind.WithdrawItemsFromSave => "Objets retirés d'une sauvegarde",
+        WalletOperationKind.DepositItemsToSave => "Objets déposés dans une sauvegarde",
         _ => kind.ToString(),
     };
 
-    private static bool IsBallOperation(WalletOperationKind kind) =>
-        kind is WalletOperationKind.WithdrawBallsFromSave or WalletOperationKind.DepositBallsToSave;
+    private static bool IsItemOperation(WalletOperationKind kind) =>
+        kind is WalletOperationKind.WithdrawItemsFromSave or WalletOperationKind.DepositItemsToSave;
 
-    private void OpenBalls(bool deposit)
+    private void OpenItems(bool deposit)
     {
         message = null;
-        ballDialog = deposit;
+        itemDialog = deposit;
     }
 
-    private async Task BallsDone(ItemTransferResult result)
+    private async Task ItemsDone(ItemTransferResult result)
     {
         message = result.Message;
         messageIsError = !result.Ok;
-        ballDialog = null;
+        itemDialog = null;
         await LoadWallet();
     }
 

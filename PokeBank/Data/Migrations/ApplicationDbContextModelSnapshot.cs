@@ -309,11 +309,11 @@ namespace PokeBank.Migrations
                     b.Property<string>("IdentityKey")
                         .HasColumnType("TEXT");
 
-                    b.Property<bool>("BallsChanged")
-                        .HasColumnType("INTEGER");
-
                     b.Property<string>("DataHash")
                         .HasColumnType("TEXT");
+
+                    b.Property<bool>("ItemsChanged")
+                        .HasColumnType("INTEGER");
 
                     b.Property<DateTime>("ModifiedAt")
                         .HasColumnType("TEXT");

@@ -10,12 +10,12 @@ namespace PokeBank.Services;
 public sealed record StoredSaveInfo(
     int Id, string FileName, string GameName, byte Generation, string TrainerName, string TrainerId,
     int PlayTimeSeconds, int PokemonCount, DateTime UploadedAt, DateTime UpdatedAt,
-    bool ModifiedOnServer, bool MustDownloadBeforeUpdate, long WithdrawnOnServer, bool BallsChangedOnServer)
+    bool ModifiedOnServer, bool MustDownloadBeforeUpdate, long WithdrawnOnServer, bool ItemsChangedOnServer)
 {
     public string Label => $"{GameName} — {TrainerName}";
 
-    /// <summary>« un retrait de 5 000 ₽ et un transfert de Pokéballs » (voir <see cref="StoredSaveService.DescribeServerChanges"/>).</summary>
-    public string ServerChanges => StoredSaveService.DescribeServerChanges(WithdrawnOnServer, BallsChangedOnServer);
+    /// <summary>« un retrait de 5 000 ₽ et un transfert d'objets » (voir <see cref="StoredSaveService.DescribeServerChanges"/>).</summary>
+    public string ServerChanges => StoredSaveService.DescribeServerChanges(WithdrawnOnServer, ItemsChangedOnServer);
 }
 
 public enum StoreStatus { Ok, Invalid, AlreadyStored, NotFound, WrongTrainer, OlderPlayTime, ModifiedOnServer, Conflict, CollectionFull }
@@ -54,7 +54,7 @@ public sealed class StoredSaveService(
                 orderby s.UploadedAt
                 select new StoredSaveInfo(s.Id, s.FileName, s.GameName, s.Generation, s.TrainerName, s.TrainerId,
                     s.PlayTimeSeconds, s.PokemonCount, s.UploadedAt, s.UpdatedAt,
-                    m != null, m != null && !s.DownloadedSinceModification, m != null ? m.Withdrawn : 0, m != null && m.BallsChanged))
+                    m != null, m != null && !s.DownloadedSinceModification, m != null ? m.Withdrawn : 0, m != null && m.ItemsChanged))
             .ToListAsync();
     }
 
@@ -202,8 +202,8 @@ public sealed class StoredSaveService(
 
     /// <summary>
     /// Refuse le fichier d'une partie modifiée par le serveur s'il n'est pas plus avancé que la version modifiée :
-    /// c'est alors l'ancienne sauvegarde du jeu, qui n'a pas ces changements (argent ou Balls retirés encore là, Balls
-    /// déposées absentes). Seule exception, la version modifiée elle-même, rendue au joueur par « Télécharger » ou la
+    /// c'est alors l'ancienne sauvegarde du jeu, qui n'a pas ces changements (argent ou objets retirés encore là, objets
+    /// déposés absents). Seule exception, la version modifiée elle-même, rendue au joueur par « Télécharger » ou la
     /// suppression : même temps de jeu et fichier identique (même argent ou moins pour les traces sans empreinte).
     /// </summary>
     private static StoreResult? CheckServerModification(SaveModification? modification, SaveIdentity identity, byte[] data)
@@ -223,19 +223,19 @@ public sealed class StoredSaveService(
             ? hash == SaveModification.Hash(data)
             : TryRead(data, "", out var sav) && sav.Money <= modification.MoneyAfter; // trace posée avant l'empreinte (argent seulement)
 
-    /// <summary>Ce que le serveur a changé dans la partie : « un retrait de 5 000 ₽ », « un transfert de Pokéballs », ou les deux.</summary>
+    /// <summary>Ce que le serveur a changé dans la partie : « un retrait de 5 000 ₽ », « un transfert d'objets », ou les deux.</summary>
     public static string DescribeServerChanges(long withdrawn, bool ballsChanged)
     {
         var parts = new List<string>(2);
         if (withdrawn > 0)
             parts.Add($"un retrait de {InventoryService.FormatMoney(withdrawn)}");
         if (ballsChanged)
-            parts.Add("un transfert de Pokéballs");
+            parts.Add("un transfert d'objets");
         return parts.Count == 0 ? "une modification" : string.Join(" et ", parts);
     }
 
     private static string DescribeServerChanges(SaveModification modification) =>
-        DescribeServerChanges(modification.Withdrawn, modification.BallsChanged);
+        DescribeServerChanges(modification.Withdrawn, modification.ItemsChanged);
 
     private static string Capitalize(string text) => text.Length == 0 ? text : char.ToUpperInvariant(text[0]) + text[1..];
 

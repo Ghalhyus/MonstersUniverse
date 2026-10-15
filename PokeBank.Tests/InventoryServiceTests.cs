@@ -19,32 +19,33 @@ public sealed class InventoryServiceTests : IDisposable
     }
 
     private const int MasterBall = 1, HyperBall = 2, SuperBall = 3, PokeBall = 4, BeastBall = 851; // Ultra Ball des Ultra-Chimères : 7e génération
+    private const int Potion = 17, SuperPotion = 26, RareCandy = 50, HealthFeather = 565; // Super Bonbon ; Plume Santé : 5e génération
 
-    private static byte[] Save(uint money = 100_000, int hours = 10, string ot = "Ludo", params (int Item, int Count)[] balls)
+    private static byte[] Save(uint money = 100_000, int hours = 10, string ot = "Ludo", params (int Item, int Count)[] items)
     {
         var sav = new SAV5B2W2 { OT = ot, TID16 = 12345, SID16 = 54321, PlayedHours = hours, Money = money };
         sav.SetBoxSlotAtIndex(SaveSessionTests.CreatePk5(25, 5), 0, 0);
-        if (balls.Length > 0)
-            SaveSessionTests.GiveBalls(sav, balls);
+        if (items.Length > 0)
+            SaveSessionTests.GiveItems(sav, items);
         return sav.Write().ToArray();
     }
 
-    private async Task<int> Store(string owner = "sacha", uint money = 100_000, string ot = "Ludo", params (int Item, int Count)[] balls)
+    private async Task<int> Store(string owner = "sacha", uint money = 100_000, string ot = "Ludo", params (int Item, int Count)[] items)
     {
-        Assert.True((await _saves.AddAsync(owner, $"{ot}.sav", Save(money, ot: ot, balls: balls))).Ok);
+        Assert.True((await _saves.AddAsync(owner, $"{ot}.sav", Save(money, ot: ot, items: items))).Ok);
         return (await _saves.ListAsync(owner)).Single(s => s.TrainerName == ot).Id;
     }
 
-    private async Task<Dictionary<int, int>> StoredBalls(int saveId)
+    private async Task<Dictionary<int, int>> StoredItems(int saveId)
     {
         using var db = _db.NewContext();
         var save = await db.StoredSaves.SingleAsync(s => s.Id == saveId);
         Assert.True(SaveUtil.TryGetSaveFile(save.Data, out var sav));
-        return SaveBag.ReadBalls(sav!);
+        return SaveBag.ReadItems(sav!);
     }
 
-    private async Task<Dictionary<int, int>> InventoryBalls(string owner = "sacha") =>
-        (await _inventory.GetBallsAsync(owner)).ToDictionary(b => b.ItemId, b => b.Count);
+    private async Task<Dictionary<int, int>> InventoryItems(string owner = "sacha") =>
+        (await _inventory.GetItemsAsync(owner)).ToDictionary(b => b.ItemId, b => b.Count);
 
     private async Task<uint> StoredMoney(int saveId)
     {
@@ -222,48 +223,48 @@ public sealed class InventoryServiceTests : IDisposable
         Assert.Equal(99_000u, await StoredMoney(id));
     }
 
-    // ---------- Pokéballs ----------
+    // ---------- Pokéballs (et objets en général) ----------
 
     [Fact]
     public async Task WithdrawBalls_MovesThemFromTheBagToTheInventory()
     {
-        var id = await Store(balls: [(PokeBall, 20), (HyperBall, 5)]);
-        var source = Assert.Single(await _inventory.ListBallSourcesAsync("sacha"));
+        var id = await Store(items: [(PokeBall, 20), (HyperBall, 5)]);
+        var source = Assert.Single(await _inventory.ListItemSourcesAsync("sacha"));
         Assert.Null(source.Unsupported);
-        Assert.Equal((25, 999), (source.Total, source.Capacity[PokeBall]));
+        Assert.Equal((25, 999), (source.Total(ItemCategory.Balls), source.Capacity[PokeBall]));
         Assert.False(source.Capacity.ContainsKey(BeastBall));
 
-        var result = await _inventory.WithdrawBallsAsync("sacha", id, new Dictionary<int, int> { [PokeBall] = 15, [HyperBall] = 5, [SuperBall] = 0 });
+        var result = await _inventory.WithdrawItemsAsync("sacha", id, new Dictionary<int, int> { [PokeBall] = 15, [HyperBall] = 5, [SuperBall] = 0 });
         Assert.True(result.Ok, result.Message);
 
-        Assert.Equal(new Dictionary<int, int> { [PokeBall] = 5 }, await StoredBalls(id)); // plus de Hyper Ball dans le sac
-        Assert.Equal(new Dictionary<int, int> { [HyperBall] = 5, [PokeBall] = 15 }, await InventoryBalls());
-        Assert.Empty(await InventoryBalls("ondine"));
-        Assert.Equal(["Hyper Ball", "Poké Ball"], (await _inventory.GetBallsAsync("sacha")).Select(b => b.Name));
+        Assert.Equal(new Dictionary<int, int> { [PokeBall] = 5 }, await StoredItems(id)); // plus de Hyper Ball dans le sac
+        Assert.Equal(new Dictionary<int, int> { [HyperBall] = 5, [PokeBall] = 15 }, await InventoryItems());
+        Assert.Empty(await InventoryItems("ondine"));
+        Assert.Equal(["Hyper Ball", "Poké Ball"], (await _inventory.GetItemsAsync("sacha")).Select(b => b.Name));
 
         var op = Assert.Single(await _inventory.ListOperationsAsync("sacha"));
-        Assert.Equal((WalletOperationKind.WithdrawBallsFromSave, 0L, "5 × Hyper Ball, 15 × Poké Ball"), (op.Kind, op.Amount, op.Details));
+        Assert.Equal((WalletOperationKind.WithdrawItemsFromSave, 0L, "5 × Hyper Ball, 15 × Poké Ball"), (op.Kind, op.Amount, op.Details));
 
         var info = Assert.Single(await _saves.ListAsync("sacha"));
         Assert.True(info.MustDownloadBeforeUpdate);
-        Assert.True(info.BallsChangedOnServer);
-        Assert.Equal("un transfert de Pokéballs", info.ServerChanges);
-        Assert.Single(Directory.GetFiles(_db.BackupRoot, "*retrait-balls-avant*", SearchOption.AllDirectories));
-        Assert.Single(Directory.GetFiles(_db.BackupRoot, "*retrait-balls-apres*", SearchOption.AllDirectories));
+        Assert.True(info.ItemsChangedOnServer);
+        Assert.Equal("un transfert d'objets", info.ServerChanges);
+        Assert.Single(Directory.GetFiles(_db.BackupRoot, "*retrait-objets-avant*", SearchOption.AllDirectories));
+        Assert.Single(Directory.GetFiles(_db.BackupRoot, "*retrait-objets-apres*", SearchOption.AllDirectories));
     }
 
     [Fact]
     public async Task WithdrawBalls_RefusesMoreThanTheBagHolds_AndChangesNothing()
     {
-        var id = await Store(balls: [(PokeBall, 10)]);
-        Assert.False((await _inventory.WithdrawBallsAsync("sacha", id, new Dictionary<int, int> { [PokeBall] = 11 })).Ok);
-        Assert.False((await _inventory.WithdrawBallsAsync("sacha", id, new Dictionary<int, int> { [PokeBall] = 5, [MasterBall] = 1 })).Ok);
-        Assert.False((await _inventory.WithdrawBallsAsync("sacha", id, new Dictionary<int, int> { [PokeBall] = -1 })).Ok);
-        Assert.False((await _inventory.WithdrawBallsAsync("sacha", id, new Dictionary<int, int>())).Ok);
-        Assert.False((await _inventory.WithdrawBallsAsync("ondine", id, new Dictionary<int, int> { [PokeBall] = 1 })).Ok); // pas sa sauvegarde
+        var id = await Store(items: [(PokeBall, 10)]);
+        Assert.False((await _inventory.WithdrawItemsAsync("sacha", id, new Dictionary<int, int> { [PokeBall] = 11 })).Ok);
+        Assert.False((await _inventory.WithdrawItemsAsync("sacha", id, new Dictionary<int, int> { [PokeBall] = 5, [MasterBall] = 1 })).Ok);
+        Assert.False((await _inventory.WithdrawItemsAsync("sacha", id, new Dictionary<int, int> { [PokeBall] = -1 })).Ok);
+        Assert.False((await _inventory.WithdrawItemsAsync("sacha", id, new Dictionary<int, int>())).Ok);
+        Assert.False((await _inventory.WithdrawItemsAsync("ondine", id, new Dictionary<int, int> { [PokeBall] = 1 })).Ok); // pas sa sauvegarde
 
-        Assert.Equal(new Dictionary<int, int> { [PokeBall] = 10 }, await StoredBalls(id));
-        Assert.Empty(await InventoryBalls());
+        Assert.Equal(new Dictionary<int, int> { [PokeBall] = 10 }, await StoredItems(id));
+        Assert.Empty(await InventoryItems());
         Assert.Empty(await _inventory.ListOperationsAsync("sacha"));
         Assert.False(Assert.Single(await _saves.ListAsync("sacha")).ModifiedOnServer);
     }
@@ -274,18 +275,18 @@ public sealed class InventoryServiceTests : IDisposable
         // Retirées de Platine, déposées dans Noir 2 : une Super Ball est le même objet d'un jeu à l'autre.
         Assert.True((await _saves.AddAsync("sacha", "platine.sav", SaveSessionTests.CreatePlatinumSave())).Ok);
         var platine = (await _saves.ListAsync("sacha")).Single().Id;
-        Assert.True((await _inventory.WithdrawBallsAsync("sacha", platine, new Dictionary<int, int> { [SuperBall] = 15, [PokeBall] = 10 })).Ok);
-        var b2 = await Store(balls: [(PokeBall, 3)]);
+        Assert.True((await _inventory.WithdrawItemsAsync("sacha", platine, new Dictionary<int, int> { [SuperBall] = 15, [PokeBall] = 10 })).Ok);
+        var b2 = await Store(items: [(PokeBall, 3)]);
 
-        var result = await _inventory.DepositBallsAsync("sacha", b2, new Dictionary<int, int> { [SuperBall] = 15, [PokeBall] = 4 });
+        var result = await _inventory.DepositItemsAsync("sacha", b2, new Dictionary<int, int> { [SuperBall] = 15, [PokeBall] = 4 });
         Assert.True(result.Ok, result.Message);
 
-        Assert.Equal(new Dictionary<int, int> { [SuperBall] = 15, [PokeBall] = 7 }, await StoredBalls(b2));
-        Assert.Equal(new Dictionary<int, int> { [PokeBall] = 6 }, await InventoryBalls()); // la ligne des Super Ball a disparu
+        Assert.Equal(new Dictionary<int, int> { [SuperBall] = 15, [PokeBall] = 7 }, await StoredItems(b2));
+        Assert.Equal(new Dictionary<int, int> { [PokeBall] = 6 }, await InventoryItems()); // la ligne des Super Ball a disparu
         using (var db = _db.NewContext())
             Assert.Equal(1, await db.OwnedItems.CountAsync());
 
-        Assert.Equal([WalletOperationKind.DepositBallsToSave, WalletOperationKind.WithdrawBallsFromSave],
+        Assert.Equal([WalletOperationKind.DepositItemsToSave, WalletOperationKind.WithdrawItemsFromSave],
             (await _inventory.ListOperationsAsync("sacha")).Select(o => o.Kind));
         var info = (await _saves.ListAsync("sacha")).Single(s => s.Id == b2);
         Assert.True(info.MustDownloadBeforeUpdate); // le joueur doit la télécharger pour avoir ses Balls
@@ -294,45 +295,45 @@ public sealed class InventoryServiceTests : IDisposable
     [Fact]
     public async Task DepositBalls_RefusesWhatTheGameCannotTake()
     {
-        var source = await Store(balls: [(PokeBall, 50)], ot: "Pierre");
-        Assert.True((await _inventory.WithdrawBallsAsync("sacha", source, new Dictionary<int, int> { [PokeBall] = 50 })).Ok);
+        var source = await Store(items: [(PokeBall, 50)], ot: "Pierre");
+        Assert.True((await _inventory.WithdrawItemsAsync("sacha", source, new Dictionary<int, int> { [PokeBall] = 50 })).Ok);
         using (var db = _db.NewContext())
         {
             db.OwnedItems.Add(new OwnedItem { OwnerId = "sacha", ItemId = BeastBall, Count = 3 }); // venue de Soleil / Lune
             await db.SaveChangesAsync();
         }
-        var b2 = await Store(balls: [(PokeBall, 990)]);
+        var b2 = await Store(items: [(PokeBall, 990)]);
 
-        var unknown = await _inventory.DepositBallsAsync("sacha", b2, new Dictionary<int, int> { [BeastBall] = 1 });
+        var unknown = await _inventory.DepositItemsAsync("sacha", b2, new Dictionary<int, int> { [BeastBall] = 1 });
         Assert.False(unknown.Ok);
         Assert.Contains("n'existe pas", unknown.Message);
-        var full = await _inventory.DepositBallsAsync("sacha", b2, new Dictionary<int, int> { [PokeBall] = 10 });
+        var full = await _inventory.DepositItemsAsync("sacha", b2, new Dictionary<int, int> { [PokeBall] = 10 });
         Assert.False(full.Ok);
         Assert.Contains("999", full.Message);
-        Assert.False((await _inventory.DepositBallsAsync("sacha", b2, new Dictionary<int, int> { [HyperBall] = 1 })).Ok); // pas dans l'inventaire
-        Assert.False((await _inventory.DepositBallsAsync("sacha", b2, new Dictionary<int, int> { [PokeBall] = 51 })).Ok); // plus que l'inventaire
+        Assert.False((await _inventory.DepositItemsAsync("sacha", b2, new Dictionary<int, int> { [HyperBall] = 1 })).Ok); // pas dans l'inventaire
+        Assert.False((await _inventory.DepositItemsAsync("sacha", b2, new Dictionary<int, int> { [PokeBall] = 51 })).Ok); // plus que l'inventaire
 
-        Assert.Equal(new Dictionary<int, int> { [PokeBall] = 990 }, await StoredBalls(b2));
-        Assert.Equal(new Dictionary<int, int> { [PokeBall] = 50, [BeastBall] = 3 }, await InventoryBalls());
+        Assert.Equal(new Dictionary<int, int> { [PokeBall] = 990 }, await StoredItems(b2));
+        Assert.Equal(new Dictionary<int, int> { [PokeBall] = 50, [BeastBall] = 3 }, await InventoryItems());
         Assert.False((await _saves.ListAsync("sacha")).Single(s => s.Id == b2).ModifiedOnServer);
 
-        Assert.True((await _inventory.DepositBallsAsync("sacha", b2, new Dictionary<int, int> { [PokeBall] = 9 })).Ok); // 999 tout juste
-        Assert.Equal(new Dictionary<int, int> { [PokeBall] = 999 }, await StoredBalls(b2));
+        Assert.True((await _inventory.DepositItemsAsync("sacha", b2, new Dictionary<int, int> { [PokeBall] = 9 })).Ok); // 999 tout juste
+        Assert.Equal(new Dictionary<int, int> { [PokeBall] = 999 }, await StoredItems(b2));
     }
 
     [Fact]
     public async Task AfterABallWithdrawal_TheOriginalFileIsRefused_EvenWithTheSameMoney()
     {
         // L'ancienne règle (temps de jeu égal et pas plus d'argent) aurait laissé passer l'original : seule l'empreinte le distingue.
-        var original = Save(balls: [(PokeBall, 20)]);
+        var original = Save(items: [(PokeBall, 20)]);
         Assert.True((await _saves.AddAsync("sacha", "b2.sav", original)).Ok);
         var id = Assert.Single(await _saves.ListAsync("sacha")).Id;
-        Assert.True((await _inventory.WithdrawBallsAsync("sacha", id, new Dictionary<int, int> { [PokeBall] = 20 })).Ok);
+        Assert.True((await _inventory.WithdrawItemsAsync("sacha", id, new Dictionary<int, int> { [PokeBall] = 20 })).Ok);
 
         var downloaded = (await _saves.DownloadAsync("sacha", id))!.Value.Data;
         var refused = await _saves.UpdateAsync("sacha", id, "b2.sav", original, acceptOlder: true);
         Assert.Equal(StoreStatus.ModifiedOnServer, refused.Status);
-        Assert.Contains("transfert de Pokéballs", refused.Message);
+        Assert.Contains("transfert d'objets", refused.Message);
         Assert.True((await _saves.UpdateAsync("sacha", id, "b2.sav", downloaded)).Ok); // la version rendue passe
 
         // Supprimer puis renvoyer l'original ne marche pas non plus ; une partie plus avancée lève la trace.
@@ -345,13 +346,13 @@ public sealed class InventoryServiceTests : IDisposable
     [Fact]
     public async Task MoneyAndBalls_AreBothDescribed()
     {
-        var id = await Store(balls: [(PokeBall, 5)]);
+        var id = await Store(items: [(PokeBall, 5)]);
         await _inventory.WithdrawFromSaveAsync("sacha", id, 1_000);
-        await _inventory.WithdrawBallsAsync("sacha", id, new Dictionary<int, int> { [PokeBall] = 5 });
+        await _inventory.WithdrawItemsAsync("sacha", id, new Dictionary<int, int> { [PokeBall] = 5 });
 
         var info = Assert.Single(await _saves.ListAsync("sacha"));
-        Assert.Equal("un retrait de 1 000 ₽ et un transfert de Pokéballs", new string(info.ServerChanges.Select(c => char.IsWhiteSpace(c) ? ' ' : c).ToArray()));
-        Assert.Empty(await StoredBalls(id));
+        Assert.Equal("un retrait de 1 000 ₽ et un transfert d'objets", new string(info.ServerChanges.Select(c => char.IsWhiteSpace(c) ? ' ' : c).ToArray()));
+        Assert.Empty(await StoredItems(id));
         Assert.Equal(99_000u, await StoredMoney(id));
     }
 
@@ -359,11 +360,80 @@ public sealed class InventoryServiceTests : IDisposable
     public void SaveBag_WithdrawLeavesNoGapInThePouch()
     {
         var sav = new SAV5B2W2();
-        SaveSessionTests.GiveBalls(sav, (MasterBall, 1), (HyperBall, 2), (SuperBall, 3));
+        SaveSessionTests.GiveItems(sav, (MasterBall, 1), (HyperBall, 2), (SuperBall, 3));
         Assert.Null(SaveBag.Withdraw(sav, new Dictionary<int, int> { [MasterBall] = 1 }, i => $"{i}"));
 
         var slots = sav.Inventory.First(p => p.CanContain(HyperBall)).Items; // poche « Objets » en 5e génération
         Assert.Equal([HyperBall, SuperBall, 0], slots.Take(3).Select(s => s.Index));
+    }
+
+    // ---------- Médicaments ----------
+
+    [Fact]
+    public async Task BallsAndMedicine_MoveTogetherInOneOperation()
+    {
+        var id = await Store(items: [(PokeBall, 10), (Potion, 5), (RareCandy, 2)]);
+        var source = Assert.Single(await _inventory.ListItemSourcesAsync("sacha"));
+        Assert.Equal((10, 7), (source.Total(ItemCategory.Balls), source.Total(ItemCategory.Medicine)));
+
+        var result = await _inventory.WithdrawItemsAsync("sacha", id, new Dictionary<int, int> { [RareCandy] = 1, [Potion] = 5, [PokeBall] = 4 });
+        Assert.True(result.Ok, result.Message);
+
+        Assert.Equal(new Dictionary<int, int> { [PokeBall] = 6, [RareCandy] = 1 }, await StoredItems(id));
+        var items = await _inventory.GetItemsAsync("sacha");
+        Assert.Equal([(PokeBall, ItemCategory.Balls), (Potion, ItemCategory.Medicine), (RareCandy, ItemCategory.Medicine)],
+            items.Select(i => (i.ItemId, i.Category))); // Pokéballs d'abord, puis médicaments
+        var op = Assert.Single(await _inventory.ListOperationsAsync("sacha"));
+        Assert.Equal((WalletOperationKind.WithdrawItemsFromSave, "4 × Poké Ball, 5 × Potion, 1 × Super Bonbon"), (op.Kind, op.Details));
+        Assert.Equal("un transfert d'objets", Assert.Single(await _saves.ListAsync("sacha")).ServerChanges);
+    }
+
+    [Fact]
+    public async Task Medicine_GoesFromPlatinumToBlack2_ButNotTheOtherWayForUnknownItems()
+    {
+        Assert.True((await _saves.AddAsync("sacha", "platine.sav", SaveSessionTests.CreatePlatinumSave())).Ok);
+        var platine = (await _saves.ListAsync("sacha")).Single().Id;
+        Assert.True((await _inventory.WithdrawItemsAsync("sacha", platine, new Dictionary<int, int> { [Potion] = 10, [SuperPotion] = 5 })).Ok);
+
+        var b2 = await Store(items: [(Potion, 1), (HealthFeather, 4)]);
+        Assert.True((await _inventory.DepositItemsAsync("sacha", b2, new Dictionary<int, int> { [Potion] = 7, [SuperPotion] = 5 })).Ok);
+        Assert.Equal(new Dictionary<int, int> { [Potion] = 8, [SuperPotion] = 5, [HealthFeather] = 4 }, await StoredItems(b2));
+
+        // La Plume Santé n'existe qu'à partir de la 5e génération : Platine la refuse.
+        Assert.True((await _inventory.WithdrawItemsAsync("sacha", b2, new Dictionary<int, int> { [HealthFeather] = 4 })).Ok);
+        Assert.False((await _inventory.ListItemSourcesAsync("sacha")).Single(s => s.SaveId == platine).Capacity.ContainsKey(HealthFeather));
+        var refused = await _inventory.DepositItemsAsync("sacha", platine, new Dictionary<int, int> { [HealthFeather] = 1, [Potion] = 1 });
+        Assert.False(refused.Ok);
+        Assert.Contains("n'existe pas", refused.Message);
+        Assert.Equal(new Dictionary<int, int> { [Potion] = 3, [HealthFeather] = 4 }, await InventoryItems()); // rien n'a bougé
+    }
+
+    [Fact]
+    public void SaveBag_RefusesItemsThatAreNeitherBallsNorMedicine()
+    {
+        var sav = new SAV5B2W2();
+        const int BlackFlute = 68; // objet de la poche Objets, pas un médicament
+        SaveSessionTests.GiveItems(sav, (BlackFlute, 1));
+        Assert.Empty(SaveBag.ReadItems(sav));
+        Assert.NotNull(SaveBag.Withdraw(sav, new Dictionary<int, int> { [BlackFlute] = 1 }, i => $"{i}"));
+        Assert.NotNull(SaveBag.Deposit(sav, new Dictionary<int, int> { [BlackFlute] = 1 }, i => $"{i}", "Noir 2"));
+    }
+
+    [Fact]
+    public void SaveBag_ConvertsItemNumbersForThirdGenerationGames()
+    {
+        // Émeraude numérote ses objets autrement : la Potion (17 à partir de la 4e génération) y porte le numéro 13.
+        var sav = new SAV3E();
+        Assert.Equal(99, SaveBag.Capacity(sav)[Potion]); // poche Objets de la 3e génération
+        Assert.False(SaveBag.Capacity(sav).ContainsKey(HealthFeather));
+        Assert.Null(SaveBag.Deposit(sav, new Dictionary<int, int> { [Potion] = 5, [PokeBall] = 3 }, i => $"{i}", "Émeraude"));
+
+        // Vérifié en mémoire : comme en 4e génération, PKHeX ne sait pas écrire une sauvegarde de 3e génération créée vide.
+        Assert.Contains(sav.Inventory.SelectMany(p => p.Items), s => s.Index == 13 && s.Count == 5);
+        Assert.Equal(new Dictionary<int, int> { [Potion] = 5, [PokeBall] = 3 }, SaveBag.ReadItems(sav));
+
+        Assert.Null(SaveBag.Withdraw(sav, new Dictionary<int, int> { [Potion] = 5 }, i => $"{i}"));
+        Assert.Equal(new Dictionary<int, int> { [PokeBall] = 3 }, SaveBag.ReadItems(sav));
     }
 
     [Fact]

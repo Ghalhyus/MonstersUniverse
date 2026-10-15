@@ -41,7 +41,7 @@ public class StoredSave
 }
 
 /// <summary>
-/// Trace d'une modification faite par le serveur sur une partie (retrait de Pokédollars, transfert de Pokéballs),
+/// Trace d'une modification faite par le serveur sur une partie (retrait de Pokédollars, transfert d'objets),
 /// rattachée à l'empreinte de la partie et non à la sauvegarde stockée : elle survit à la suppression, pour qu'on ne
 /// puisse pas renvoyer l'ancienne sauvegarde du jeu (qui n'a pas ces changements) en la supprimant puis en l'ajoutant
 /// de nouveau. Levée dès qu'une version plus avancée de la partie (plus de temps de jeu) est envoyée.
@@ -59,13 +59,13 @@ public class SaveModification
     public long MoneyAfter { get; set; }
     /// <summary>
     /// Empreinte SHA-256 du fichier modifié par le serveur : à temps de jeu égal, seul ce fichier exact est accepté
-    /// (l'ancienne sauvegarde du jeu a encore l'argent ou les Balls retirés, ou pas les Balls déposées).
+    /// (l'ancienne sauvegarde du jeu a encore l'argent ou les objets retirés, ou pas les objets déposés).
     /// </summary>
     public string? DataHash { get; set; }
     /// <summary>Total d'argent retiré depuis la dernière version envoyée par le joueur.</summary>
     public long Withdrawn { get; set; }
-    /// <summary>Des Pokéballs ont été retirées ou déposées depuis la dernière version envoyée par le joueur.</summary>
-    public bool BallsChanged { get; set; }
+    /// <summary>Des objets (Pokéballs, médicaments) ont été retirés ou déposés depuis la dernière version envoyée par le joueur.</summary>
+    public bool ItemsChanged { get; set; }
     public DateTime ModifiedAt { get; set; }
 
     public static string Hash(ReadOnlySpan<byte> data) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(data));

@@ -202,7 +202,7 @@ public class SaveSessionTests
     /// Sauvegarde Platine avec <paramref name="count"/> Pokémon d'espèces différentes dans les boîtes, à partir de Tortipouss
     /// (n° 387). Chacun vient d'une vraie rencontre de Platine générée par PKHeX (sauvage, don, échange) : ils sont donc
     /// légaux. Les espèces qu'on ne rencontre pas directement dans Platine (Boskara, qui s'obtient par évolution...) sont sautées.
-    /// 50 000 ₽ et des Pokéballs (<see cref="PlatinumSampleBalls"/>) dans le sac, pour essayer l'inventaire.
+    /// 50 000 ₽, des Pokéballs et des médicaments (<see cref="PlatinumSampleItems"/>) dans le sac, pour essayer l'inventaire.
     /// </summary>
     internal static byte[] CreatePlatinumSave(int count = 50)
     {
@@ -247,7 +247,7 @@ public class SaveSessionTests
             sav.SetBoxSlotAtIndex(pk, placed / sav.BoxSlotCount, placed % sav.BoxSlotCount);
             placed++;
         }
-        GiveBalls(sav, PlatinumSampleBalls);
+        GiveItems(sav, PlatinumSampleItems);
 
         // PKHeX n'écrit que la copie active : la seconde copie reçoit les mêmes blocs, pour que le jeu trouve les deux à jour.
         var data = sav.Write().ToArray();
@@ -255,14 +255,21 @@ public class SaveSessionTests
         return data;
     }
 
-    /// <summary>Sac de la sauvegarde Platine : 30 Poké Ball, 15 Super Ball, 8 Hyper Ball, 1 Master Ball, 5 Luxe Ball, 3 Honor Ball.</summary>
-    internal static readonly (int Item, int Count)[] PlatinumSampleBalls = [(4, 30), (3, 15), (2, 8), (1, 1), (11, 5), (12, 3)];
+    /// <summary>
+    /// Sac de la sauvegarde Platine : 30 Poké Ball, 15 Super Ball, 8 Hyper Ball, 1 Master Ball, 5 Luxe Ball, 3 Honor Ball ;
+    /// 10 Potion, 5 Super Potion, 2 Total Soin, 3 Rappel, 4 Huile, 2 Super Bonbon.
+    /// </summary>
+    internal static readonly (int Item, int Count)[] PlatinumSampleItems =
+        [(4, 30), (3, 15), (2, 8), (1, 1), (11, 5), (12, 3), (17, 10), (26, 5), (27, 2), (28, 3), (38, 4), (50, 2)];
 
-    /// <summary>Ajoute des Balls dans le sac, dans la poche où le jeu les range (« Balls » en 4e génération, « Objets » en 5e).</summary>
-    internal static void GiveBalls(SaveFile sav, params (int Item, int Count)[] balls)
+    /// <summary>
+    /// Ajoute des objets dans le sac, dans la poche où le jeu les range (« Balls » ou « Médicaments » en 4e génération, Balls
+    /// avec les « Objets » en 5e). Numéros de 4e génération : pas pour les jeux de 3e génération (voir <see cref="SaveBag.Deposit"/>).
+    /// </summary>
+    internal static void GiveItems(SaveFile sav, params (int Item, int Count)[] items)
     {
         var pouches = sav.Inventory;
-        foreach (var (item, count) in balls)
+        foreach (var (item, count) in items)
         {
             var pouch = pouches.First(p => p.Type != InventoryType.PCItems && p.CanContain((ushort)item));
             Assert.True(pouch.GiveItem(sav, (ushort)item, count) > 0);
@@ -287,7 +294,7 @@ public class SaveSessionTests
         Assert.IsType<SAV4Pt>(sav);
         Assert.True(sav.ChecksumsValid, sav.ChecksumInfo);
         Assert.Equal(50_000u, sav.Money);
-        Assert.Equal(PlatinumSampleBalls.ToDictionary(b => b.Item, b => b.Count), SaveBag.ReadBalls(sav));
+        Assert.Equal(PlatinumSampleItems.ToDictionary(b => b.Item, b => b.Count), SaveBag.ReadItems(sav));
         Assert.True(new SaveSession().TryLoad(CreatePlatinumSave(), "platine.sav", out var error), error);
         var pokemon = StoredSaveService.ReadAllPokemon(sav).Select(p => p.Pokemon).ToList();
         Assert.Equal(50, pokemon.Count);
@@ -301,5 +308,38 @@ public class SaveSessionTests
         var path = Environment.GetEnvironmentVariable("POKEBANK_SAMPLE_PT_OUT");
         if (string.IsNullOrEmpty(path)) return;
         File.WriteAllBytes(path, CreatePlatinumSave());
+    }
+
+    /// <summary>Ajoute une heure de jeu à une sauvegarde, sans rien changer d'autre (« le joueur a rejoué un peu »).</summary>
+    internal static byte[] AddOneHourOfPlay(byte[] data, string fileName = "")
+    {
+        // PKHeX écrit dans le tableau qu'on lui donne : une copie laisse l'original intact.
+        Assert.True(SaveUtil.TryGetSaveFile(data.ToArray(), out var sav, fileName), "Fichier non reconnu comme une sauvegarde Pokémon.");
+        sav!.PlayedHours += 1;
+        return sav.Write().ToArray();
+    }
+
+    [Fact]
+    public void AddOneHourOfPlay_KeepsEverythingElse()
+    {
+        var before = CreatePlatinumSave();
+        Assert.True(SaveUtil.TryGetSaveFile(AddOneHourOfPlay(before), out var after));
+        Assert.True(SaveUtil.TryGetSaveFile(before, out var original));
+        Assert.Equal(SaveIdentity.Of(original!).PlayTimeSeconds + 3600, SaveIdentity.Of(after!).PlayTimeSeconds);
+        Assert.Equal(SaveIdentity.Of(original!).Key, SaveIdentity.Of(after!).Key); // même partie
+        Assert.Equal(SaveBag.ReadItems(original!), SaveBag.ReadItems(after!));
+        Assert.Equal(50, StoredSaveService.ReadAllPokemon(after!).Count());
+    }
+
+    /// <summary>
+    /// Ajoute une heure de jeu à un fichier existant, modifié sur place, pour passer la règle anti-copie de « Mes sauvegardes »
+    /// (une version plus avancée est acceptée) : définir POKEBANK_ADD_PLAYTIME=chemin\vers\fichier.sav puis lancer les tests.
+    /// </summary>
+    [Fact]
+    public void AddPlayTime_WhenRequested()
+    {
+        var path = Environment.GetEnvironmentVariable("POKEBANK_ADD_PLAYTIME");
+        if (string.IsNullOrEmpty(path)) return;
+        File.WriteAllBytes(path, AddOneHourOfPlay(File.ReadAllBytes(path), path));
     }
 }

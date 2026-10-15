@@ -14,27 +14,38 @@ public sealed record WithdrawResult(bool Ok, string Message, long Balance = 0);
 
 public sealed record PurchaseResult(bool Ok, string Message, int Limit = 0, long Balance = 0);
 
-/// <summary>Objet de l'inventaire ou du sac d'une sauvegarde, prêt à afficher.</summary>
-public sealed record ItemStack(int ItemId, string Name, string SpriteUrl, int Count);
+/// <summary>Objet de l'inventaire ou du sac d'une sauvegarde (Pokéball, médicament), prêt à afficher.</summary>
+public sealed record ItemStack(int ItemId, ItemCategory Category, string Name, string SpriteUrl, int Count);
 
-/// <summary>Sauvegarde stockée telle que proposée pour un transfert de Pokéballs.</summary>
+/// <summary>Sauvegarde stockée telle que proposée pour un transfert d'objets.</summary>
 /// <param name="Unsupported">Raison pour laquelle son sac n'est pas pris en charge ; null s'il l'est.</param>
-/// <param name="Balls">Balls de son sac.</param>
-/// <param name="Capacity">Quantité maximale de chaque Ball que son sac accepte ; absente si son jeu ne la connaît pas (dépôt).</param>
-public sealed record BallSource(
+/// <param name="Items">Pokéballs et médicaments de son sac.</param>
+/// <param name="Capacity">Quantité maximale de chaque objet que son sac accepte ; absent si son jeu ne le connaît pas (dépôt).</param>
+public sealed record ItemSource(
     int SaveId, string Label, string TrainerId, string GameName, string? Unsupported,
-    IReadOnlyList<ItemStack> Balls, IReadOnlyDictionary<int, int> Capacity)
+    IReadOnlyList<ItemStack> Items, IReadOnlyDictionary<int, int> Capacity)
 {
-    public int Total => Balls.Sum(b => b.Count);
-    public int CountOf(int itemId) => Balls.FirstOrDefault(b => b.ItemId == itemId)?.Count ?? 0;
+    public int Total(ItemCategory category) => Items.Where(i => i.Category == category).Sum(i => i.Count);
+    public int CountOf(int itemId) => Items.FirstOrDefault(i => i.ItemId == itemId)?.Count ?? 0;
 }
 
 public sealed record ItemTransferResult(bool Ok, string Message);
 
+/// <summary>Libellés d'une catégorie d'objets, dans l'ordre d'affichage (<see cref="All"/>).</summary>
+public sealed record ItemCategories(ItemCategory Category, string Title, string Empty)
+{
+    public static readonly IReadOnlyList<ItemCategories> All =
+    [
+        new(ItemCategory.Balls, "Pokéballs", "Aucune Pokéball pour l'instant : retires-en du sac d'une de tes sauvegardes stockées."),
+        new(ItemCategory.Medicine, "Médicaments", "Aucun médicament pour l'instant : retires-en du sac d'une de tes sauvegardes stockées."),
+    ];
+}
+
 /// <summary>
 /// Inventaire du site : un porte-monnaie de Pokédollars, alimenté en retirant de l'argent des sauvegardes stockées, et des
-/// Pokéballs, retirées du sac des sauvegardes stockées ou déposées dedans. Seule la copie du serveur est modifiée ; la partie
-/// est alors marquée « modifiée sur le serveur » (voir <see cref="SaveModification"/>). Chaque mouvement est inscrit dans un journal.
+/// objets (Pokéballs, médicaments), retirés du sac des sauvegardes stockées ou déposés dedans. Seule la copie du serveur est
+/// modifiée ; la partie est alors marquée « modifiée sur le serveur » (voir <see cref="SaveModification"/>). Chaque mouvement
+/// est inscrit dans un journal.
 /// </summary>
 public sealed class InventoryService(
     IDbContextFactory<ApplicationDbContext> dbFactory,
@@ -178,22 +189,21 @@ public sealed class InventoryService(
         return new(true, $"{FormatMoney(amount)} retirés de « {label} ». Solde : {FormatMoney(balance)}.", balance);
     }
 
-    // ---------- Pokéballs ----------
+    // ---------- Objets (Pokéballs, médicaments) ----------
 
-    /// <summary>Pokéballs de l'inventaire, dans l'ordre des numéros d'objets (Master Ball, Hyper Ball, Super Ball...).</summary>
-    public async Task<List<ItemStack>> GetBallsAsync(string ownerId)
+    /// <summary>Objets de l'inventaire : les Pokéballs puis les médicaments, chacun dans l'ordre des numéros d'objets.</summary>
+    public async Task<List<ItemStack>> GetItemsAsync(string ownerId)
     {
         await using var db = await dbFactory.CreateDbContextAsync();
         var items = await db.OwnedItems.AsNoTracking()
             .Where(i => i.OwnerId == ownerId && i.Count > 0)
-            .OrderBy(i => i.ItemId)
             .Select(i => new { i.ItemId, i.Count })
             .ToListAsync();
-        return items.Select(i => Stack(i.ItemId, i.Count)).ToList();
+        return Ordered(items.ToDictionary(i => i.ItemId, i => i.Count)).Select(i => Stack(i.Key, i.Value)).ToList();
     }
 
-    /// <summary>Sauvegardes stockées de l'utilisateur, avec les Balls de leur sac (lues dans le fichier).</summary>
-    public async Task<List<BallSource>> ListBallSourcesAsync(string ownerId)
+    /// <summary>Sauvegardes stockées de l'utilisateur, avec les Pokéballs et médicaments de leur sac (lus dans le fichier).</summary>
+    public async Task<List<ItemSource>> ListItemSourcesAsync(string ownerId)
     {
         await using var db = await dbFactory.CreateDbContextAsync();
         var saves = await db.StoredSaves.AsNoTracking()
@@ -205,33 +215,33 @@ public sealed class InventoryService(
         {
             var label = $"{s.GameName} — {s.TrainerName}";
             if (!StoredSaveService.TryRead(s.Data, s.FileName, out var sav))
-                return new BallSource(s.Id, label, s.TrainerId, s.GameName, "Sauvegarde illisible.", [], new Dictionary<int, int>());
-            var balls = SaveBag.ReadBalls(sav).OrderBy(b => b.Key).Select(b => Stack(b.Key, b.Value)).ToList();
-            return new BallSource(s.Id, label, s.TrainerId, s.GameName, SaveBag.Unsupported(sav), balls, SaveBag.Capacity(sav));
+                return new ItemSource(s.Id, label, s.TrainerId, s.GameName, "Sauvegarde illisible.", [], new Dictionary<int, int>());
+            var items = Ordered(SaveBag.ReadItems(sav)).Select(i => Stack(i.Key, i.Value)).ToList();
+            return new ItemSource(s.Id, label, s.TrainerId, s.GameName, SaveBag.Unsupported(sav), items, SaveBag.Capacity(sav));
         }).ToList();
     }
 
     /// <summary>
-    /// Retire des Pokéballs du sac de la sauvegarde stockée et les ajoute à l'inventaire, en une seule opération.
-    /// La partie est marquée « modifiée sur le serveur » : le jeu du joueur a toujours ces Balls.
+    /// Retire des objets (Pokéballs, médicaments, mélangés si besoin) du sac de la sauvegarde stockée et les ajoute à
+    /// l'inventaire, en une seule opération. La partie est marquée « modifiée sur le serveur » : le jeu du joueur a toujours ces objets.
     /// </summary>
-    public Task<ItemTransferResult> WithdrawBallsAsync(string ownerId, int saveId, IReadOnlyDictionary<int, int> quantities) =>
-        TransferBallsAsync(ownerId, saveId, quantities, deposit: false);
+    public Task<ItemTransferResult> WithdrawItemsAsync(string ownerId, int saveId, IReadOnlyDictionary<int, int> quantities) =>
+        TransferItemsAsync(ownerId, saveId, quantities, deposit: false);
 
     /// <summary>
-    /// Dépose des Pokéballs de l'inventaire dans le sac de la sauvegarde stockée, en une seule opération.
-    /// La partie est marquée « modifiée sur le serveur » : le joueur doit la télécharger pour avoir ces Balls dans son jeu.
+    /// Dépose des objets de l'inventaire dans le sac de la sauvegarde stockée, en une seule opération. La partie est marquée
+    /// « modifiée sur le serveur » : le joueur doit la télécharger pour avoir ces objets dans son jeu.
     /// </summary>
-    public Task<ItemTransferResult> DepositBallsAsync(string ownerId, int saveId, IReadOnlyDictionary<int, int> quantities) =>
-        TransferBallsAsync(ownerId, saveId, quantities, deposit: true);
+    public Task<ItemTransferResult> DepositItemsAsync(string ownerId, int saveId, IReadOnlyDictionary<int, int> quantities) =>
+        TransferItemsAsync(ownerId, saveId, quantities, deposit: true);
 
-    private async Task<ItemTransferResult> TransferBallsAsync(string ownerId, int saveId, IReadOnlyDictionary<int, int> quantities, bool deposit)
+    private async Task<ItemTransferResult> TransferItemsAsync(string ownerId, int saveId, IReadOnlyDictionary<int, int> quantities, bool deposit)
     {
         if (quantities.Values.Any(q => q < 0))
             return new(false, "Les quantités ne peuvent pas être négatives.");
-        var wanted = quantities.Where(q => q.Value > 0).OrderBy(q => q.Key).ToDictionary(q => q.Key, q => q.Value);
+        var wanted = Ordered(quantities.Where(q => q.Value > 0).ToDictionary(q => q.Key, q => q.Value)).ToDictionary(q => q.Key, q => q.Value);
         if (wanted.Count == 0)
-            return new(false, "Choisis au moins une Pokéball.");
+            return new(false, "Choisis au moins un objet.");
 
         await using var db = await dbFactory.CreateDbContextAsync();
         var save = await db.StoredSaves.FirstOrDefaultAsync(s => s.Id == saveId && s.OwnerId == ownerId);
@@ -257,25 +267,25 @@ public sealed class InventoryService(
             : SaveBag.Withdraw(sav, wanted, info.ItemName);
         if (refused is not null)
             return new(false, refused);
-        var expected = SaveBag.ReadBalls(sav);
+        var expected = SaveBag.ReadItems(sav);
         var newData = sav.Write().ToArray();
-        if (!StoredSaveService.TryRead(newData, save.FileName, out var check) || !SameCounts(SaveBag.ReadBalls(check), expected))
+        if (!StoredSaveService.TryRead(newData, save.FileName, out var check) || !SameCounts(SaveBag.ReadItems(check), expected))
             return new(false, $"La modification du sac n'est pas prise en charge pour ce jeu ({save.GameName}).");
 
         var details = Describe(wanted);
-        var error = await SaveServerChangeAsync(db, ownerId, save, newData, check.Money, deposit ? "depot-balls" : "retrait-balls",
-            m => m.BallsChanged = true,
+        var error = await SaveServerChangeAsync(db, ownerId, save, newData, check.Money, deposit ? "depot-objets" : "retrait-objets",
+            m => m.ItemsChanged = true,
             async now =>
             {
                 foreach (var (item, quantity) in wanted)
                 {
                     if (deposit)
                     {
-                        // Débit conditionnel et atomique : un autre onglet a pu utiliser ces Balls entre-temps.
+                        // Débit conditionnel et atomique : un autre onglet a pu utiliser ces objets entre-temps.
                         var debited = await db.OwnedItems.Where(i => i.OwnerId == ownerId && i.ItemId == item && i.Count >= quantity)
                             .ExecuteUpdateAsync(i => i.SetProperty(x => x.Count, x => x.Count - quantity));
                         if (debited == 0)
-                            return $"Ton inventaire ne contient plus assez de {info.ItemName(item)} (utilisées depuis un autre onglet ?).";
+                            return $"Ton inventaire ne contient plus assez de {info.ItemName(item)} (utilisé depuis un autre onglet ?).";
                     }
                     else
                     {
@@ -289,25 +299,31 @@ public sealed class InventoryService(
                     await db.OwnedItems.Where(i => i.OwnerId == ownerId && i.Count == 0).ExecuteDeleteAsync();
 
                 var balance = await db.Wallets.Where(w => w.OwnerId == ownerId).Select(w => w.Money).FirstOrDefaultAsync();
-                var kind = deposit ? WalletOperationKind.DepositBallsToSave : WalletOperationKind.WithdrawBallsFromSave;
+                var kind = deposit ? WalletOperationKind.DepositItemsToSave : WalletOperationKind.WithdrawItemsFromSave;
                 AddOperation(db, ownerId, now, kind, 0, balance, save, details);
                 return null;
             });
         if (error is not null)
             return new(false, error);
 
-        logger.LogInformation("Utilisateur {User} : Pokéballs {Direction} la sauvegarde {Id} ({Details}).",
-            ownerId, deposit ? "déposées dans" : "retirées de", save.Id, details);
+        logger.LogInformation("Utilisateur {User} : objets {Direction} la sauvegarde {Id} ({Details}).",
+            ownerId, deposit ? "déposés dans" : "retirés de", save.Id, details);
         return deposit
             ? new(true, $"Déposé dans « {label} » : {details}. Télécharge la sauvegarde depuis « Mes sauvegardes » pour les avoir dans ton jeu.")
             : new(true, $"Retiré de « {label} » : {details}.");
     }
 
-    private ItemStack Stack(int item, int count) => new(item, info.ItemName(item), PokemonInfo.ItemSpriteUrl(item), count);
+    private ItemStack Stack(int item, int count) =>
+        new(item, SaveBag.CategoryOf(item) ?? ItemCategory.Balls, info.ItemName(item), PokemonInfo.ItemSpriteUrl(item), count);
 
-    /// <summary>« 10 × Poké Ball, 2 × Hyper Ball » (dans l'ordre des numéros d'objets).</summary>
+    /// <summary>Pokéballs d'abord, puis médicaments, chacun dans l'ordre des numéros d'objets.</summary>
+    private static IEnumerable<KeyValuePair<int, int>> Ordered(IReadOnlyDictionary<int, int> items) =>
+        items.OrderBy(i => SaveBag.CategoryOf(i.Key)).ThenBy(i => i.Key);
+
+    /// <summary>« 10 × Poké Ball, 2 × Hyper Ball, 5 × Potion » (Pokéballs puis médicaments).</summary>
     private string Describe(IReadOnlyDictionary<int, int> quantities) =>
-        string.Join(", ", quantities.OrderBy(q => q.Key).Select(q => $"{q.Value} × {info.ItemName(q.Key)}"));
+        string.Join(", ", Ordered(quantities).Select(q => $"{q.Value} × {info.ItemName(q.Key)}"));
+
 
     private static bool SameCounts(Dictionary<int, int> actual, Dictionary<int, int> expected) =>
         actual.Count == expected.Count && expected.All(e => actual.GetValueOrDefault(e.Key) == e.Value);

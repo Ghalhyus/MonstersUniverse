@@ -1,0 +1,259 @@
+@using PokeBank.Services
+@inject InventoryService InventoryStore
+
+@* Fenêtre de transfert d'objets (Pokéballs, médicaments) entre l'inventaire et le sac d'une sauvegarde stockée, dans un sens
+   ou dans l'autre : sauvegarde → quantité de chaque objet, un onglet par catégorie → confirmation. Une seule opération pour toutes les
+   catégories ; seule la copie du serveur est modifiée. *@
+
+<div class="dialog-backdrop" @onclick="Cancel"></div>
+<div class="dialog-panel card" role="dialog" aria-modal="true" aria-label="@Title">
+    <div class="card-body">
+        @switch (step)
+        {
+            case Step.ChooseSave:
+                <h5>@Title <small class="text-muted">· 1/3</small></h5>
+                <p class="small text-muted">
+                    @(Deposit ? "Choisis la sauvegarde stockée dans le sac de laquelle déposer les objets." : "Choisis la sauvegarde stockée du sac de laquelle retirer les objets.")
+                </p>
+                @if (sources is null)
+                {
+                    <p class="text-muted">Chargement…</p>
+                }
+                else if (sources.Count == 0)
+                {
+                    <p>Aucune sauvegarde stockée. Ajoutes-en une dans <a href="sauvegardes">Mes sauvegardes</a>.</p>
+                }
+                else
+                {
+                    <div class="list-group mb-3">
+                        @foreach (var source in sources)
+                        {
+                            var s = source;
+                            <button type="button" class="list-group-item list-group-item-action d-flex align-items-center gap-2"
+                                    disabled="@(s.Unsupported is not null || (!Deposit && s.Items.Count == 0))" @onclick="() => ChooseSave(s)">
+                                <span><strong>@s.Label</strong> <span class="small text-muted">(@s.TrainerId)</span></span>
+                                <span class="ms-auto small text-nowrap text-end">@(s.Unsupported ?? BagSummary(s))</span>
+                            </button>
+                        }
+                    </div>
+                }
+                <div class="d-flex justify-content-end">
+                    <button class="btn btn-outline-secondary" @onclick="Cancel">Annuler</button>
+                </div>
+                break;
+
+            case Step.Quantities:
+                <h5>@Title <small class="text-muted">· 2/3</small></h5>
+                <p class="small">@(Deposit ? "Vers" : "Depuis") le sac de « @chosen!.Label ».</p>
+                @* Une liste à la fois ; les quantités des autres onglets sont gardées et partent dans la même opération. *@
+                <ul class="nav nav-tabs mb-2" role="tablist">
+                    @foreach (var category in ItemCategories.All)
+                    {
+                        var c = category.Category;
+                        var chosenCount = Rows.Count(r => r.Category == c && Wanted(r) > 0);
+                        var hasError = Rows.Any(r => r.Category == c && QuantityError(r) is not null);
+                        <li class="nav-item" role="presentation">
+                            <button type="button" role="tab" class="nav-link @(tab == c ? "active" : "")" aria-selected="@(tab == c)"
+                                    @onclick="() => tab = c">
+                                @category.Title
+                                @if (hasError)
+                                {
+                                    <span class="badge bg-danger ms-1" title="Quantité à corriger">!</span>
+                                }
+                                else if (chosenCount > 0)
+                                {
+                                    <span class="badge bg-primary ms-1" title="Objets choisis dans cette liste">@chosenCount</span>
+                                }
+                            </button>
+                        </li>
+                    }
+                </ul>
+                @foreach (var category in ItemCategories.All.Where(c => c.Category == tab))
+                {
+                    var rows = Rows.Where(r => r.Category == category.Category).ToList();
+                    @if (rows.Count == 0)
+                    {
+                        <p class="small text-muted mb-0">@(Deposit ? "Aucun dans ton inventaire." : "Aucun dans ce sac.")</p>
+                        continue;
+                    }
+                    <table class="table table-sm align-middle mb-0">
+                        <thead>
+                            <tr><th>Objet</th><th class="text-end">@(Deposit ? "Inventaire" : "Sac")</th><th class="text-end">Quantité</th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var row in rows)
+                            {
+                                var r = row;
+                                var max = Max(r);
+                                <tr>
+                                    <td>
+                                        <img src="@r.SpriteUrl" alt="" width="24" height="24" class="item-sprite" />
+                                        @r.Name
+                                        @if (Deposit && RowProblem(r) is { } problem)
+                                        {
+                                            <div class="small text-muted">@problem</div>
+                                        }
+                                    </td>
+                                    <td class="text-end">@CollectionCapacity.FormatCount(r.Count)</td>
+                                    <td class="text-end">
+                                        <div class="d-flex justify-content-end align-items-center gap-1">
+                                            <input type="number" class="form-control form-control-sm item-quantity" min="0" max="@max" step="1"
+                                                   aria-label="@($"Quantité de {r.Name}")" disabled="@(max == 0)"
+                                                   value="@quantities.GetValueOrDefault(r.ItemId)" @oninput="e => SetQuantity(r.ItemId, e.Value)" />
+                                            <button class="btn btn-sm btn-link px-1" disabled="@(max == 0)" @onclick="() => quantities[r.ItemId] = max">Tout</button>
+                                        </div>
+                                        @if (QuantityError(r) is { } error)
+                                        {
+                                            <div class="small text-danger">@error</div>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+                <div class="d-flex justify-content-end gap-2 mt-3">
+                    <button class="btn btn-outline-secondary" @onclick="() => step = Step.ChooseSave">Retour</button>
+                    <button class="btn btn-primary" @onclick="() => step = Step.Confirm" disabled="@(!CanContinue)">Suivant</button>
+                </div>
+                break;
+
+            case Step.Confirm:
+                <h5>@Title <small class="text-muted">· 3/3</small></h5>
+                <p>@(Deposit ? "Déposer dans" : "Retirer de") « @chosen!.Label » :</p>
+                <ul class="small">
+                    @foreach (var r in Rows.Where(r => Wanted(r) > 0))
+                    {
+                        var inSave = chosen.CountOf(r.ItemId);
+                        var inStock = Stock.FirstOrDefault(s => s.ItemId == r.ItemId)?.Count ?? 0;
+                        var n = Wanted(r);
+                        <li>
+                            <strong>@n × @r.Name</strong> —
+                            sac : @inSave → @(Deposit ? inSave + n : inSave - n),
+                            inventaire : @inStock → @(Deposit ? inStock - n : inStock + n)
+                        </li>
+                    }
+                </ul>
+                <div class="alert alert-warning small">
+                    Seule la copie du serveur est modifiée :
+                    @if (Deposit)
+                    {
+                        <strong>ton jeu n'a pas encore ces objets.</strong>
+                        <text> Pour les avoir, télécharge la sauvegarde depuis « Mes sauvegardes » et remplace celle de ton jeu.</text>
+                    }
+                    else
+                    {
+                        <strong>ton jeu a toujours ces objets.</strong>
+                        <text> Pour ne pas les avoir en double, télécharge la sauvegarde depuis « Mes sauvegardes » et remplace celle de ton jeu.</text>
+                    }
+                    Sa mise à jour reste bloquée en attendant.
+                </div>
+                <div class="d-flex justify-content-end gap-2">
+                    <button class="btn btn-outline-secondary" @onclick="() => step = Step.Quantities" disabled="@busy">Retour</button>
+                    <button class="btn btn-primary" @onclick="Confirm" disabled="@busy">@(Deposit ? "Confirmer le dépôt" : "Confirmer le retrait")</button>
+                </div>
+                break;
+        }
+    </div>
+</div>
+
+@code {
+    /// <summary>Dépôt (inventaire → sac) ; sinon retrait (sac → inventaire).</summary>
+    [Parameter] public bool Deposit { get; set; }
+    [Parameter, EditorRequired] public string UserId { get; set; } = "";
+    /// <summary>Objets de l'inventaire (ce qu'on peut déposer).</summary>
+    [Parameter, EditorRequired] public IReadOnlyList<ItemStack> Stock { get; set; } = [];
+    /// <summary>Fin de l'opération (réussie ou refusée) : la page affiche le message et recharge l'inventaire.</summary>
+    [Parameter] public EventCallback<ItemTransferResult> OnDone { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private enum Step { ChooseSave, Quantities, Confirm }
+
+    private Step step;
+    private List<ItemSource>? sources;
+    private ItemSource? chosen;
+    private Dictionary<int, int?> quantities = [];
+    private ItemCategory tab; // onglet affiché à l'étape 2
+    private bool busy;
+
+    private string Title => Deposit ? "Déposer des objets" : "Retirer des objets";
+
+    /// <summary>Lignes de l'étape 2 : les objets du sac (retrait) ou de l'inventaire (dépôt).</summary>
+    private IReadOnlyList<ItemStack> Rows => Deposit ? Stock : chosen?.Items ?? [];
+
+    protected override async Task OnInitializedAsync() => sources = await InventoryStore.ListItemSourcesAsync(UserId);
+
+    /// <summary>« 62 Pokéballs · 12 médicaments dans le sac ».</summary>
+    private static string BagSummary(ItemSource source)
+    {
+        if (source.Items.Count == 0)
+            return "sac vide";
+        var balls = source.Total(ItemCategory.Balls);
+        var medicine = source.Total(ItemCategory.Medicine);
+        return $"{CollectionCapacity.FormatCount(balls)} Pokéball{(balls > 1 ? "s" : "")} · " +
+               $"{CollectionCapacity.FormatCount(medicine)} médicament{(medicine > 1 ? "s" : "")} dans le sac";
+    }
+
+    private void ChooseSave(ItemSource source)
+    {
+        chosen = source;
+        quantities = []; // rien de prérempli : rien n'est transféré par accident
+        // Premier onglet qui a quelque chose à transférer.
+        tab = ItemCategories.All.Select(c => c.Category).FirstOrDefault(c => Rows.Any(r => r.Category == c), ItemCategory.Balls);
+        step = Step.Quantities;
+    }
+
+    /// <summary>Quantité maximale transférable : tout ce qu'il y a pour un retrait ; pour un dépôt, la place dans le sac en plus.</summary>
+    private int Max(ItemStack item) =>
+        !Deposit ? item.Count
+        : RowProblem(item) is not null ? 0
+        : Math.Min(item.Count, chosen!.Capacity[item.ItemId] - chosen.CountOf(item.ItemId));
+
+    /// <summary>Dépôt impossible pour cet objet : inconnu du jeu ou sac plein.</summary>
+    private string? RowProblem(ItemStack item) =>
+        !chosen!.Capacity.TryGetValue(item.ItemId, out var capacity) ? $"n'existe pas dans {chosen.GameName}"
+        : chosen.CountOf(item.ItemId) >= capacity ? $"sac plein ({capacity} au maximum)"
+        : null;
+
+    private int Wanted(ItemStack item) => quantities.GetValueOrDefault(item.ItemId) ?? 0;
+
+    private string? QuantityError(ItemStack item)
+    {
+        if (!quantities.TryGetValue(item.ItemId, out var value))
+            return null;
+        var max = Max(item);
+        return value is not { } n ? "Nombre entier attendu."
+            : n < 0 ? "Pas de quantité négative."
+            : n > max ? (Deposit && n <= item.Count ? $"Le sac n'accepte que {max} de plus." : $"{max} au maximum.")
+            : null;
+    }
+
+    private bool CanContinue => Rows.Any(r => Wanted(r) > 0) && Rows.All(r => QuantityError(r) is null);
+
+    private void SetQuantity(int itemId, object? value) =>
+        quantities[itemId] = int.TryParse(value?.ToString(), out var n) ? n : string.IsNullOrWhiteSpace(value?.ToString()) ? 0 : null;
+
+    private async Task Cancel()
+    {
+        if (!busy) await OnCancel.InvokeAsync();
+    }
+
+    private async Task Confirm()
+    {
+        if (chosen is null || !CanContinue) return;
+        busy = true;
+        try
+        {
+            var wanted = Rows.Where(r => Wanted(r) > 0).ToDictionary(r => r.ItemId, Wanted);
+            var result = Deposit
+                ? await InventoryStore.DepositItemsAsync(UserId, chosen.SaveId, wanted)
+                : await InventoryStore.WithdrawItemsAsync(UserId, chosen.SaveId, wanted);
+            await OnDone.InvokeAsync(result);
+        }
+        catch (Exception ex)
+        {
+            await OnDone.InvokeAsync(new ItemTransferResult(false, $"Transfert impossible : {ex.Message}"));
+        }
+        finally { busy = false; }
+    }
+}
