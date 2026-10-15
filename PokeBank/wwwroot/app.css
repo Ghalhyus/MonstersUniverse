@@ -199,7 +199,7 @@ h1:focus {
 /* ---------- Inventaire ---------- */
 .wallet-balance { font-size: 2rem; font-weight: 600; line-height: 1.2; }
 
-/* Objets de l'inventaire (Pokéballs, médicaments) */
+/* Objets de l'inventaire en grille (vignettes) */
 .item-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: .5rem; }
 .item-tile {
     display: flex;
@@ -215,3 +215,28 @@ h1:focus {
 .item-sprite { image-rendering: pixelated; vertical-align: middle; }
 .item-quantity { width: 5.5rem; }
 
+
+/* Stockage de l'inventaire et journal en panneau latéral : ouvert, il prend un tiers de la page (420 px au moins) et la
+   liste se rétrécit ; sur un téléphone, il recouvre tout l'écran. */
+.inventory-layout { display: flex; align-items: flex-start; gap: 1rem; }
+.inventory-main { flex: 1; min-width: 0; }
+.inventory-search { max-width: 24rem; }
+.journal-panel {
+    flex: 0 0 33.333%;
+    min-width: 420px;
+    position: sticky;
+    top: 4.5rem; /* sous la barre du haut */
+    max-height: calc(100vh - 5.5rem);
+    overflow-y: auto;
+}
+.journal-panel .card-header { position: sticky; top: 0; z-index: 1; background: var(--bs-tertiary-bg); }
+@media (max-width: 640.98px) {
+    .journal-panel {
+        position: fixed;
+        inset: 0;
+        z-index: 1050;
+        min-width: 0;
+        max-height: none;
+        border-radius: 0;
+    }
+}

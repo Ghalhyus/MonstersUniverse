@@ -3,13 +3,13 @@ using PKHeX.Core;
 namespace PokeBank.Services;
 
 /// <summary>Catégories d'objets du sac que le site sait transférer.</summary>
-public enum ItemCategory { Balls, Medicine, Berries, Machines }
+public enum ItemCategory { Items, Balls, Medicine, Berries, Machines }
 
 /// <summary>
-/// Objets du sac d'une sauvegarde (Pokéballs, médicaments, baies, CT et DT), lus et modifiés en mémoire avec PKHeX (le fichier s'écrit
+/// Objets du sac d'une sauvegarde (objets, Pokéballs, médicaments, baies, CT et DT), lus et modifiés en mémoire avec PKHeX (le fichier s'écrit
 /// ensuite avec <see cref="SaveFile.Write"/>). Chaque objet est repéré par une clé, la même d'un jeu à l'autre :
 /// <list type="bullet">
-/// <item>Pokéballs, médicaments et baies : leur numéro PKHeX de 4e génération et suivantes (une Super Ball retirée de Platine peut être
+/// <item>objets, Pokéballs, médicaments et baies : leur numéro PKHeX de 4e génération et suivantes (une Super Ball retirée de Platine peut être
 /// déposée dans Noir 2) ; les jeux de 3e génération, qui numérotent leurs objets autrement, sont convertis ;</item>
 /// <item>CT et DT : la capacité qu'elles apprennent (<see cref="MachineKey"/>), car un même numéro de CT n'apprend pas la même
 /// capacité d'une génération à l'autre (CT01 : Mitra-Poing en Platine, Affûtage en Noir 2). Une CT Séisme retirée de Platine
@@ -18,7 +18,8 @@ public enum ItemCategory { Balls, Medicine, Berries, Machines }
 /// </list>
 /// Les objets sont cherchés dans toutes les poches du sac : les Balls ont leur poche en 4e génération mais sont rangées avec les
 /// objets dans Noir 2, les médicaments sont avec les objets en 3e génération, les baies de Let's Go avec les Balls. Seul le sac
-/// est concerné : les baies plantées ne sont pas touchées.
+/// est concerné : les baies plantées ne sont pas touchées. Les objets rares, les Lettres et les Cristaux Z ne sont jamais lus
+/// ni modifiés (voir <see cref="ItemPouches"/>).
 /// </summary>
 public static class SaveBag
 {
@@ -53,6 +54,27 @@ public static class SaveBag
     /// </summary>
     public const int EnigmaBerry = 208;
 
+    /// <summary>
+    /// Lettres (4e génération et suivantes ; celles de la 3e n'ont pas d'équivalent) : leur message est enregistré à part dans la
+    /// sauvegarde, elles ne sont donc jamais transférées, même quand le jeu les range avec les objets (5e génération).
+    /// </summary>
+    public static readonly IReadOnlySet<int> MailItems = new HashSet<int>(Enumerable.Range(137, 12));
+
+    /// <summary>
+    /// Poches d'où viennent les objets ordinaires (catégorie <see cref="ItemCategory.Items"/>) : Objets, Objets de combat,
+    /// Trésors, Ingrédients, Bonbons, Méga-Gemmes. Les autres catégories sont reconnues à leur numéro, dans toutes les poches
+    /// sauf <see cref="UntouchedPouches"/>.
+    /// </summary>
+    public static readonly IReadOnlySet<InventoryType> ItemPouches = new HashSet<InventoryType>(
+        [InventoryType.Items, InventoryType.BattleItems, InventoryType.Treasure, InventoryType.Ingredients, InventoryType.Candy, InventoryType.MegaStones]);
+
+    /// <summary>
+    /// Poches jamais lues ni modifiées : objets rares (les retirer pourrait bloquer la progression), Lettres, Cristaux Z et
+    /// stockage d'objets du PC (3e génération), qui ne fait pas partie du sac.
+    /// </summary>
+    private static readonly IReadOnlySet<InventoryType> UntouchedPouches = new HashSet<InventoryType>(
+        [InventoryType.KeyItems, InventoryType.MailItems, InventoryType.ZCrystals, InventoryType.PCItems]);
+
     /// <summary>Début des clés des CT et DT : <c>MachineKeyBase + numéro de la capacité</c>, au-delà de tout numéro d'objet.</summary>
     public const int MachineKeyBase = 100_000;
 
@@ -63,23 +85,28 @@ public static class SaveBag
     public static ushort? MoveOf(int key) =>
         key > MachineKeyBase && key - MachineKeyBase <= ushort.MaxValue ? (ushort)(key - MachineKeyBase) : null;
 
-    /// <summary>Catégorie d'une clé d'objet (voir <see cref="SaveBag"/>), null si le site ne la transfère pas.</summary>
+    /// <summary>
+    /// Catégorie d'une clé d'objet (voir <see cref="SaveBag"/>), null si le site ne la transfère jamais (Lettres). Ce qui n'est
+    /// ni une Pokéball, ni un médicament, ni une baie, ni une CT est un objet ordinaire ; c'est la poche où chaque jeu le range
+    /// qui dit s'il y est transférable (<see cref="ItemPouches"/>).
+    /// </summary>
     public static ItemCategory? CategoryOf(int key) =>
         BallItems.Contains(key) ? ItemCategory.Balls
         : MedicineItems.Contains(key) ? ItemCategory.Medicine
         : BerryItems.Contains(key) ? ItemCategory.Berries
         : MoveOf(key) is not null ? ItemCategory.Machines
+        : key is > 0 and < MachineKeyBase && !MailItems.Contains(key) ? ItemCategory.Items
         : null;
 
     /// <summary>Pourquoi le sac de cette sauvegarde n'est pas pris en charge ; null s'il l'est.</summary>
     public static string? Unsupported(SaveFile sav) =>
         sav.Generation < 3 ? "Les sacs des jeux de 1re et 2e génération ne sont pas pris en charge."
-        : Capacity(sav).Count == 0 ? "Le sac de ce jeu ne peut contenir aucune Pokéball, aucun médicament, aucune baie ni aucune CT."
+        : Capacity(sav).Count == 0 ? "Le sac de ce jeu ne peut contenir aucun objet que le site sait transférer."
         : null;
 
     /// <summary>
-    /// Objets transférables du sac (Pokéballs, médicaments, baies, CT et DT ; jamais les CS) par clé, et leur quantité (additionnée si
-    /// un objet occupe plusieurs emplacements).
+    /// Objets transférables du sac (objets ordinaires, Pokéballs, médicaments, baies, CT et DT ; jamais les objets rares, les
+    /// Lettres ni les CS) par clé, et leur quantité (additionnée si un objet occupe plusieurs emplacements).
     /// </summary>
     public static Dictionary<int, int> ReadItems(SaveFile sav) =>
         sav.Generation < 3 ? [] : Count(sav, Bag(sav.Inventory));
@@ -88,7 +115,8 @@ public static class SaveBag
     /// Quantité maximale de chaque objet que le sac peut contenir, par clé : 999 en 4e et 5e génération, 99 dans la poche Objets
     /// de la 3e, et 1 pour une CT réutilisable (5e à 7e génération, Épée/Bouclier, Légendes Z-A). Un objet que le jeu ne connaît
     /// pas est absent (les Balls Noigrume de HGSS n'existent pas dans Platine, aucune CT n'apprend Mitra-Poing dans Noir 2...),
-    /// comme une capacité que le jeu n'apprend que par une CS (Surf dans Platine) et la Baie Enigma en 3e génération.
+    /// comme une capacité que le jeu n'apprend que par une CS (Surf dans Platine), la Baie Enigma en 3e génération et un objet
+    /// que le jeu range parmi les objets rares.
     /// </summary>
     public static Dictionary<int, int> Capacity(SaveFile sav)
     {
@@ -101,7 +129,16 @@ public static class SaveBag
             if (!IsEnigmaOfGen3(sav, item) && PouchFor(sav, bag, item) is { } pouch)
                 capacity[item] = pouch.MaxCount;
         }
-        foreach (var machine in MachinesOf(sav).ByMove.Values)
+        var machines = MachinesOf(sav);
+        foreach (var pouch in bag.Where(p => ItemPouches.Contains(p.Type)))
+        {
+            foreach (var index in pouch.GetAllItems())
+            {
+                if (KeyOf(sav, machines, pouch, index) is { } item && CategoryOf(item) == ItemCategory.Items)
+                    capacity.TryAdd(item, pouch.MaxCount);
+            }
+        }
+        foreach (var machine in machines.ByMove.Values)
         {
             if (PouchFor(sav, bag, machine.Item) is { } pouch)
                 capacity[MachineKey(machine.Move)] = machine.Reusable ? 1 : pouch.MaxCount;
@@ -124,7 +161,7 @@ public static class SaveBag
         foreach (var (item, quantity) in quantities)
         {
             if (CategoryOf(item) is null)
-                return $"{name(item)} n'est ni une Pokéball, ni un médicament, ni une baie, ni une CT.";
+                return $"{name(item)} ne peut pas être transféré.";
             if (quantity > have.GetValueOrDefault(item))
                 return $"Le sac ne contient que {have.GetValueOrDefault(item)} × {name(item)}.";
         }
@@ -136,7 +173,7 @@ public static class SaveBag
             var left = quantity;
             foreach (var pouch in bag)
             {
-                foreach (var slot in pouch.Items.Where(s => s.Count > 0 && KeyOf(sav, machines, s.Index) == item))
+                foreach (var slot in pouch.Items.Where(s => s.Count > 0 && KeyOf(sav, machines, pouch, s.Index) == item))
                 {
                     var taken = Math.Min(left, slot.Count);
                     slot.Count -= taken;
@@ -166,10 +203,11 @@ public static class SaveBag
         foreach (var (item, quantity) in quantities)
         {
             if (CategoryOf(item) is null)
-                return $"{name(item)} n'est ni une Pokéball, ni un médicament, ni une baie, ni une CT.";
+                return $"{name(item)} ne peut pas être transféré.";
             if (!capacity.TryGetValue(item, out var max))
                 return MoveOf(item) is not null ? $"{name(item)} : aucune CT ni DT n'apprend cette capacité dans {gameName}."
                     : IsEnigmaOfGen3(sav, item) ? $"{name(item)} : en 3e génération, elle vient de l'e-Reader et ne peut pas être déposée."
+                    : CategoryOf(item) == ItemCategory.Items ? $"{name(item)} n'existe pas dans {gameName}, ou y est un objet rare."
                     : $"{name(item)} n'existe pas dans {gameName}.";
             var current = have.GetValueOrDefault(item);
             if (current + quantity > max)
@@ -180,19 +218,20 @@ public static class SaveBag
         foreach (var (item, quantity) in quantities)
         {
             var gameItem = MoveOf(item) is { } move ? machines.ByMove[move].Item : item;
-            if (PouchFor(sav, bag, gameItem)!.GiveItem(sav, ToGame(sav, gameItem), quantity) < 0)
+            var targets = CategoryOf(item) == ItemCategory.Items ? bag.Where(p => ItemPouches.Contains(p.Type)) : bag;
+            if (PouchFor(sav, targets, gameItem)!.GiveItem(sav, ToGame(sav, gameItem), quantity) < 0)
                 return $"Plus de place dans le sac pour {name(item)}.";
         }
         sav.Inventory = pouches;
         return null;
     }
 
-    /// <summary>Poches du sac, sans le stockage d'objets du PC (3e génération) qui n'en fait pas partie.</summary>
+    /// <summary>Poches du sac que le site peut lire et modifier (sans <see cref="UntouchedPouches"/>).</summary>
     private static List<InventoryPouch> Bag(IReadOnlyList<InventoryPouch> pouches) =>
-        pouches.Where(p => p.Type != InventoryType.PCItems).ToList();
+        pouches.Where(p => !UntouchedPouches.Contains(p.Type)).ToList();
 
     /// <summary>Poche où le jeu range cet objet (« Balls » en 4e génération, « Objets » en 5e...), null s'il ne le connaît pas.</summary>
-    private static InventoryPouch? PouchFor(SaveFile sav, List<InventoryPouch> bag, int item)
+    private static InventoryPouch? PouchFor(SaveFile sav, IEnumerable<InventoryPouch> bag, int item)
     {
         var index = ToGame(sav, item);
         return index == 0 ? null : bag.FirstOrDefault(p => p.CanContain(index));
@@ -206,13 +245,24 @@ public static class SaveBag
     private static int ToNational(SaveFile sav, int index) =>
         sav.Generation == 3 ? ItemConverter.GetItemFuture3((ushort)index) : index;
 
-    /// <summary>Clé d'un objet lu dans le sac (voir <see cref="SaveBag"/>), null si le site ne le transfère pas (CS comprises).</summary>
-    private static int? KeyOf(SaveFile sav, Machines machines, int index)
+    /// <summary>
+    /// Clé d'un objet lu dans une poche du sac (voir <see cref="SaveBag"/>), null si le site ne le transfère pas : CS (rangées
+    /// avec les CT), objet ordinaire hors de <see cref="ItemPouches"/>, Lettre, Baie Enigma de la 3e génération, objet de la
+    /// 3e génération sans équivalent ensuite (ses Lettres).
+    /// </summary>
+    private static int? KeyOf(SaveFile sav, Machines machines, InventoryPouch pouch, int index)
     {
         var item = ToNational(sav, index);
+        if (item == 0 || ToGame(sav, item) != index)
+            return null;
         if (machines.ByItem.TryGetValue(item, out var machine))
             return MachineKey(machine.Move);
-        return CategoryOf(item) is ItemCategory.Balls or ItemCategory.Medicine or ItemCategory.Berries && !IsEnigmaOfGen3(sav, item) ? item : null;
+        return CategoryOf(item) switch
+        {
+            ItemCategory.Items when ItemPouches.Contains(pouch.Type) => item,
+            ItemCategory.Balls or ItemCategory.Medicine or ItemCategory.Berries when !IsEnigmaOfGen3(sav, item) => item,
+            _ => null,
+        };
     }
 
     private static bool IsEnigmaOfGen3(SaveFile sav, int item) => sav.Generation == 3 && item == EnigmaBerry;
@@ -221,12 +271,15 @@ public static class SaveBag
     {
         var machines = MachinesOf(sav);
         var counts = new Dictionary<int, int>();
-        foreach (var slot in bag.SelectMany(p => p.Items))
+        foreach (var pouch in bag)
         {
-            if (slot.Index == 0 || slot.Count <= 0)
-                continue;
-            if (KeyOf(sav, machines, slot.Index) is { } key)
-                counts[key] = counts.GetValueOrDefault(key) + slot.Count;
+            foreach (var slot in pouch.Items)
+            {
+                if (slot.Index == 0 || slot.Count <= 0)
+                    continue;
+                if (KeyOf(sav, machines, pouch, slot.Index) is { } key)
+                    counts[key] = counts.GetValueOrDefault(key) + slot.Count;
+            }
         }
         return counts;
     }

@@ -409,14 +409,15 @@ public sealed class InventoryServiceTests : IDisposable
     }
 
     [Fact]
-    public void SaveBag_RefusesItemsThatAreNeitherBallsNorMedicine()
+    public void SaveBag_RefusesMail_EvenInTheItemsPouch()
     {
         var sav = new SAV5B2W2();
-        const int BlackFlute = 68; // objet de la poche Objets, pas un médicament
-        SaveSessionTests.GiveItems(sav, (BlackFlute, 1));
+        const int GrassMail = 137; // Lettre : rangée avec les objets en 5e génération, son message est enregistré à part
+        SaveSessionTests.GiveItems(sav, (GrassMail, 1));
         Assert.Empty(SaveBag.ReadItems(sav));
-        Assert.NotNull(SaveBag.Withdraw(sav, new Dictionary<int, int> { [BlackFlute] = 1 }, i => $"{i}"));
-        Assert.NotNull(SaveBag.Deposit(sav, new Dictionary<int, int> { [BlackFlute] = 1 }, i => $"{i}", "Noir 2"));
+        Assert.Null(SaveBag.CategoryOf(GrassMail));
+        Assert.NotNull(SaveBag.Withdraw(sav, new Dictionary<int, int> { [GrassMail] = 1 }, i => $"{i}"));
+        Assert.NotNull(SaveBag.Deposit(sav, new Dictionary<int, int> { [GrassMail] = 1 }, i => $"{i}", "Noir 2"));
     }
 
     [Fact]
@@ -609,7 +610,7 @@ public sealed class InventoryServiceTests : IDisposable
     {
         Assert.Equal(ItemCategory.Berries, SaveBag.CategoryOf(CheriBerry));
         Assert.Equal(ItemCategory.Medicine, SaveBag.CategoryOf(BerryJuice)); // Jus de Baie : un médicament
-        Assert.Null(SaveBag.CategoryOf(2550)); // Baie Pêcha Mythique : objet rare d'Écarlate/Violet
+        Assert.False(SaveBag.Capacity(new SAV9SV()).ContainsKey(2550)); // Baie Pêcha Mythique : objet rare d'Écarlate/Violet
 
         // Baies de capture de Let's Go : rangées avec les Balls, inconnues des autres jeux.
         var letsGo = SaveBag.Capacity(new SAV7b());
@@ -617,6 +618,73 @@ public sealed class InventoryServiceTests : IDisposable
         Assert.False(letsGo.ContainsKey(SitrusBerry));
         Assert.False(SaveBag.Capacity(new SAV5B2W2()).ContainsKey(GoldenRazzBerry));
         Assert.True(SaveBag.Capacity(new SAV9ZA()).ContainsKey(2659)); // Extra Baie Sitrus
+    }
+
+    // ---------- Objets ordinaires ----------
+
+    private const int MoonStone = 81, FireStone = 82, Nugget = 92, Leftovers = 234, XAttack = 57, Bicycle = 450, GrassMail = 137;
+
+    [Fact]
+    public async Task Items_GoFromPlatinumToBlack2_FirstInTheInventory()
+    {
+        Assert.True((await _saves.AddAsync("sacha", "platine.sav", SaveSessionTests.CreatePlatinumSave())).Ok);
+        var platine = (await _saves.ListAsync("sacha")).Single().Id;
+        var source = (await _inventory.ListItemSourcesAsync("sacha")).Single();
+        Assert.Equal(11, source.Total(ItemCategory.Items)); // ni le Vélo ni la Lettre
+        Assert.Equal(4, source.CountOf(XAttack)); // poche Objets de combat
+
+        var result = await _inventory.WithdrawItemsAsync("sacha", platine,
+            new Dictionary<int, int> { [Nugget] = 3, [MoonStone] = 2, [XAttack] = 4, [PokeBall] = 1 });
+        Assert.True(result.Ok, result.Message);
+        Assert.Equal([(XAttack, ItemCategory.Items), (MoonStone, ItemCategory.Items), (Nugget, ItemCategory.Items), (PokeBall, ItemCategory.Balls)],
+            (await _inventory.GetItemsAsync("sacha")).Select(i => (i.ItemId, i.Category))); // les objets ordinaires d'abord
+        Assert.Equal("4 × Attaque +, 2 × Pierre Lune, 3 × Pépite, 1 × Poké Ball",
+            new string((await _inventory.ListOperationsAsync("sacha")).Single().Details.Select(c => char.IsWhiteSpace(c) ? ' ' : c).ToArray()));
+
+        // Noir 2 n'a pas de poche Objets de combat : Attaque + va avec les objets.
+        var b2 = await Store(items: [(Leftovers, 1)]);
+        Assert.True((await _inventory.DepositItemsAsync("sacha", b2, new Dictionary<int, int> { [XAttack] = 4, [MoonStone] = 1 })).Ok);
+        Assert.Equal(new Dictionary<int, int> { [Leftovers] = 1, [XAttack] = 4, [MoonStone] = 1 }, await StoredItems(b2));
+    }
+
+    [Fact]
+    public void SaveBag_NeverTouchesKeyItemsNorMail()
+    {
+        Assert.True(SaveUtil.TryGetSaveFile(SaveSessionTests.CreatePlatinumSave(), out var sav, "platine.sav"));
+        var items = SaveBag.ReadItems(sav!);
+        Assert.DoesNotContain(Bicycle, items.Keys);
+        Assert.DoesNotContain(GrassMail, items.Keys);
+        Assert.Equal(ItemCategory.Items, SaveBag.CategoryOf(Bicycle)); // un objet comme un autre... que Platine range parmi les objets rares
+        Assert.False(SaveBag.Capacity(sav!).ContainsKey(Bicycle));
+
+        var refused = SaveBag.Deposit(sav!, new Dictionary<int, int> { [Bicycle] = 1 }, i => $"{i}", "Platine");
+        Assert.Contains("objet rare", refused);
+        Assert.NotNull(SaveBag.Withdraw(sav!, new Dictionary<int, int> { [Bicycle] = 1 }, i => $"{i}"));
+
+        // Tous les objets retirés : le Vélo et la Lettre restent dans leur poche.
+        Assert.Null(SaveBag.Withdraw(sav!, items, i => $"{i}"));
+        Assert.Empty(SaveBag.ReadItems(sav!));
+        var pouches = sav!.Inventory;
+        Assert.Contains(pouches.Single(p => p.Type == InventoryType.KeyItems).Items, s => s.Index == Bicycle && s.Count == 1);
+        Assert.Contains(pouches.Single(p => p.Type == InventoryType.MailItems).Items, s => s.Index == GrassMail && s.Count == 1);
+    }
+
+    [Fact]
+    public void SaveBag_ConvertsItemsForThirdGenerationGames_AndSkipsTheirMail()
+    {
+        var sav = new SAV3E();
+        Assert.Equal(99, SaveBag.Capacity(sav)[FireStone]); // poche Objets de la 3e génération
+        Assert.Null(SaveBag.Deposit(sav, new Dictionary<int, int> { [FireStone] = 2, [Nugget] = 1 }, i => $"{i}", "Émeraude"));
+        Assert.Contains(sav.Inventory.SelectMany(p => p.Items), s => s.Index == ItemConverter.GetItemOld3(FireStone) && s.Count == 2);
+
+        // Lettre de la 3e génération (121 : Lettre Orsch), sans équivalent ensuite : ni lue ni retirée.
+        var pouches = sav.Inventory;
+        var bag = pouches.Single(p => p.Type == InventoryType.Items);
+        var free = bag.Items.First(s => s.Index == 0);
+        free.Index = 121;
+        free.Count = 1;
+        sav.Inventory = pouches;
+        Assert.Equal(new Dictionary<int, int> { [FireStone] = 2, [Nugget] = 1 }, SaveBag.ReadItems(sav));
     }
 
     [Fact]

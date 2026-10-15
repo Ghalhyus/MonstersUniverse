@@ -76,5 +76,7 @@ toute seule au démarrage (`Database.Migrate()`). Le code doit compiler avant de
 
 Même modèle que les Pokéballs, médicaments, baies et CT : `ItemCategory` et la liste d'objets dans `SaveBag`
 (`CategoryOf`, `KeyOf`, `Capacity`), `ItemCategories.All` (carte et onglet), `BagSummary` du dialogue de transfert,
-des tests dans `InventoryServiceTests`, des objets dans la sauvegarde d'exemple Platine, et le README. Pas de migration :
-la table `OwnedItems` stocke une clé par objet.
+des tests dans `InventoryServiceTests`, des objets dans la sauvegarde d'exemple Platine, et le README. « Objets » est la
+catégorie fourre-tout (tout ce qui n'est dans aucune autre, limité aux poches `SaveBag.ItemPouches`) : une nouvelle
+catégorie (les bonbons, envisagée) se teste avant elle dans `CategoryOf`. Objets rares, Lettres, Cristaux Z et CS ne
+sont jamais touchés. Pas de migration : la table `OwnedItems` stocke une clé par objet.

@@ -7,109 +7,179 @@
 @using PokeBank.Services
 @inject InventoryService InventoryStore
 @inject WalletState Wallet
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
 
 <PageTitle>Inventaire</PageTitle>
 
-@* Inventaire du site : le porte-monnaie de Pokédollars, les objets (Pokéballs, médicaments, baies, CT et DT) et le journal. L'argent et les
-   objets viennent des sauvegardes stockées (les objets peuvent aussi y retourner) ; seule la copie du serveur est modifiée (la mise à jour de la
-   sauvegarde est ensuite encadrée). *@
+@* Inventaire du site : le porte-monnaie de Pokédollars, le stockage des objets (objets ordinaires, Pokéballs, médicaments,
+   baies, CT et DT) et le journal. L'argent et les objets viennent des sauvegardes stockées (les objets peuvent aussi y
+   retourner) ; seule la copie du serveur est modifiée (la mise à jour de la sauvegarde est ensuite encadrée).
+   Le journal s'ouvre dans un panneau à droite, qui réduit la largeur de la page (il la recouvre sur un téléphone). *@
 
-<h1 class="mb-3">Inventaire</h1>
-
-@if (message is not null)
-{
-    <div class="alert @(messageIsError ? "alert-danger" : "alert-success") alert-dismissible" role="alert">
-        @message
-        <button type="button" class="btn-close" aria-label="Fermer" @onclick="() => message = null"></button>
+<div class="inventory-layout">
+<div class="inventory-main">
+    <div class="d-flex align-items-center gap-2 mb-3">
+        <h1 class="mb-0">Inventaire</h1>
+        <button class="btn btn-outline-secondary ms-auto" aria-expanded="@(journalOpen ? "true" : "false")" aria-controls="journal"
+                @onclick="() => journalOpen = !journalOpen">
+            @(journalOpen ? "Fermer le journal" : "Journal")
+        </button>
     </div>
-}
 
-<div class="card mb-4">
-    <div class="card-body d-flex flex-wrap align-items-center gap-3">
-        <div>
-            <div class="small text-muted">Porte-monnaie</div>
-            <div class="wallet-balance">@InventoryService.FormatMoney(balance)</div>
+    @if (message is not null)
+    {
+        <div class="alert @(messageIsError ? "alert-danger" : "alert-success") alert-dismissible" role="alert">
+            @message
+            <button type="button" class="btn-close" aria-label="Fermer" @onclick="() => message = null"></button>
         </div>
-        <button class="btn btn-primary ms-auto" @onclick="OpenWithdraw">Retirer de l'argent d'une sauvegarde</button>
-    </div>
-</div>
+    }
 
-@* Objets : une carte par catégorie ; une même opération peut déplacer des objets de toutes les catégories. *@
-<div class="d-flex flex-wrap align-items-center gap-2 mb-2">
-    <h2 class="h5 mb-0">Objets</h2>
-    <div class="ms-auto d-flex flex-wrap gap-2">
-        <button class="btn btn-outline-primary" @onclick="() => OpenItems(deposit: false)">Retirer d'une sauvegarde</button>
-        <button class="btn btn-outline-primary" @onclick="() => OpenItems(deposit: true)" disabled="@(items.Count == 0)">Déposer dans une sauvegarde</button>
-    </div>
-</div>
-
-@foreach (var category in ItemCategories.All)
-{
-    var stacks = items.Where(i => i.Category == category.Category).ToList();
-    var total = stacks.Sum(i => i.Count);
-    <div class="card mb-3">
-        <div class="card-body">
-            <div class="d-flex align-items-baseline gap-2 mb-2">
-                <span class="small text-muted">@category.Title</span>
-                <span class="fw-semibold">@CollectionCapacity.FormatCount(total)</span>
+    <div class="card mb-4">
+        <div class="card-body d-flex flex-wrap align-items-center gap-3">
+            <div>
+                <div class="small text-muted">Porte-monnaie</div>
+                <div class="wallet-balance">@InventoryService.FormatMoney(balance)</div>
             </div>
-            @if (stacks.Count == 0)
-            {
-                <p class="text-muted small mb-0">@category.Empty</p>
-            }
-            else
-            {
-                <div class="item-grid">
-                    @foreach (var item in stacks)
+            <button class="btn btn-primary ms-auto" @onclick="OpenWithdraw">Retirer de l'argent d'une sauvegarde</button>
+        </div>
+    </div>
+
+    @* Stockage des objets : un onglet par catégorie (les objets ordinaires d'abord), une recherche sur tout l'inventaire, en
+       liste ou en grille. Une même opération peut déplacer des objets de toutes les catégories. *@
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+        <h2 class="h5 mb-0">Stockage</h2>
+        <div class="ms-auto d-flex flex-wrap gap-2">
+            <button class="btn btn-outline-primary" @onclick="() => OpenItems(deposit: false)">Retirer d'une sauvegarde</button>
+            <button class="btn btn-outline-primary" @onclick="() => OpenItems(deposit: true)" disabled="@(items.Count == 0)">Déposer dans une sauvegarde</button>
+        </div>
+    </div>
+
+    <ul class="nav nav-tabs mb-2" role="tablist">
+        @foreach (var category in ItemCategories.All)
+        {
+            var c = category.Category;
+            var stacks = items.Where(i => i.Category == c).ToList();
+            <li class="nav-item" role="presentation">
+                <button type="button" role="tab" class="nav-link @(tab == c ? "active" : "")" aria-selected="@(tab == c ? "true" : "false")"
+                        @onclick="() => ShowTab(c)">
+                    @category.Title
+                    @if (Searching)
                     {
-                        <div class="item-tile" title="@item.Name">
-                            <img src="@item.SpriteUrl" alt="" width="32" height="32" class="item-sprite" />
-                            <span class="item-name">@item.Name</span>
-                            <span class="item-count">× @CollectionCapacity.FormatCount(item.Count)</span>
-                        </div>
+                        var found = stacks.Count(Matches);
+                        <span class="badge @(found > 0 ? "text-bg-primary" : "text-bg-light") ms-1" title="Objets trouvés">@found</span>
                     }
+                    else
+                    {
+                        <span class="badge text-bg-light ms-1" title="Quantité totale">@CollectionCapacity.FormatCount(stacks.Sum(i => i.Count))</span>
+                    }
+                </button>
+            </li>
+        }
+    </ul>
+
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+        <input type="search" class="form-control form-control-sm inventory-search" placeholder="Rechercher dans tout l'inventaire…"
+               aria-label="Rechercher dans tout l'inventaire" @bind="search" @bind:event="oninput" />
+        <div class="btn-group btn-group-sm ms-auto" role="group" aria-label="Affichage">
+            <button type="button" class="btn @(grid ? "btn-outline-secondary" : "btn-secondary")" aria-pressed="@(grid ? "false" : "true")"
+                    @onclick="() => SetView(grid: false)">Liste</button>
+            <button type="button" class="btn @(grid ? "btn-secondary" : "btn-outline-secondary")" aria-pressed="@(grid ? "true" : "false")"
+                    @onclick="() => SetView(grid: true)">Grille</button>
+        </div>
+    </div>
+
+    @{
+        var current = ItemCategories.All.First(c => c.Category == tab);
+        var all = items.Where(i => i.Category == tab).ToList();
+        var shown = all.Where(Matches).ToList();
+    }
+    @if (all.Count == 0)
+    {
+        <p class="text-muted small">@current.Empty</p>
+    }
+    else if (shown.Count == 0)
+    {
+        <p class="text-muted small">Rien ne correspond à « @search.Trim() » dans cet onglet.</p>
+    }
+    else if (grid)
+    {
+        <div class="item-grid">
+            @foreach (var item in shown)
+            {
+                <div class="item-tile" title="@item.Name">
+                    <img src="@item.SpriteUrl" alt="" width="32" height="32" class="item-sprite" />
+                    <span class="item-name">@item.Name</span>
+                    <span class="item-count">× @CollectionCapacity.FormatCount(item.Count)</span>
                 </div>
             }
         </div>
-    </div>
-}
-
-<h2 class="h5 mt-4">Journal des opérations</h2>
-@if (operations.Count == 0)
-{
-    <p class="text-muted">Aucune opération pour l'instant.</p>
-}
-else
-{
-    <div class="table-responsive">
+    }
+    else
+    {
         <table class="table table-sm align-middle">
             <thead>
-                <tr><th>Date</th><th>Opération</th><th>Détail</th><th class="text-end">Montant</th><th class="text-end">Solde</th></tr>
+                <tr><th>Objet</th><th class="text-end">Quantité</th></tr>
             </thead>
             <tbody>
-                @foreach (var op in operations)
+                @foreach (var item in shown)
                 {
                     <tr>
-                        <td class="text-nowrap">@op.At.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
-                        <td>@KindLabel(op.Kind)</td>
-                        <td>@string.Join(" · ", new[] { op.SaveLabel, op.Details }.Where(t => !string.IsNullOrEmpty(t)))</td>
-                        @if (IsItemOperation(op.Kind))
-                        {
-                            <td class="text-end text-muted">—</td>
-                        }
-                        else
-                        {
-                            <td class="text-end text-nowrap @(op.Amount >= 0 ? "text-success" : "text-danger")">
-                                @(op.Amount >= 0 ? "+" : "")@InventoryService.FormatMoney(op.Amount)
-                            </td>
-                        }
-                        <td class="text-end text-nowrap">@InventoryService.FormatMoney(op.BalanceAfter)</td>
+                        <td>
+                            <img src="@item.SpriteUrl" alt="" width="24" height="24" class="item-sprite" />
+                            @item.Name
+                        </td>
+                        <td class="text-end">@CollectionCapacity.FormatCount(item.Count)</td>
                     </tr>
                 }
             </tbody>
         </table>
-    </div>
+    }
+</div>
+
+@if (journalOpen)
+{
+    @* Journal : une opération sur deux lignes (date, nature, montant ; puis sauvegarde, détail, solde). *@
+    <aside id="journal" class="journal-panel card" aria-label="Journal des opérations">
+        <div class="card-header d-flex align-items-center">
+            <h2 class="h6 mb-0">Journal des opérations</h2>
+            <button type="button" class="btn-close ms-auto" aria-label="Fermer le journal" @onclick="() => journalOpen = false"></button>
+        </div>
+        @if (operations.Count == 0)
+        {
+            <p class="text-muted small m-3">Aucune opération pour l'instant.</p>
+        }
+        else
+        {
+            <ul class="list-group list-group-flush">
+                @foreach (var op in operations)
+                {
+                    <li class="list-group-item">
+                        <div class="d-flex gap-2">
+                            <span class="text-nowrap text-muted">@op.At.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</span>
+                            <span class="fw-semibold">@KindLabel(op.Kind)</span>
+                            @if (IsItemOperation(op.Kind))
+                            {
+                                <span class="ms-auto text-muted">—</span>
+                            }
+                            else
+                            {
+                                <span class="ms-auto text-nowrap @(op.Amount >= 0 ? "text-success" : "text-danger")">
+                                    @(op.Amount >= 0 ? "+" : "")@InventoryService.FormatMoney(op.Amount)
+                                </span>
+                            }
+                        </div>
+                        <div class="d-flex gap-2 small text-muted">
+                            <span>@string.Join(" · ", new[] { op.SaveLabel, op.Details }.Where(t => !string.IsNullOrEmpty(t)))</span>
+                            <span class="ms-auto text-nowrap" title="Solde après l'opération">@InventoryService.FormatMoney(op.BalanceAfter)</span>
+                        </div>
+                    </li>
+                }
+            </ul>
+        }
+    </aside>
 }
+</div>
 
 @* ---------- Fenêtre de retrait : sauvegarde → montant → confirmation ---------- *@
 @if (step != WithdrawStep.Closed)
@@ -196,7 +266,30 @@ else
 @code {
     [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = default!;
 
+    /// <summary>Onglet du stockage dans l'adresse (« ?onglet=baies ») : une actualisation garde l'onglet ouvert.</summary>
+    [SupplyParameterFromQuery(Name = "onglet")] private string? TabSlug { get; set; }
+
     private enum WithdrawStep { Closed, ChooseSave, Amount, Confirm }
+
+    /// <summary>Nom de chaque onglet dans l'adresse ; « Objets » par défaut.</summary>
+    private static readonly IReadOnlyDictionary<ItemCategory, string> TabSlugs = new Dictionary<ItemCategory, string>
+    {
+        [ItemCategory.Items] = "objets",
+        [ItemCategory.Balls] = "pokeballs",
+        [ItemCategory.Medicine] = "medicaments",
+        [ItemCategory.Berries] = "baies",
+        [ItemCategory.Machines] = "ct",
+    };
+
+    /// <summary>Choix « Liste » / « Grille », retenu par le navigateur.</summary>
+    private const string ViewStorageKey = "pokebank.inventaire.affichage";
+
+    private static readonly System.Globalization.CompareInfo French = System.Globalization.CultureInfo.GetCultureInfo("fr-FR").CompareInfo;
+
+    private ItemCategory tab = ItemCategory.Items;
+    private string search = "";
+    private bool grid; // liste par défaut
+    private bool journalOpen; // fermé à chaque arrivée sur la page
 
     private string userId = "";
     private long balance;
@@ -223,6 +316,52 @@ else
     {
         userId = (await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
         await LoadWallet();
+    }
+
+    protected override void OnParametersSet() =>
+        tab = TabSlugs.FirstOrDefault(t => t.Value == TabSlug, new(ItemCategory.Items, "objets")).Key;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+        try
+        {
+            if (await JS.InvokeAsync<string?>("localStorage.getItem", ViewStorageKey) == "grille")
+            {
+                grid = true;
+                StateHasChanged();
+            }
+        }
+        catch (JSException)
+        {
+            // stockage du navigateur indisponible (navigation privée...) : on reste sur la liste
+        }
+    }
+
+    private bool Searching => !string.IsNullOrWhiteSpace(search);
+
+    /// <summary>L'objet correspond à la recherche : sans tenir compte des majuscules ni des accents (« pepite » trouve « Pépite »).</summary>
+    private bool Matches(ItemStack item) =>
+        !Searching || French.IndexOf(item.Name, search.Trim(), System.Globalization.CompareOptions.IgnoreCase | System.Globalization.CompareOptions.IgnoreNonSpace) >= 0;
+
+    private void ShowTab(ItemCategory category)
+    {
+        tab = category;
+        Navigation.NavigateTo($"inventaire?onglet={TabSlugs[category]}", replace: true);
+    }
+
+    private async Task SetView(bool grid)
+    {
+        this.grid = grid;
+        try
+        {
+            await JS.InvokeVoidAsync("localStorage.setItem", ViewStorageKey, grid ? "grille" : "liste");
+        }
+        catch (JSException)
+        {
+            // pas retenu : le choix vaut pour cette visite
+        }
     }
 
     private async Task LoadWallet()

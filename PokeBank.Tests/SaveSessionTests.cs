@@ -202,8 +202,9 @@ public class SaveSessionTests
     /// Sauvegarde Platine avec <paramref name="count"/> Pokémon d'espèces différentes dans les boîtes, à partir de Tortipouss
     /// (n° 387). Chacun vient d'une vraie rencontre de Platine générée par PKHeX (sauvage, don, échange) : ils sont donc
     /// légaux. Les espèces qu'on ne rencontre pas directement dans Platine (Boskara, qui s'obtient par évolution...) sont sautées.
-    /// 50 000 ₽, des Pokéballs, des médicaments, des baies (<see cref="PlatinumSampleItems"/>), des CT et des CS (<see cref="PlatinumSampleMachines"/>)
-    /// dans le sac, pour essayer l'inventaire.
+    /// 50 000 ₽, des objets, des Pokéballs, des médicaments, des baies (<see cref="PlatinumSampleItems"/>), des CT et des CS
+    /// (<see cref="PlatinumSampleMachines"/>), un objet rare et une Lettre (<see cref="PlatinumSampleUntouched"/>) dans le sac,
+    /// pour essayer l'inventaire.
     /// </summary>
     internal static byte[] CreatePlatinumSave(int count = 50)
     {
@@ -250,6 +251,7 @@ public class SaveSessionTests
         }
         GiveItems(sav, PlatinumSampleItems);
         GiveItems(sav, PlatinumSampleMachines);
+        GiveItems(sav, PlatinumSampleUntouched);
 
         // PKHeX n'écrit que la copie active : la seconde copie reçoit les mêmes blocs, pour que le jeu trouve les deux à jour.
         var data = sav.Write().ToArray();
@@ -260,11 +262,16 @@ public class SaveSessionTests
     /// <summary>
     /// Sac de la sauvegarde Platine : 30 Poké Ball, 15 Super Ball, 8 Hyper Ball, 1 Master Ball, 5 Luxe Ball, 3 Honor Ball ;
     /// 10 Potion, 5 Super Potion, 2 Total Soin, 3 Rappel, 4 Huile, 2 Super Bonbon ; 4 Baie Ceriz, 10 Baie Oran, 3 Baie Prine,
-    /// 5 Baie Sitrus, 1 Baie Enigma (une baie normale à partir de la 4e génération).
+    /// 5 Baie Sitrus, 1 Baie Enigma (une baie normale à partir de la 4e génération) ; 2 Pierre Lune, 1 Pierre Feu, 3 Pépite,
+    /// 1 Restes, 4 Attaque + (poche Objets de combat).
     /// </summary>
     internal static readonly (int Item, int Count)[] PlatinumSampleItems =
         [(4, 30), (3, 15), (2, 8), (1, 1), (11, 5), (12, 3), (17, 10), (26, 5), (27, 2), (28, 3), (38, 4), (50, 2),
-         (149, 4), (155, 10), (157, 3), (158, 5), (208, 1)];
+         (149, 4), (155, 10), (157, 3), (158, 5), (208, 1),
+         (81, 2), (82, 1), (92, 3), (234, 1), (57, 4)];
+
+    /// <summary>Ce que le site ne doit ni montrer ni toucher dans la sauvegarde Platine : le Vélo (objet rare) et une Lettre Herbe.</summary>
+    internal static readonly (int Item, int Count)[] PlatinumSampleUntouched = [(450, 1), (137, 1)];
 
     /// <summary>
     /// CT et CS de la sauvegarde Platine : 2 CT01 Mitra-Poing, 3 CT06 Toxik, 1 CT24 Tonnerre, 1 CT26 Séisme ; CS01 Coupe et

@@ -1,7 +1,7 @@
 @using PokeBank.Services
 @inject InventoryService InventoryStore
 
-@* Fenêtre de transfert d'objets (Pokéballs, médicaments, baies, CT et DT) entre l'inventaire et le sac d'une sauvegarde stockée, dans un sens
+@* Fenêtre de transfert d'objets (objets, Pokéballs, médicaments, baies, CT et DT) entre l'inventaire et le sac d'une sauvegarde stockée, dans un sens
    ou dans l'autre : sauvegarde → quantité de chaque objet, un onglet par catégorie → confirmation. Une seule opération pour toutes les
    catégories ; seule la copie du serveur est modifiée. *@
 
@@ -53,7 +53,7 @@
                         var chosenCount = Rows.Count(r => r.Category == c && Wanted(r) > 0);
                         var hasError = Rows.Any(r => r.Category == c && QuantityError(r) is not null);
                         <li class="nav-item" role="presentation">
-                            <button type="button" role="tab" class="nav-link @(tab == c ? "active" : "")" aria-selected="@(tab == c)"
+                            <button type="button" role="tab" class="nav-link @(tab == c ? "active" : "")" aria-selected="@(tab == c ? "true" : "false")"
                                     @onclick="() => tab = c">
                                 @category.Title
                                 @if (hasError)
@@ -68,12 +68,21 @@
                         </li>
                     }
                 </ul>
+                @* Recherche par nom dans l'onglet affiché ; les quantités des lignes masquées sont gardées. *@
+                <input type="search" class="form-control form-control-sm mb-2" placeholder="Rechercher par nom…" aria-label="Rechercher par nom"
+                       @bind="search" @bind:event="oninput" />
                 @foreach (var category in ItemCategories.All.Where(c => c.Category == tab))
                 {
-                    var rows = Rows.Where(r => r.Category == category.Category).ToList();
-                    @if (rows.Count == 0)
+                    var all = Rows.Where(r => r.Category == category.Category).ToList();
+                    var rows = all.Where(Matches).ToList();
+                    @if (all.Count == 0)
                     {
                         <p class="small text-muted mb-0">@(Deposit ? "Aucun dans ton inventaire." : "Aucun dans ce sac.")</p>
+                        continue;
+                    }
+                    @if (rows.Count == 0)
+                    {
+                        <p class="small text-muted mb-0">Rien ne correspond à « @search.Trim() » dans cette liste.</p>
                         continue;
                     }
                     <table class="table table-sm align-middle mb-0">
@@ -174,7 +183,10 @@
     private ItemSource? chosen;
     private Dictionary<int, int?> quantities = [];
     private ItemCategory tab; // onglet affiché à l'étape 2
+    private string search = ""; // recherche par nom à l'étape 2
     private bool busy;
+
+    private static readonly System.Globalization.CompareInfo French = System.Globalization.CultureInfo.GetCultureInfo("fr-FR").CompareInfo;
 
     private string Title => Deposit ? "Déposer des objets" : "Retirer des objets";
 
@@ -183,16 +195,18 @@
 
     protected override async Task OnInitializedAsync() => sources = await InventoryStore.ListItemSourcesAsync(UserId);
 
-    /// <summary>« 62 Pokéballs · 12 médicaments · 20 baies · 5 CT/DT dans le sac ».</summary>
+    /// <summary>« 40 objets · 62 Pokéballs · 12 médicaments · 20 baies · 5 CT/DT dans le sac ».</summary>
     private static string BagSummary(ItemSource source)
     {
         if (source.Items.Count == 0)
             return "sac vide";
+        var items = source.Total(ItemCategory.Items);
         var balls = source.Total(ItemCategory.Balls);
         var medicine = source.Total(ItemCategory.Medicine);
         var berries = source.Total(ItemCategory.Berries);
         var machines = source.Total(ItemCategory.Machines);
-        return $"{CollectionCapacity.FormatCount(balls)} Pokéball{(balls > 1 ? "s" : "")} · " +
+        return $"{CollectionCapacity.FormatCount(items)} objet{(items > 1 ? "s" : "")} · " +
+               $"{CollectionCapacity.FormatCount(balls)} Pokéball{(balls > 1 ? "s" : "")} · " +
                $"{CollectionCapacity.FormatCount(medicine)} médicament{(medicine > 1 ? "s" : "")} · " +
                $"{CollectionCapacity.FormatCount(berries)} baie{(berries > 1 ? "s" : "")} · " +
                $"{CollectionCapacity.FormatCount(machines)} CT/DT dans le sac";
@@ -202,12 +216,18 @@
     private string DisplayName(ItemStack item) =>
         chosen is not null && chosen.MachineLabels.TryGetValue(item.ItemId, out var label) ? $"{label} {item.Name}" : item.Name;
 
+    /// <summary>La ligne correspond à la recherche : sans tenir compte des majuscules ni des accents (« eclat » trouve « Éclat »).</summary>
+    private bool Matches(ItemStack item) =>
+        string.IsNullOrWhiteSpace(search)
+        || French.IndexOf(DisplayName(item), search.Trim(), System.Globalization.CompareOptions.IgnoreCase | System.Globalization.CompareOptions.IgnoreNonSpace) >= 0;
+
     private void ChooseSave(ItemSource source)
     {
         chosen = source;
         quantities = []; // rien de prérempli : rien n'est transféré par accident
+        search = "";
         // Premier onglet qui a quelque chose à transférer.
-        tab = ItemCategories.All.Select(c => c.Category).FirstOrDefault(c => Rows.Any(r => r.Category == c), ItemCategory.Balls);
+        tab = ItemCategories.All.Select(c => c.Category).FirstOrDefault(c => Rows.Any(r => r.Category == c), ItemCategory.Items);
         step = Step.Quantities;
     }
 
