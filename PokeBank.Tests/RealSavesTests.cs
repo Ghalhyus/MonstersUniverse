@@ -48,10 +48,17 @@ public sealed class RealSavesTests : IDisposable
         return Open((await db.StoredSaves.SingleAsync(s => s.Id == saveId)).Data, file);
     }
 
-    /// <summary>Poches que le site ne doit jamais modifier (objets rares, Cristaux Z...), telles quelles.</summary>
-    private static List<(InventoryType, int, int)> Untouched(SaveFile sav) =>
-        sav.Inventory.Where(p => p.Type is InventoryType.KeyItems or InventoryType.ZCrystals or InventoryType.MailItems or InventoryType.PCItems)
-            .SelectMany(p => p.Items.Where(i => i.Index != 0).Select(i => (p.Type, (int)i.Index, i.Count))).ToList();
+    /// <summary>Emplacements remplis de toutes les poches (sac et PC) : poche, numéro d'objet dans le jeu, quantité.</summary>
+    private static List<(InventoryType, int, int)> Slots(SaveFile sav) =>
+        sav.Inventory.SelectMany(p => p.Items.Where(i => i.Index != 0 && i.Count > 0).Select(i => (p.Type, (int)i.Index, i.Count))).ToList();
+
+    /// <summary>Chaque élément de <paramref name="part"/> est dans <paramref name="whole"/> (multi-ensembles).</summary>
+    private static void AssertContained(List<(InventoryType, int, int)> part, List<(InventoryType, int, int)> whole, string file)
+    {
+        var left = whole.ToList();
+        foreach (var slot in part)
+            Assert.True(left.Remove(slot), $"{file} : {slot} a changé");
+    }
 
     [Theory]
     [MemberData(nameof(Files))]
@@ -71,7 +78,7 @@ public sealed class RealSavesTests : IDisposable
         Assert.Equal(SaveIdentity.Of(sav).Key, SaveIdentity.Of(again).Key);
         Assert.Equal(sav.Money, again.Money);
         Assert.Equal(Contents(sav), Contents(again));
-        Assert.Equal(sav.Generation < 3, SaveBag.Unsupported(sav) is not null); // sacs de 1re et 2e génération : pas pris en charge
+        Assert.Null(SaveBag.Unsupported(sav));
     }
 
     /// <summary>Octets de chaque Pokémon de l'équipe et des boîtes, dans l'ordre.</summary>
@@ -149,30 +156,26 @@ public sealed class RealSavesTests : IDisposable
             return;
         var id = await Store(file, data);
         var before = await Stored(id, file);
-        var items = SaveBag.ReadItems(before);
-        if (before.Generation < 3)
-        {
-            // Sac non pris en charge : rien n'est proposé, et un retrait est refusé sans toucher au fichier.
-            Assert.Empty(items);
-            var refused = await _db.Inventory().WithdrawItemsAsync(Owner, id, new Dictionary<int, int> { [4] = 1 });
-            Assert.False(refused.Ok);
-            Assert.Equal(Untouched(before), Untouched(await Stored(id, file)));
-            return;
-        }
-        Assert.NotEmpty(items);
+        var bag = SaveBag.ReadItems(before, BagPlace.Bag);
+        var pc = SaveBag.ReadItems(before, BagPlace.Pc); // PC d'objets : 1re à 3e génération
+        Assert.NotEmpty(SaveBag.ReadItems(before));
+        Assert.Equal(SaveBag.HasPc(before), before.Generation <= 3);
 
-        var withdrawn = await _db.Inventory().WithdrawItemsAsync(Owner, id, items);
+        var withdrawn = await _db.Inventory().WithdrawItemsAsync(Owner, id, bag, pc);
         Assert.True(withdrawn.Ok, $"{file} : {withdrawn.Message}");
         var emptied = await Stored(id, file);
         Assert.Empty(SaveBag.ReadItems(emptied));
-        Assert.Equal(Untouched(before), Untouched(emptied));
-        Assert.Equal(items.Values.Sum(), (await _db.Inventory().GetItemsAsync(Owner)).Sum(i => i.Count));
+        // Ce qui reste (objets rares, CS, Lettres...) n'a pas bougé d'un exemplaire.
+        var untouched = Slots(emptied);
+        AssertContained(untouched, Slots(before), file);
+        Assert.Equal(bag.Values.Sum() + pc.Values.Sum(), (await _db.Inventory().GetItemsAsync(Owner)).Sum(i => i.Count));
 
-        var deposited = await _db.Inventory().DepositItemsAsync(Owner, id, items);
+        var deposited = await _db.Inventory().DepositItemsAsync(Owner, id, bag, pc);
         Assert.True(deposited.Ok, $"{file} : {deposited.Message}");
         var after = await Stored(id, file);
-        Assert.Equal(items.OrderBy(i => i.Key), SaveBag.ReadItems(after).OrderBy(i => i.Key));
-        Assert.Equal(Untouched(before), Untouched(after));
+        Assert.Equal(bag.OrderBy(i => i.Key), SaveBag.ReadItems(after, BagPlace.Bag).OrderBy(i => i.Key));
+        Assert.Equal(pc.OrderBy(i => i.Key), SaveBag.ReadItems(after, BagPlace.Pc).OrderBy(i => i.Key));
+        AssertContained(untouched, Slots(after), file);
         Assert.Empty(await _db.Inventory().GetItemsAsync(Owner));
     }
 }

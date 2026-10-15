@@ -21,17 +21,37 @@ public sealed record ItemStack(int ItemId, ItemCategory Category, string Name, s
 
 /// <summary>Sauvegarde stockée telle que proposée pour un transfert d'objets.</summary>
 /// <param name="Unsupported">Raison pour laquelle son sac n'est pas pris en charge ; null s'il l'est.</param>
-/// <param name="Items">Objets, Pokéballs, médicaments, baies, CT et DT de son sac (jamais les objets rares ni les CS).</param>
+/// <param name="Items">
+/// Objets, Pokéballs, médicaments, baies, CT et DT de son sac et de son PC additionnés (jamais les objets rares ni les CS) : ce qu'on
+/// consulte. Pour un transfert, voir <see cref="BagItems"/> et <see cref="PcItems"/>.
+/// </param>
+/// <param name="BagItems">Ceux du sac seulement.</param>
 /// <param name="Capacity">Quantité maximale de chaque objet que son sac accepte ; absent si son jeu ne le connaît pas (dépôt).</param>
 /// <param name="MachineLabels">Numéro dans son jeu de la CT ou de la DT de chaque capacité (« CT26 »), par clé.</param>
 /// <param name="LockedMachines">CT cachées de cette sauvegarde, ni retirées ni déposées (<see cref="SaveBag.LockedMachines"/>).</param>
+/// <param name="PcItems">Ceux de son PC d'objets (1re à 3e génération) ; null si son jeu n'en a pas.</param>
+/// <param name="PcCapacity">Comme <paramref name="Capacity"/>, pour son PC ; null si son jeu n'en a pas.</param>
 public sealed record ItemSource(
     int SaveId, string Label, string TrainerId, string GameName, string? Unsupported,
-    IReadOnlyList<ItemStack> Items, IReadOnlyDictionary<int, int> Capacity, IReadOnlyDictionary<int, string> MachineLabels,
-    IReadOnlySet<int> LockedMachines)
+    IReadOnlyList<ItemStack> Items, IReadOnlyList<ItemStack> BagItems, IReadOnlyDictionary<int, int> Capacity,
+    IReadOnlyDictionary<int, string> MachineLabels, IReadOnlySet<int> LockedMachines,
+    IReadOnlyList<ItemStack>? PcItems = null, IReadOnlyDictionary<int, int>? PcCapacity = null)
 {
+    /// <summary>La sauvegarde a un PC d'objets, à côté du sac (1re à 3e génération).</summary>
+    public bool HasPc => PcItems is not null;
+
     public int Total(ItemCategory category) => Items.Where(i => i.Category == category).Sum(i => i.Count);
+
+    /// <summary>Quantité d'un objet, sac et PC additionnés.</summary>
     public int CountOf(int itemId) => Items.FirstOrDefault(i => i.ItemId == itemId)?.Count ?? 0;
+
+    public IReadOnlyList<ItemStack> ItemsIn(BagPlace place) => place == BagPlace.Pc ? PcItems ?? [] : BagItems;
+
+    public IReadOnlyDictionary<int, int> CapacityIn(BagPlace place) =>
+        place == BagPlace.Pc ? PcCapacity ?? new Dictionary<int, int>() : Capacity;
+
+    /// <summary>Quantité d'un objet dans le sac ou dans le PC.</summary>
+    public int CountIn(int itemId, BagPlace place) => ItemsIn(place).FirstOrDefault(i => i.ItemId == itemId)?.Count ?? 0;
 }
 
 public sealed record ItemTransferResult(bool Ok, string Message);
@@ -210,7 +230,10 @@ public sealed class InventoryService(
         return Ordered(items.ToDictionary(i => i.ItemId, i => i.Count)).Select(i => Stack(i.Key, i.Value)).ToList();
     }
 
-    /// <summary>Sauvegardes stockées de l'utilisateur, avec les objets, Pokéballs, médicaments, baies, CT et DT de leur sac (lus dans le fichier).</summary>
+    /// <summary>
+    /// Sauvegardes stockées de l'utilisateur, avec les objets, Pokéballs, médicaments, baies, CT et DT de leur sac et de leur PC
+    /// (lus dans le fichier).
+    /// </summary>
     public async Task<List<ItemSource>> ListItemSourcesAsync(string ownerId)
     {
         await using var db = await dbFactory.CreateDbContextAsync();
@@ -223,31 +246,48 @@ public sealed class InventoryService(
         {
             var label = $"{s.GameName} — {s.TrainerName}";
             if (!StoredSaveService.TryRead(s.Data, s.FileName, out var sav))
-                return new ItemSource(s.Id, label, s.TrainerId, s.GameName, "Sauvegarde illisible.", [], new Dictionary<int, int>(), new Dictionary<int, string>(), new HashSet<int>());
-            var items = Ordered(SaveBag.ReadItems(sav)).Select(i => Stack(i.Key, i.Value)).ToList();
-            return new ItemSource(s.Id, label, s.TrainerId, s.GameName, SaveBag.Unsupported(sav), items, SaveBag.Capacity(sav), SaveBag.MachineLabels(sav), SaveBag.LockedMachines(sav));
+                return new ItemSource(s.Id, label, s.TrainerId, s.GameName, "Sauvegarde illisible.", [], [], new Dictionary<int, int>(),
+                    new Dictionary<int, string>(), new HashSet<int>());
+            var hasPc = SaveBag.HasPc(sav);
+            return new ItemSource(s.Id, label, s.TrainerId, s.GameName, SaveBag.Unsupported(sav),
+                Stacks(SaveBag.ReadItems(sav)), Stacks(SaveBag.ReadItems(sav, BagPlace.Bag)), SaveBag.Capacity(sav),
+                SaveBag.MachineLabels(sav), SaveBag.LockedMachines(sav),
+                hasPc ? Stacks(SaveBag.ReadItems(sav, BagPlace.Pc)) : null, hasPc ? SaveBag.Capacity(sav, BagPlace.Pc) : null);
         }).ToList();
     }
 
     /// <summary>
-    /// Retire des objets (objets, Pokéballs, médicaments, baies, CT et DT, mélangés si besoin) du sac de la sauvegarde stockée et les ajoute à
-    /// l'inventaire, en une seule opération. La partie est marquée « modifiée sur le serveur » : le jeu du joueur a toujours ces objets.
+    /// Retire des objets (objets, Pokéballs, médicaments, baies, CT et DT, mélangés si besoin) du sac de la sauvegarde stockée,
+    /// et de son PC d'objets (<paramref name="fromPc"/>, 1re à 3e génération), et les ajoute à l'inventaire, en une seule opération.
+    /// La partie est marquée « modifiée sur le serveur » : le jeu du joueur a toujours ces objets.
     /// </summary>
-    public Task<ItemTransferResult> WithdrawItemsAsync(string ownerId, int saveId, IReadOnlyDictionary<int, int> quantities) =>
-        TransferItemsAsync(ownerId, saveId, quantities, deposit: false);
+    public Task<ItemTransferResult> WithdrawItemsAsync(string ownerId, int saveId, IReadOnlyDictionary<int, int> quantities,
+        IReadOnlyDictionary<int, int>? fromPc = null) =>
+        TransferItemsAsync(ownerId, saveId, quantities, fromPc, deposit: false);
 
     /// <summary>
-    /// Dépose des objets de l'inventaire dans le sac de la sauvegarde stockée, en une seule opération. La partie est marquée
-    /// « modifiée sur le serveur » : le joueur doit la télécharger pour avoir ces objets dans son jeu.
+    /// Dépose des objets de l'inventaire dans le sac de la sauvegarde stockée, et dans son PC d'objets (<paramref name="toPc"/>),
+    /// en une seule opération. La partie est marquée « modifiée sur le serveur » : le joueur doit la télécharger pour avoir ces
+    /// objets dans son jeu.
     /// </summary>
-    public Task<ItemTransferResult> DepositItemsAsync(string ownerId, int saveId, IReadOnlyDictionary<int, int> quantities) =>
-        TransferItemsAsync(ownerId, saveId, quantities, deposit: true);
+    public Task<ItemTransferResult> DepositItemsAsync(string ownerId, int saveId, IReadOnlyDictionary<int, int> quantities,
+        IReadOnlyDictionary<int, int>? toPc = null) =>
+        TransferItemsAsync(ownerId, saveId, quantities, toPc, deposit: true);
 
-    private async Task<ItemTransferResult> TransferItemsAsync(string ownerId, int saveId, IReadOnlyDictionary<int, int> quantities, bool deposit)
+    private async Task<ItemTransferResult> TransferItemsAsync(string ownerId, int saveId, IReadOnlyDictionary<int, int> bagQuantities,
+        IReadOnlyDictionary<int, int>? pcQuantities, bool deposit)
     {
-        if (quantities.Values.Any(q => q < 0))
+        pcQuantities ??= new Dictionary<int, int>();
+        if (bagQuantities.Values.Concat(pcQuantities.Values).Any(q => q < 0))
             return new(false, "Les quantités ne peuvent pas être négatives.");
-        var wanted = Ordered(quantities.Where(q => q.Value > 0).ToDictionary(q => q.Key, q => q.Value)).ToDictionary(q => q.Key, q => q.Value);
+        // Ce qui bouge à chaque endroit, puis le total par objet (ce qui entre dans l'inventaire ou en sort).
+        var moves = new Dictionary<BagPlace, Dictionary<int, int>>
+        {
+            [BagPlace.Bag] = Ordered(bagQuantities.Where(q => q.Value > 0).ToDictionary()).ToDictionary(),
+            [BagPlace.Pc] = Ordered(pcQuantities.Where(q => q.Value > 0).ToDictionary()).ToDictionary(),
+        };
+        var wanted = Ordered(moves.Values.SelectMany(m => m).GroupBy(m => m.Key).ToDictionary(g => g.Key, g => g.Sum(m => m.Value)))
+            .ToDictionary();
         if (wanted.Count == 0)
             return new(false, "Choisis au moins un objet.");
 
@@ -258,6 +298,9 @@ public sealed class InventoryService(
         if (!StoredSaveService.TryRead(save.Data, save.FileName, out var sav))
             return new(false, "Impossible de lire cette sauvegarde.");
         var label = $"{save.GameName} — {save.TrainerName}";
+        var hasPc = SaveBag.HasPc(sav);
+        if (moves[BagPlace.Pc].Count > 0 && !hasPc)
+            return new(false, "Cette sauvegarde n'a pas de PC d'objets.");
 
         if (deposit)
         {
@@ -269,18 +312,23 @@ public sealed class InventoryService(
             }
         }
 
-        // Modifie le sac, puis vérifie en relisant le fichier que le jeu a bien pris les nouvelles quantités.
-        var refused = deposit
-            ? SaveBag.Deposit(sav, wanted, info.ItemName, save.GameName)
-            : SaveBag.Withdraw(sav, wanted, info.ItemName);
-        if (refused is not null)
-            return new(false, refused);
-        var expected = SaveBag.ReadItems(sav);
+        // Modifie le sac et le PC, puis vérifie en relisant le fichier que le jeu a bien pris les nouvelles quantités.
+        foreach (var (place, quantities) in moves.Where(m => m.Value.Count > 0))
+        {
+            var refused = deposit
+                ? SaveBag.Deposit(sav, quantities, info.ItemName, save.GameName, place)
+                : SaveBag.Withdraw(sav, quantities, info.ItemName, place);
+            if (refused is not null)
+                return new(false, refused);
+        }
+        var expectedBag = SaveBag.ReadItems(sav, BagPlace.Bag);
+        var expectedPc = SaveBag.ReadItems(sav, BagPlace.Pc);
         var newData = sav.Write().ToArray();
-        if (!StoredSaveService.TryRead(newData, save.FileName, out var check) || !SameCounts(SaveBag.ReadItems(check), expected))
+        if (!StoredSaveService.TryRead(newData, save.FileName, out var check)
+            || !SameCounts(SaveBag.ReadItems(check, BagPlace.Bag), expectedBag) || !SameCounts(SaveBag.ReadItems(check, BagPlace.Pc), expectedPc))
             return new(false, $"La modification du sac n'est pas prise en charge pour ce jeu ({save.GameName}).");
 
-        var details = Describe(wanted);
+        var details = hasPc ? Describe(moves) : Describe(wanted);
         var error = await SaveServerChangeAsync(db, ownerId, save, newData, check.Money, deposit ? "depot-objets" : "retrait-objets",
             m => m.ItemsChanged = true,
             async now =>
@@ -321,6 +369,8 @@ public sealed class InventoryService(
             : new(true, $"Retiré de « {label} » : {details}.");
     }
 
+    private List<ItemStack> Stacks(IReadOnlyDictionary<int, int> items) => Ordered(items).Select(i => Stack(i.Key, i.Value)).ToList();
+
     private ItemStack Stack(int item, int count) =>
         new(item, SaveBag.CategoryOf(item) ?? ItemCategory.Balls, info.ShortItemName(item), PokemonInfo.ItemSpriteUrl(item), count);
 
@@ -336,6 +386,10 @@ public sealed class InventoryService(
     /// <summary>« 10 × Poké Ball, 5 × Potion, 1 × CT/DT Séisme » (dans l'ordre de <see cref="Ordered"/>).</summary>
     private string Describe(IReadOnlyDictionary<int, int> quantities) =>
         string.Join(", ", Ordered(quantities).Select(q => $"{q.Value} × {info.ItemName(q.Key)}"));
+
+    /// <summary>Pour une sauvegarde qui a un PC : « Sac : 3 × Potion ; PC : 1 × Pierre Lune ».</summary>
+    private string Describe(Dictionary<BagPlace, Dictionary<int, int>> moves) =>
+        string.Join(" ; ", moves.Where(m => m.Value.Count > 0).Select(m => $"{(m.Key == BagPlace.Pc ? "PC" : "Sac")} : {Describe(m.Value)}"));
 
 
     private static bool SameCounts(Dictionary<int, int> actual, Dictionary<int, int> expected) =>

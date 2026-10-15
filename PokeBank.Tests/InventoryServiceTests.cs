@@ -758,6 +758,199 @@ public sealed class InventoryServiceTests : IDisposable
         Assert.Equal(new Dictionary<int, int> { [FireStone] = 2, [Nugget] = 1 }, SaveBag.ReadItems(sav));
     }
 
+    // ---------- Jeux de 1re à 3e génération : sac et PC d'objets ----------
+
+    private const int HelixFossil = 101, OranBerry2 = 155, LureBall = 494, DynamicPunch = 223;
+
+    /// <summary>Ajoute des objets (numéros du jeu) au PC d'objets de la sauvegarde.</summary>
+    private static void GiveToPc(SaveFile sav, params (int Item, int Count)[] items)
+    {
+        var pouches = sav.Inventory;
+        var pc = pouches.Single(p => p.Type == InventoryType.PCItems);
+        foreach (var (item, count) in items)
+            Assert.True(pc.GiveItem(sav, (ushort)item, count) > 0, $"{item} refusé par le PC");
+        sav.Inventory = pouches;
+    }
+
+    /// <summary>
+    /// Rouge vide, en mémoire : PKHeX ne reconnaît pas le fichier d'une sauvegarde de 1re génération créée vide (structure des
+    /// boîtes), on la relit donc en mémoire (<c>sav.Inventory</c>). Pour un fichier, voir <see cref="RedFile"/>.
+    /// </summary>
+    private static SAV1 Red() => new(LanguageID.French, GameVersion.RB);
+
+    /// <summary>
+    /// Fichier de Rouge que le site accepte : la vraie sauvegarde <c>Sauvegardes/rouge.sav</c>, sac et PC vidés de tout ce qui est
+    /// transférable (ses objets rares restent), puis garnie de <paramref name="bag"/> et <paramref name="pc"/> (numéros du jeu).
+    /// </summary>
+    private static byte[] RedFile((int Item, int Count)[] bag, (int Item, int Count)[] pc)
+    {
+        var data = File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Sauvegardes", "rouge.sav"));
+        Assert.True(SaveUtil.TryGetSaveFile(data, out var sav, "rouge.sav"));
+        Assert.Null(SaveBag.Withdraw(sav!, SaveBag.ReadItems(sav!, BagPlace.Bag), i => $"{i}"));
+        Assert.Null(SaveBag.Withdraw(sav!, SaveBag.ReadItems(sav!, BagPlace.Pc), i => $"{i}", BagPlace.Pc));
+        SaveSessionTests.GiveItems(sav!, bag);
+        GiveToPc(sav!, pc);
+        return sav!.Write().ToArray();
+    }
+
+    [Fact]
+    public void SaveBag_FirstGeneration_ConvertsItems_AndNeverTouchesKeyItems()
+    {
+        var sav = Red();
+        // Numéros de Rouge/Bleu : Poké Ball 4, Potion 20, Nautile 42, CT26 226 ; Bicyclette 6, CS01 196, Multi Exp 75.
+        SaveSessionTests.GiveItems(sav, (4, 5), (20, 3), (42, 1), (226, 2), (6, 1), (196, 1), (75, 1));
+        GiveToPc(sav, (40, 4), (5, 1)); // Super Bonbon ; Carte (objet rare)
+        Assert.True(SaveBag.HasPc(sav));
+        Assert.Equal(new Dictionary<int, int> { [PokeBall] = 5, [Potion] = 3, [HelixFossil] = 1, [EarthquakeTM] = 2 },
+            SaveBag.ReadItems(sav, BagPlace.Bag));
+        Assert.Equal(new Dictionary<int, int> { [RareCandy] = 4 }, SaveBag.ReadItems(sav, BagPlace.Pc));
+        Assert.Equal(6, SaveBag.ReadItems(sav)[EarthquakeTM] + SaveBag.ReadItems(sav)[RareCandy]);
+        Assert.Equal("CT26", SaveBag.MachineLabels(sav)[EarthquakeTM]);
+        Assert.Equal("CT01", SaveBag.MachineLabels(sav)[SaveBag.MachineKey(MegaPunch)]); // Ultimapoing en 1re génération
+        Assert.Equal(79, SaveBag.Capacity(sav)[EarthquakeTM]); // CT à usage unique : seuil de 80
+        Assert.False(SaveBag.Capacity(sav).ContainsKey(BeastBall)); // inconnue du jeu
+
+        // Tout retirer, du sac et du PC : la Bicyclette, la CS01, le Multi Exp et la Carte restent.
+        Assert.Null(SaveBag.Withdraw(sav, SaveBag.ReadItems(sav, BagPlace.Bag), i => $"{i}"));
+        Assert.Null(SaveBag.Withdraw(sav, SaveBag.ReadItems(sav, BagPlace.Pc), i => $"{i}", BagPlace.Pc));
+        var again = sav; // relue en mémoire (voir Red)
+        Assert.Empty(SaveBag.ReadItems(again));
+        Assert.Equal([(6, 1), (75, 1), (196, 1)], again.Inventory.Single(p => p.Type == InventoryType.Items).Items
+            .Where(s => s.Count > 0).Select(s => ((int)s.Index, s.Count)).Order());
+        Assert.Equal([(5, 1)], again.Inventory.Single(p => p.Type == InventoryType.PCItems).Items
+            .Where(s => s.Count > 0).Select(s => ((int)s.Index, s.Count)));
+
+        // Dépôt dans le PC : l'objet y arrive sous son numéro de Rouge/Bleu.
+        Assert.Null(SaveBag.Deposit(again, new Dictionary<int, int> { [Potion] = 7 }, i => $"{i}", "Rouge / Bleu", BagPlace.Pc));
+        Assert.Contains(again.Inventory.Single(p => p.Type == InventoryType.PCItems).Items, s => s.Index == 20 && s.Count == 7);
+    }
+
+    [Fact]
+    public void SaveBag_FirstGeneration_RefusesWhatTheBagCannotHold()
+    {
+        var sav = Red();
+        // 20 emplacements dans le sac de Rouge/Bleu : 19 objets différents plus la Bicyclette le remplissent.
+        SaveSessionTests.GiveItems(sav, [(6, 1), .. new[] { 1, 2, 3, 4, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 29, 30, 32, 33 }.Select(i => (i, 1))]);
+        var refused = SaveBag.Deposit(sav, new Dictionary<int, int> { [Nugget] = 1 }, _ => "Pépite", "Rouge / Bleu");
+        Assert.Equal("Plus de place dans le sac pour Pépite.", refused);
+        Assert.Null(SaveBag.Deposit(sav, new Dictionary<int, int> { [Nugget] = 1 }, _ => "Pépite", "Rouge / Bleu", BagPlace.Pc));
+        Assert.Contains("n'existe pas dans Rouge / Bleu",
+            SaveBag.Deposit(sav, new Dictionary<int, int> { [OranBerry2] = 1 }, _ => "Baie Oran", "Rouge / Bleu"));
+    }
+
+    [Fact]
+    public void SaveBag_SecondGeneration_ConvertsItems_AndEmptiesItsMachinePocket()
+    {
+        var sav = new SAV2(LanguageID.French, GameVersion.C);
+        // Numéros d'Or/Argent/Cristal : Baie 173 (Baie Oran), Appât Ball 160, CT01 191 (Dynamo-Poing) ; Feuille d'Or 75
+        // (sans équivalent), Bicyclette 7 (objet rare), CS01 243, Lettre Fleur 158.
+        SaveSessionTests.GiveItems(sav, (173, 4), (160, 2), (191, 3), (75, 1), (7, 1), (243, 1), (158, 1));
+        GiveToPc(sav, (32, 2)); // Super Bonbon
+        Assert.Equal(new Dictionary<int, int> { [OranBerry2] = 4, [LureBall] = 2, [SaveBag.MachineKey(DynamicPunch)] = 3 },
+            SaveBag.ReadItems(sav, BagPlace.Bag));
+        Assert.Equal(new Dictionary<int, int> { [RareCandy] = 2 }, SaveBag.ReadItems(sav, BagPlace.Pc));
+        Assert.Equal(ItemCategory.Berries, SaveBag.CategoryOf(OranBerry2));
+        Assert.Equal("CT01", SaveBag.MachineLabels(sav)[SaveBag.MachineKey(DynamicPunch)]);
+
+        // PKHeX n'écrit pas une quantité de CT tombée à zéro en 2e génération : le site s'en charge.
+        Assert.Null(SaveBag.Withdraw(sav, SaveBag.ReadItems(sav, BagPlace.Bag), i => $"{i}"));
+        var again = sav; // relue en mémoire, comme Red
+        Assert.Equal(new Dictionary<int, int> { [RareCandy] = 2 }, SaveBag.ReadItems(again));
+        var tm = again.Inventory.Single(p => p.Type == InventoryType.TMHMs);
+        Assert.Equal([(243, 1)], tm.Items.Where(s => s.Count > 0).Select(s => ((int)s.Index, s.Count))); // la CS reste
+        Assert.Contains(again.Inventory.Single(p => p.Type == InventoryType.KeyItems).Items, s => s.Index == 7 && s.Count == 1);
+        Assert.Contains(again.Inventory.Single(p => p.Type == InventoryType.Items).Items, s => s.Index == 75 && s.Count == 1);
+
+        // Noigrumes : Bleue (89) et Jaune (92) d'Or/Argent/Cristal, 486 et 487 à partir de la 5e génération (inversés en 4e).
+        SaveSessionTests.GiveItems(again, (89, 1), (92, 2));
+        Assert.Equal(new Dictionary<int, int> { [486] = 1, [487] = 2 }, SaveBag.ReadItems(again, BagPlace.Bag));
+        Assert.Equal("Noigrume Bleu", new PokemonInfo().ItemName(486));
+        Assert.Null(SaveBag.Withdraw(again, new Dictionary<int, int> { [486] = 1, [487] = 2 }, i => $"{i}"));
+
+        // Retour : la Baie Oran redevient la Baie, l'Appât Ball revient sous son numéro d'Or/Argent/Cristal.
+        Assert.Null(SaveBag.Deposit(again, new Dictionary<int, int> { [OranBerry2] = 4, [LureBall] = 2 }, i => $"{i}", "Cristal"));
+        var items = again.Inventory.SelectMany(p => p.Items).ToList();
+        Assert.Contains(items, s => s.Index == 173 && s.Count == 4);
+        Assert.Contains(items, s => s.Index == 160 && s.Count == 2);
+    }
+
+    [Fact]
+    public void SaveBag_ThirdGeneration_ReadsItsPc_ButNeverItsHiddenMachines()
+    {
+        var sav = new SAV3E();
+        // Numéros de la 3e génération : Potion 13, Super Bonbon 68, CS01 339.
+        GiveToPc(sav, (13, 5), (68, 1), (339, 1));
+        Assert.Equal(new Dictionary<int, int> { [Potion] = 5, [RareCandy] = 1 }, SaveBag.ReadItems(sav, BagPlace.Pc));
+        Assert.Null(SaveBag.Withdraw(sav, new Dictionary<int, int> { [Potion] = 5 }, i => $"{i}", BagPlace.Pc));
+        Assert.Equal(new Dictionary<int, int> { [RareCandy] = 1 }, SaveBag.ReadItems(sav, BagPlace.Pc));
+        Assert.Contains(sav.Inventory.Single(p => p.Type == InventoryType.PCItems).Items, s => s.Index == 339 && s.Count == 1);
+
+        // Platine n'a pas de PC d'objets.
+        Assert.True(SaveUtil.TryGetSaveFile(SaveSessionTests.CreatePlatinumSave(), out var platinum, "platine.sav"));
+        Assert.False(SaveBag.HasPc(platinum!));
+        Assert.Empty(SaveBag.Capacity(platinum!, BagPlace.Pc));
+        Assert.NotNull(SaveBag.Deposit(platinum!, new Dictionary<int, int> { [Potion] = 1 }, i => $"{i}", "Platine", BagPlace.Pc));
+    }
+
+    [Fact]
+    public void SaveBag_SingleUseMachines_CountTheBagAndThePcTogether()
+    {
+        var sav = Red();
+        SaveSessionTests.GiveItems(sav, (226, 50)); // CT26 Séisme
+        GiveToPc(sav, (226, 29));
+        Assert.Equal(0, SaveBag.Capacity(sav, BagPlace.Pc)[EarthquakeTM] - 29); // 79 au total : plus rien dans le PC
+        Assert.Contains("limitée à 79 par sauvegarde",
+            SaveBag.Deposit(sav, new Dictionary<int, int> { [EarthquakeTM] = 1 }, i => $"{i}", "Rouge / Bleu"));
+        GiveToPc(sav, (226, 1)); // 80 avec le sac : cachée et bloquée aux deux endroits
+        Assert.Equal([EarthquakeTM], SaveBag.LockedMachines(sav));
+        Assert.Empty(SaveBag.ReadItems(sav));
+        Assert.NotNull(SaveBag.Withdraw(sav, new Dictionary<int, int> { [EarthquakeTM] = 1 }, i => $"{i}"));
+        Assert.NotNull(SaveBag.Withdraw(sav, new Dictionary<int, int> { [EarthquakeTM] = 1 }, i => $"{i}", BagPlace.Pc));
+    }
+
+    [Fact]
+    public async Task OldGames_TransferTheBagAndThePc_InOneOperation()
+    {
+        var red = RedFile(bag: [(20, 3), (226, 1)], pc: [(20, 2), (40, 4)]); // Potion, CT26 ; Potion, Super Bonbon
+        Assert.True((await _saves.AddAsync("sacha", "rouge.sav", red)).Ok);
+        var id = (await _saves.ListAsync("sacha")).Single().Id;
+
+        var source = (await _inventory.ListItemSourcesAsync("sacha")).Single();
+        Assert.True(source.HasPc);
+        Assert.Equal(5, source.CountOf(Potion)); // consultation : sac et PC additionnés
+        Assert.Equal((3, 2), (source.CountIn(Potion, BagPlace.Bag), source.CountIn(Potion, BagPlace.Pc)));
+        Assert.Equal(4, source.CountIn(RareCandy, BagPlace.Pc));
+
+        var result = await _inventory.WithdrawItemsAsync("sacha", id,
+            new Dictionary<int, int> { [Potion] = 3, [EarthquakeTM] = 1 }, new Dictionary<int, int> { [Potion] = 2, [RareCandy] = 1 });
+        Assert.True(result.Ok, result.Message);
+        Assert.Equal(new Dictionary<int, int> { [Potion] = 5, [RareCandy] = 1, [EarthquakeTM] = 1 }, await InventoryItems());
+        Assert.Equal("Sac : 3 × Potion, 1 × CT/DT Séisme ; PC : 2 × Potion, 1 × Super Bonbon",
+            (await _inventory.ListOperationsAsync("sacha")).Single().Details);
+
+        var deposited = await _inventory.DepositItemsAsync("sacha", id, new Dictionary<int, int>(), new Dictionary<int, int> { [Potion] = 5 });
+        Assert.True(deposited.Ok, deposited.Message);
+        using var db = _db.NewContext();
+        Assert.True(SaveUtil.TryGetSaveFile((await db.StoredSaves.SingleAsync(s => s.Id == id)).Data, out var stored));
+        Assert.Equal(new Dictionary<int, int> { [Potion] = 5, [RareCandy] = 3 }, SaveBag.ReadItems(stored!, BagPlace.Pc));
+        Assert.Empty(SaveBag.ReadItems(stored!, BagPlace.Bag));
+
+        // Une sauvegarde sans PC refuse les quantités pour le PC.
+        Assert.True((await _saves.AddAsync("sacha", "platine.sav", SaveSessionTests.CreatePlatinumSave())).Ok);
+        var platine = (await _saves.ListAsync("sacha")).Single(s => s.Id != id).Id;
+        var refused = await _inventory.DepositItemsAsync("sacha", platine, new Dictionary<int, int>(), new Dictionary<int, int> { [RareCandy] = 1 });
+        Assert.Equal("Cette sauvegarde n'a pas de PC d'objets.", refused.Message);
+    }
+
+    [Fact]
+    public void GameNames_OfFirstAndSecondGenerationGroups_AreReadable()
+    {
+        var info = new PokemonInfo();
+        Assert.Equal("Rouge / Bleu", info.GameName(Red()));
+        Assert.Equal("Or / Argent", info.GameName(GameVersion.GS));
+        Assert.Equal("Cristal", info.GameName(new SAV2(LanguageID.French, GameVersion.C)));
+    }
+
     [Fact]
     public void Money_IsFormattedTheFrenchWay()
     {

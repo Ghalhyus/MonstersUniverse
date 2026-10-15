@@ -29,7 +29,20 @@ public sealed class PokemonInfo
     private const int French = (int)LanguageID.French;
     private readonly GameStrings _strings = GameInfo.GetStrings("fr");
 
-    public string GameName(GameVersion version) => Get(_strings.gamelist, (int)version, version.ToString());
+    public string GameName(GameVersion version) =>
+        GroupNames.TryGetValue(version, out var name) ? name : Get(_strings.gamelist, (int)version, version.ToString());
+
+    /// <summary>
+    /// Noms des groupes de jeux, absents des listes de PKHeX : une sauvegarde de Rouge/Bleu ou d'Or/Argent ne dit pas lequel des
+    /// deux, et un Pokémon de 1re ou 2e génération pas de quel jeu il vient. À garder en accord avec la migration GameNames.
+    /// </summary>
+    public static readonly IReadOnlyDictionary<GameVersion, string> GroupNames = new Dictionary<GameVersion, string>
+    {
+        [GameVersion.RB] = "Rouge / Bleu",
+        [GameVersion.RBY] = "Rouge / Bleu / Jaune",
+        [GameVersion.GS] = "Or / Argent",
+        [GameVersion.GSC] = "Or / Argent / Cristal",
+    };
 
     /// <summary>Nom du jeu d'une sauvegarde ; certaines ne précisent pas la version exacte (« Any » pour PKHeX).</summary>
     public string GameName(SaveFile sav) =>

@@ -506,15 +506,31 @@ else if (panel == SidePanel.Detail && detail is { } d)
     /// <summary>Nom d'un objet sans les numéros de CT ajoutés pour « Tout ».</summary>
     private static string BaseName(ItemStack item) => item.Name.Split(" — ")[0];
 
-    /// <summary>Où se trouve un objet (source « Tout ») : l'inventaire interne puis chaque sauvegarde qui en a.</summary>
+    /// <summary>
+    /// Où se trouve un objet (source « Tout ») : l'inventaire interne puis chaque sauvegarde qui en a ; pour une sauvegarde qui a
+    /// un PC d'objets (1re à 3e génération), le sac et le PC à part (« Rouge / Bleu — Red (CT26, PC) »).
+    /// </summary>
     private IEnumerable<(string Label, int Count)> DetailRows(int itemId)
     {
         if (items.FirstOrDefault(i => i.ItemId == itemId) is { } owned)
             yield return ("Interne", owned.Count);
         foreach (var save in saves ?? [])
         {
-            if (save.CountOf(itemId) is var count and > 0)
-                yield return (save.MachineLabels.TryGetValue(itemId, out var label) ? $"{save.Label} ({label})" : save.Label, count);
+            var machine = save.MachineLabels.GetValueOrDefault(itemId);
+            if (!save.HasPc)
+            {
+                if (save.CountOf(itemId) is var count and > 0)
+                    yield return (machine is null ? save.Label : $"{save.Label} ({machine})", count);
+                continue;
+            }
+            foreach (var place in new[] { BagPlace.Bag, BagPlace.Pc })
+            {
+                if (save.CountIn(itemId, place) is var count and > 0)
+                {
+                    var where = place == BagPlace.Pc ? "PC" : "sac";
+                    yield return ($"{save.Label} ({(machine is null ? where : $"{machine}, {where}")})", count);
+                }
+            }
         }
     }
 

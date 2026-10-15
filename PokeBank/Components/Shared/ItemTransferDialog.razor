@@ -3,7 +3,8 @@
 
 @* Fenêtre de transfert d'objets (objets, Pokéballs, médicaments, baies, CT et DT) entre l'inventaire et le sac d'une sauvegarde stockée, dans un sens
    ou dans l'autre : sauvegarde → quantité de chaque objet, un onglet par catégorie → confirmation. Une seule opération pour toutes les
-   catégories ; seule la copie du serveur est modifiée. *@
+   catégories ; seule la copie du serveur est modifiée. Pour les jeux de 1re à 3e génération, deux onglets « Sac » et « PC » au-dessus
+   des catégories : l'opération peut toucher les deux. *@
 
 <div class="dialog-backdrop" @onclick="Cancel"></div>
 <div class="dialog-panel card" role="dialog" aria-modal="true" aria-label="@Title">
@@ -44,14 +45,43 @@
 
             case Step.Quantities:
                 <h5>@Title <small class="text-muted">· 2/3</small></h5>
-                <p class="small">@(Deposit ? "Vers" : "Depuis") le sac de « @chosen!.Label ».</p>
+                @if (chosen!.HasPc)
+                {
+                    <p class="small">@(Deposit ? "Vers" : "Depuis") « @chosen.Label » :</p>
+                    @* Sac ou PC d'objets (1re à 3e génération) ; les quantités de l'autre endroit sont gardées. *@
+                    <ul class="nav nav-pills mb-2" role="tablist">
+                        @foreach (var p in Places)
+                        {
+                            var place = p;
+                            var chosenCount = Entries(place).Count();
+                            <li class="nav-item" role="presentation">
+                                <button type="button" role="tab" class="nav-link py-1 @(current == place ? "active" : "")"
+                                        aria-selected="@(current == place ? "true" : "false")" @onclick="() => SwitchPlace(place)">
+                                    @PlaceTitle(place)
+                                    @if (HasError(place))
+                                    {
+                                        <span class="badge bg-danger ms-1" title="Quantité à corriger">!</span>
+                                    }
+                                    else if (chosenCount > 0)
+                                    {
+                                        <span class="badge text-bg-light ms-1" title="Objets choisis à cet endroit">@chosenCount</span>
+                                    }
+                                </button>
+                            </li>
+                        }
+                    </ul>
+                }
+                else
+                {
+                    <p class="small">@(Deposit ? "Vers" : "Depuis") le sac de « @chosen.Label ».</p>
+                }
                 @* Une liste à la fois ; les quantités des autres onglets sont gardées et partent dans la même opération. *@
                 <ul class="nav nav-tabs mb-2" role="tablist">
                     @foreach (var category in ItemCategories.All)
                     {
                         var c = category.Category;
-                        var chosenCount = Rows.Count(r => r.Category == c && Wanted(r) > 0);
-                        var hasError = Rows.Any(r => r.Category == c && QuantityError(r) is not null);
+                        var chosenCount = Rows(current).Count(r => r.Category == c && Wanted(r.ItemId, current) > 0);
+                        var hasError = Rows(current).Any(r => r.Category == c && QuantityError(r, current) is not null);
                         <li class="nav-item" role="presentation">
                             <button type="button" role="tab" class="nav-link @(tab == c ? "active" : "")" aria-selected="@(tab == c ? "true" : "false")"
                                     @onclick="() => tab = c">
@@ -73,11 +103,11 @@
                        @bind="search" @bind:event="oninput" />
                 @foreach (var category in ItemCategories.All.Where(c => c.Category == tab))
                 {
-                    var all = Rows.Where(r => r.Category == category.Category).ToList();
+                    var all = Rows(current).Where(r => r.Category == category.Category).ToList();
                     var rows = all.Where(Matches).ToList();
                     @if (all.Count == 0)
                     {
-                        <p class="small text-muted mb-0">@(Deposit ? "Aucun dans ton inventaire." : "Aucun dans ce sac.")</p>
+                        <p class="small text-muted mb-0">@(Deposit ? "Aucun dans ton inventaire." : current == BagPlace.Pc ? "Aucun dans ce PC." : "Aucun dans ce sac.")</p>
                         continue;
                     }
                     @if (rows.Count == 0)
@@ -87,18 +117,19 @@
                     }
                     <table class="table table-sm align-middle mb-0">
                         <thead>
-                            <tr><th>Objet</th><th class="text-end">@(Deposit ? "Inventaire" : "Sac")</th><th class="text-end">Quantité</th></tr>
+                            <tr><th>Objet</th><th class="text-end">@(Deposit ? "Inventaire" : PlaceTitle(current))</th><th class="text-end">Quantité</th></tr>
                         </thead>
                         <tbody>
                             @foreach (var row in rows)
                             {
                                 var r = row;
-                                var max = Max(r);
+                                var place = current;
+                                var max = Max(r, place);
                                 <tr>
                                     <td>
                                         <img src="@r.SpriteUrl" alt="" width="24" height="24" class="item-sprite" />
                                         @DisplayName(r)
-                                        @if (Deposit && RowProblem(r) is { } problem)
+                                        @if (Deposit && RowProblem(r, place) is { } problem)
                                         {
                                             <div class="small text-muted">@problem</div>
                                         }
@@ -108,10 +139,10 @@
                                         <div class="d-flex justify-content-end align-items-center gap-1">
                                             <input type="number" class="form-control form-control-sm item-quantity" min="0" max="@max" step="1"
                                                    aria-label="@($"Quantité de {r.Name}")" disabled="@(max == 0)"
-                                                   value="@quantities.GetValueOrDefault(r.ItemId)" @oninput="e => SetQuantity(r.ItemId, e.Value)" />
-                                            <button class="btn btn-sm btn-link px-1" disabled="@(max == 0)" @onclick="() => quantities[r.ItemId] = max">Tout</button>
+                                                   value="@quantities.GetValueOrDefault((place, r.ItemId))" @oninput="e => SetQuantity(place, r.ItemId, e.Value)" />
+                                            <button class="btn btn-sm btn-link px-1" disabled="@(max == 0)" @onclick="() => quantities[(place, r.ItemId)] = max">Tout</button>
                                         </div>
-                                        @if (QuantityError(r) is { } error)
+                                        @if (QuantityError(r, place) is { } error)
                                         {
                                             <div class="small text-danger">@error</div>
                                         }
@@ -130,19 +161,28 @@
             case Step.Confirm:
                 <h5>@Title <small class="text-muted">· 3/3</small></h5>
                 <p>@(Deposit ? "Déposer dans" : "Retirer de") « @chosen!.Label » :</p>
-                <ul class="small">
-                    @foreach (var r in Rows.Where(r => Wanted(r) > 0))
+                @foreach (var p in Places.Where(p => Entries(p).Any()))
+                {
+                    var place = p;
+                    @if (chosen.HasPc)
                     {
-                        var inSave = chosen.CountOf(r.ItemId);
-                        var inStock = Stock.FirstOrDefault(s => s.ItemId == r.ItemId)?.Count ?? 0;
-                        var n = Wanted(r);
-                        <li>
-                            <strong>@n × @DisplayName(r)</strong> —
-                            sac : @inSave → @(Deposit ? inSave + n : inSave - n),
-                            inventaire : @inStock → @(Deposit ? inStock - n : inStock + n)
-                        </li>
+                        <div class="small fw-semibold">@PlaceTitle(place)</div>
                     }
-                </ul>
+                    <ul class="small">
+                        @foreach (var r in Rows(place).Where(r => Wanted(r.ItemId, place) > 0))
+                        {
+                            var inSave = chosen.CountIn(r.ItemId, place);
+                            var inStock = Stock.FirstOrDefault(s => s.ItemId == r.ItemId)?.Count ?? 0;
+                            var n = Wanted(r.ItemId, place);
+                            var moved = Places.Sum(other => Wanted(r.ItemId, other)); // l'inventaire voit passer les deux endroits
+                            <li>
+                                <strong>@n × @DisplayName(r)</strong> —
+                                @(place == BagPlace.Pc ? "PC" : "sac") : @inSave → @(Deposit ? inSave + n : inSave - n),
+                                inventaire : @inStock → @(Deposit ? inStock - moved : inStock + moved)
+                            </li>
+                        }
+                    </ul>
+                }
                 <div class="alert alert-warning small">
                     Seule la copie du serveur est modifiée :
                     @if (Deposit)
@@ -181,7 +221,9 @@
     private Step step;
     private List<ItemSource>? sources;
     private ItemSource? chosen;
-    private Dictionary<int, int?> quantities = [];
+    /// <summary>Quantité saisie pour chaque objet, au sac ou au PC.</summary>
+    private Dictionary<(BagPlace Place, int ItemId), int?> quantities = [];
+    private BagPlace current; // sac ou PC affiché à l'étape 2
     private ItemCategory tab; // onglet affiché à l'étape 2
     private string search = ""; // recherche par nom à l'étape 2
     private bool busy;
@@ -190,8 +232,13 @@
 
     private string Title => Deposit ? "Déposer des objets" : "Retirer des objets";
 
-    /// <summary>Lignes de l'étape 2 : les objets du sac (retrait) ou de l'inventaire (dépôt).</summary>
-    private IReadOnlyList<ItemStack> Rows => Deposit ? Stock : chosen?.Items ?? [];
+    /// <summary>Endroits de la sauvegarde choisie : le sac, et le PC si son jeu en a un.</summary>
+    private IEnumerable<BagPlace> Places => chosen?.HasPc == true ? [BagPlace.Bag, BagPlace.Pc] : [BagPlace.Bag];
+
+    private static string PlaceTitle(BagPlace place) => place == BagPlace.Pc ? "PC" : "Sac";
+
+    /// <summary>Lignes de l'étape 2 : les objets du sac ou du PC (retrait), ou de l'inventaire (dépôt).</summary>
+    private IReadOnlyList<ItemStack> Rows(BagPlace place) => Deposit ? Stock : chosen?.ItemsIn(place) ?? [];
 
     protected override async Task OnInitializedAsync() => sources = await InventoryStore.ListItemSourcesAsync(UserId);
 
@@ -199,7 +246,7 @@
     private static string BagSummary(ItemSource source)
     {
         if (source.Items.Count == 0)
-            return "sac vide";
+            return source.HasPc ? "sac et PC vides" : "sac vide";
         var items = source.Total(ItemCategory.Items);
         var balls = source.Total(ItemCategory.Balls);
         var medicine = source.Total(ItemCategory.Medicine);
@@ -209,7 +256,7 @@
                $"{CollectionCapacity.FormatCount(balls)} Pokéball{(balls > 1 ? "s" : "")} · " +
                $"{CollectionCapacity.FormatCount(medicine)} médicament{(medicine > 1 ? "s" : "")} · " +
                $"{CollectionCapacity.FormatCount(berries)} baie{(berries > 1 ? "s" : "")} · " +
-               $"{CollectionCapacity.FormatCount(machines)} CT/DT dans le sac";
+               $"{CollectionCapacity.FormatCount(machines)} CT/DT {(source.HasPc ? "dans le sac et le PC" : "dans le sac")}";
     }
 
     /// <summary>Nom d'une ligne ; une CT ou une DT porte son numéro dans le jeu de la sauvegarde choisie (« CT26 Séisme »).</summary>
@@ -226,45 +273,72 @@
         chosen = source;
         quantities = []; // rien de prérempli : rien n'est transféré par accident
         search = "";
-        // Premier onglet qui a quelque chose à transférer.
-        tab = ItemCategories.All.Select(c => c.Category).FirstOrDefault(c => Rows.Any(r => r.Category == c), ItemCategory.Items);
+        current = BagPlace.Bag;
+        FirstTabWithRows();
         step = Step.Quantities;
     }
 
-    /// <summary>Quantité maximale transférable : tout ce qu'il y a pour un retrait ; pour un dépôt, la place dans le sac en plus.</summary>
-    private int Max(ItemStack item) =>
-        !Deposit ? item.Count
-        : RowProblem(item) is not null ? 0
-        : Math.Min(item.Count, chosen!.Capacity[item.ItemId] - chosen.CountOf(item.ItemId));
+    private void SwitchPlace(BagPlace place)
+    {
+        current = place;
+        if (!Rows(place).Any(r => r.Category == tab))
+            FirstTabWithRows();
+    }
+
+    /// <summary>Premier onglet qui a quelque chose à transférer.</summary>
+    private void FirstTabWithRows() =>
+        tab = ItemCategories.All.Select(c => c.Category).FirstOrDefault(c => Rows(current).Any(r => r.Category == c), ItemCategory.Items);
 
     /// <summary>
-    /// Dépôt impossible pour cet objet : CT bloquée dans cette sauvegarde (au moins 80 exemplaires), inconnu du jeu (une
-    /// capacité qu'il n'apprend que par une CS aussi) ou sac plein.
+    /// Quantité maximale transférable : tout ce qu'il y a pour un retrait ; pour un dépôt, la place à cet endroit, sans dépasser
+    /// ce que l'inventaire a encore une fois servi l'autre endroit.
     /// </summary>
-    private string? RowProblem(ItemStack item) =>
+    private int Max(ItemStack item, BagPlace place)
+    {
+        if (!Deposit)
+            return item.Count;
+        if (RowProblem(item, place) is not null)
+            return 0;
+        var elsewhere = Places.Where(p => p != place).Sum(p => Wanted(item.ItemId, p));
+        return Math.Max(0, Math.Min(item.Count - elsewhere, chosen!.CapacityIn(place)[item.ItemId] - chosen.CountIn(item.ItemId, place)));
+    }
+
+    /// <summary>
+    /// Dépôt impossible pour cet objet à cet endroit : CT bloquée dans cette sauvegarde (au moins 80 exemplaires), inconnu du jeu
+    /// (une capacité qu'il n'apprend que par une CS aussi), refusé par le PC, ou plus de place.
+    /// </summary>
+    private string? RowProblem(ItemStack item, BagPlace place) =>
         chosen!.LockedMachines.Contains(item.ItemId) ? $"déjà au moins {SaveBag.LimitedMachineThreshold} dans cette sauvegarde"
-        : !chosen.Capacity.TryGetValue(item.ItemId, out var capacity)
-            ? item.Category == ItemCategory.Machines ? $"aucune CT ni DT pour cette capacité dans {chosen.GameName}" : $"n'existe pas dans {chosen.GameName}"
-        : chosen.CountOf(item.ItemId) >= capacity ? $"sac plein ({capacity} au maximum)"
+        : !chosen.CapacityIn(place).TryGetValue(item.ItemId, out var capacity)
+            ? place == BagPlace.Pc && chosen.Capacity.ContainsKey(item.ItemId) ? "ne peut pas être rangé dans le PC"
+            : item.Category == ItemCategory.Machines ? $"aucune CT ni DT pour cette capacité dans {chosen.GameName}" : $"n'existe pas dans {chosen.GameName}"
+        : chosen.CountIn(item.ItemId, place) >= capacity ? $"{(place == BagPlace.Pc ? "PC" : "sac")} plein ({capacity} au maximum)"
         : null;
 
-    private int Wanted(ItemStack item) => quantities.GetValueOrDefault(item.ItemId) ?? 0;
+    private int Wanted(int itemId, BagPlace place) => quantities.GetValueOrDefault((place, itemId)) ?? 0;
 
-    private string? QuantityError(ItemStack item)
+    /// <summary>Objets choisis (quantité saisie, même invalide) à cet endroit.</summary>
+    private IEnumerable<int> Entries(BagPlace place) =>
+        quantities.Where(q => q.Key.Place == place && q.Value is not 0).Select(q => q.Key.ItemId);
+
+    private string? QuantityError(ItemStack item, BagPlace place)
     {
-        if (!quantities.TryGetValue(item.ItemId, out var value))
+        if (!quantities.TryGetValue((place, item.ItemId), out var value))
             return null;
-        var max = Max(item);
+        var max = Max(item, place);
+        var available = Deposit ? item.Count - Places.Where(p => p != place).Sum(p => Wanted(item.ItemId, p)) : item.Count;
         return value is not { } n ? "Nombre entier attendu."
             : n < 0 ? "Pas de quantité négative."
-            : n > max ? (Deposit && n <= item.Count ? $"Le sac n'accepte que {max} de plus." : $"{max} au maximum.")
+            : n > max ? (Deposit && n <= available ? $"{(place == BagPlace.Pc ? "Le PC" : "Le sac")} n'accepte que {max} de plus." : $"{max} au maximum.")
             : null;
     }
 
-    private bool CanContinue => Rows.Any(r => Wanted(r) > 0) && Rows.All(r => QuantityError(r) is null);
+    private bool HasError(BagPlace place) => Rows(place).Any(r => QuantityError(r, place) is not null);
 
-    private void SetQuantity(int itemId, object? value) =>
-        quantities[itemId] = int.TryParse(value?.ToString(), out var n) ? n : string.IsNullOrWhiteSpace(value?.ToString()) ? 0 : null;
+    private bool CanContinue => Places.Any(p => Rows(p).Any(r => Wanted(r.ItemId, p) > 0)) && !Places.Any(HasError);
+
+    private void SetQuantity(BagPlace place, int itemId, object? value) =>
+        quantities[(place, itemId)] = int.TryParse(value?.ToString(), out var n) ? n : string.IsNullOrWhiteSpace(value?.ToString()) ? 0 : null;
 
     private async Task Cancel()
     {
@@ -277,10 +351,12 @@
         busy = true;
         try
         {
-            var wanted = Rows.Where(r => Wanted(r) > 0).ToDictionary(r => r.ItemId, Wanted);
+            Dictionary<int, int> In(BagPlace place) => Rows(place).Where(r => Wanted(r.ItemId, place) > 0).ToDictionary(r => r.ItemId, r => Wanted(r.ItemId, place));
+            var bag = In(BagPlace.Bag);
+            var pc = chosen.HasPc ? In(BagPlace.Pc) : null;
             var result = Deposit
-                ? await InventoryStore.DepositItemsAsync(UserId, chosen.SaveId, wanted)
-                : await InventoryStore.WithdrawItemsAsync(UserId, chosen.SaveId, wanted);
+                ? await InventoryStore.DepositItemsAsync(UserId, chosen.SaveId, bag, pc)
+                : await InventoryStore.WithdrawItemsAsync(UserId, chosen.SaveId, bag, pc);
             await OnDone.InvokeAsync(result);
         }
         catch (Exception ex)

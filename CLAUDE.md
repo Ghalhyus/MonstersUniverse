@@ -68,9 +68,17 @@ toute seule au démarrage (`Database.Migrate()`). Le code doit compiler avant de
 - Une sauvegarde de 3e ou 4e génération créée vide (`new SAV3E()`, `new SAV4Pt()`) ne peut pas être écrite (`Write()`
   plante) : tester ces jeux en mémoire, ou partir d'un fichier brut valide (voir `CreatePlatinumSave`).
 - `SaveUtil.TryGetSaveFile` dans les tests (les méthodes internes de PKHeX ne sont pas visibles).
-- Sac : lire `sav.Inventory`, modifier les poches, puis **réaffecter** `sav.Inventory`. Ignorer `InventoryType.PCItems`.
-  Après un retrait, `ClearCount0()` seulement sur les poches vidées.
-- Les objets de la 3e génération ont d'autres numéros : convertir avec `ItemConverter.GetItemOld3` / `GetItemFuture3`.
+- Sac : lire `sav.Inventory`, modifier les poches, puis **réaffecter** `sav.Inventory`. Le PC d'objets (`InventoryType.PCItems`,
+  1re à 3e génération) n'est lu et modifié que comme `BagPlace.Pc`. Après un retrait, `ClearCount0()` seulement sur les
+  poches vidées.
+- Or/Argent/Cristal : PKHeX **n'écrit pas une quantité de CT tombée à zéro** (poche CT/CS, un octet par numéro) ;
+  `SaveBag.ClearEmptiedMachines` remet ces octets à zéro (position de la poche lue par réflexion, champ interne `Offset`).
+- Une sauvegarde de 1re ou 2e génération créée vide (`new SAV1(...)`, `new SAV2(...)`) n'est **pas reconnue** par
+  `SaveUtil` une fois écrite : la tester en mémoire (relire `sav.Inventory`), ou partir d'une vraie sauvegarde
+  (`Sauvegardes/rouge.sav`, voir `InventoryServiceTests.RedFile`).
+- Numéros d'objets : 3e génération avec `ItemConverter.GetItemOld3` / `GetItemFuture3`, 2e avec `GetItemFuture2` (128 : sans
+  équivalent) / `GetItemOld2`, Rouge/Bleu avec la table `SaveBag.Gen1Items` (PKHeX n'a rien). La 2e génération sort en
+  numéros de 4e : les Noigrumes Bleue/Jaune (486/487) y sont inversées par rapport aux jeux suivants (`SwapApricorns`).
 - Les poches changent d'un jeu à l'autre (Balls avec les objets en Noir 2, baies de Let's Go avec les Balls...) : chercher
   un objet dans toutes les poches avec `CanContain`, jamais par type de poche.
 - CT : un même numéro n'apprend pas la même capacité selon le jeu, d'où le stockage par capacité (`SaveBag.MachineKey`).
