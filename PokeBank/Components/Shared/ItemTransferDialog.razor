@@ -237,9 +237,13 @@
         : RowProblem(item) is not null ? 0
         : Math.Min(item.Count, chosen!.Capacity[item.ItemId] - chosen.CountOf(item.ItemId));
 
-    /// <summary>Dépôt impossible pour cet objet : inconnu du jeu (une capacité qu'il n'apprend que par une CS aussi) ou sac plein.</summary>
+    /// <summary>
+    /// Dépôt impossible pour cet objet : CT bloquée dans cette sauvegarde (au moins 80 exemplaires), inconnu du jeu (une
+    /// capacité qu'il n'apprend que par une CS aussi) ou sac plein.
+    /// </summary>
     private string? RowProblem(ItemStack item) =>
-        !chosen!.Capacity.TryGetValue(item.ItemId, out var capacity)
+        chosen!.LockedMachines.Contains(item.ItemId) ? $"déjà au moins {SaveBag.LimitedMachineThreshold} dans cette sauvegarde"
+        : !chosen.Capacity.TryGetValue(item.ItemId, out var capacity)
             ? item.Category == ItemCategory.Machines ? $"aucune CT ni DT pour cette capacité dans {chosen.GameName}" : $"n'existe pas dans {chosen.GameName}"
         : chosen.CountOf(item.ItemId) >= capacity ? $"sac plein ({capacity} au maximum)"
         : null;

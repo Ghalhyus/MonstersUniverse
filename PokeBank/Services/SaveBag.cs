@@ -78,6 +78,13 @@ public static class SaveBag
     /// <summary>Début des clés des CT et DT : <c>MachineKeyBase + numéro de la capacité</c>, au-delà de tout numéro d'objet.</summary>
     public const int MachineKeyBase = 100_000;
 
+    /// <summary>
+    /// Seuil des CT à usage unique (3e et 4e génération, Diamant Étincelant/Perle Scintillante, Écarlate/Violet ; pas les DT
+    /// d'Épée/Bouclier) : une sauvegarde qui en a au moins autant d'une même CT la garde pour elle. Cette CT y est cachée, ni
+    /// retirée ni déposée (<see cref="LockedMachines"/>), et un dépôt ne peut pas l'amener jusque-là (79 au plus).
+    /// </summary>
+    public const int LimitedMachineThreshold = 80;
+
     /// <summary>Clé d'une CT ou d'une DT : la capacité qu'elle apprend.</summary>
     public static int MachineKey(ushort move) => MachineKeyBase + move;
 
@@ -106,14 +113,23 @@ public static class SaveBag
 
     /// <summary>
     /// Objets transférables du sac (objets ordinaires, Pokéballs, médicaments, baies, CT et DT ; jamais les objets rares, les
-    /// Lettres ni les CS) par clé, et leur quantité (additionnée si un objet occupe plusieurs emplacements).
+    /// Lettres ni les CS) par clé, et leur quantité (additionnée si un objet occupe plusieurs emplacements). Les CT bloquées
+    /// (<see cref="LockedMachines"/>) n'y sont pas.
     /// </summary>
     public static Dictionary<int, int> ReadItems(SaveFile sav) =>
-        sav.Generation < 3 ? [] : Count(sav, Bag(sav.Inventory));
+        sav.Generation < 3 ? [] : Visible(sav, Count(sav, Bag(sav.Inventory)));
+
+    /// <summary>
+    /// CT à usage unique dont le sac a au moins <see cref="LimitedMachineThreshold"/> exemplaires, par clé : cachées pour cette
+    /// sauvegarde, ni retirées ni déposées. Les autres CT du sac, et la même CT dans une autre sauvegarde, ne sont pas concernées.
+    /// </summary>
+    public static HashSet<int> LockedMachines(SaveFile sav) =>
+        sav.Generation < 3 ? [] : Locked(sav, Count(sav, Bag(sav.Inventory)));
 
     /// <summary>
     /// Quantité maximale de chaque objet que le sac peut contenir, par clé : 999 en 4e et 5e génération, 99 dans la poche Objets
-    /// de la 3e, et 1 pour une CT réutilisable (5e à 7e génération, Épée/Bouclier, Légendes Z-A). Un objet que le jeu ne connaît
+    /// de la 3e, 1 pour une CT réutilisable (5e à 7e génération, Épée/Bouclier, Légendes Z-A) et 79 pour une CT à usage unique
+    /// (<see cref="LimitedMachineThreshold"/> ; une CT bloquée y est aussi, voir <see cref="LockedMachines"/>). Un objet que le jeu ne connaît
     /// pas est absent (les Balls Noigrume de HGSS n'existent pas dans Platine, aucune CT n'apprend Mitra-Poing dans Noir 2...),
     /// comme une capacité que le jeu n'apprend que par une CS (Surf dans Platine), la Baie Enigma en 3e génération et un objet
     /// que le jeu range parmi les objets rares.
@@ -141,7 +157,9 @@ public static class SaveBag
         foreach (var machine in machines.ByMove.Values)
         {
             if (PouchFor(sav, bag, machine.Item) is { } pouch)
-                capacity[MachineKey(machine.Move)] = machine.Reusable ? 1 : pouch.MaxCount;
+                capacity[MachineKey(machine.Move)] = machine.Reusable ? 1
+                    : machine.Limited ? Math.Min(pouch.MaxCount, LimitedMachineThreshold - 1)
+                    : pouch.MaxCount;
         }
         return capacity;
     }
@@ -157,7 +175,7 @@ public static class SaveBag
             return why;
         var pouches = sav.Inventory;
         var bag = Bag(pouches);
-        var have = Count(sav, bag);
+        var have = Visible(sav, Count(sav, bag)); // une CT bloquée compte pour 0 : elle n'est jamais retirée
         foreach (var (item, quantity) in quantities)
         {
             if (CategoryOf(item) is null)
@@ -199,11 +217,14 @@ public static class SaveBag
         var pouches = sav.Inventory;
         var bag = Bag(pouches);
         var have = Count(sav, bag);
+        var locked = Locked(sav, have);
         var capacity = Capacity(sav);
         foreach (var (item, quantity) in quantities)
         {
             if (CategoryOf(item) is null)
                 return $"{name(item)} ne peut pas être transféré.";
+            if (locked.Contains(item))
+                return LockedMessage(name(item));
             if (!capacity.TryGetValue(item, out var max))
                 return MoveOf(item) is not null ? $"{name(item)} : aucune CT ni DT n'apprend cette capacité dans {gameName}."
                     : IsEnigmaOfGen3(sav, item) ? $"{name(item)} : en 3e génération, elle vient de l'e-Reader et ne peut pas être déposée."
@@ -211,7 +232,9 @@ public static class SaveBag
                     : $"{name(item)} n'existe pas dans {gameName}.";
             var current = have.GetValueOrDefault(item);
             if (current + quantity > max)
-                return $"{name(item)} : le sac en contient déjà {current} et en accepte {max} au plus ({max - current} de plus).";
+                return IsLimited(sav, item)
+                    ? $"{name(item)} : le sac en contient déjà {current}, et une CT à usage unique est limitée à {max} par sauvegarde ({max - current} de plus)."
+                    : $"{name(item)} : le sac en contient déjà {current} et en accepte {max} au plus ({max - current} de plus).";
         }
 
         var machines = MachinesOf(sav);
@@ -224,6 +247,25 @@ public static class SaveBag
         }
         sav.Inventory = pouches;
         return null;
+    }
+
+    /// <summary>Refus d'un dépôt d'une CT bloquée (<see cref="LockedMachines"/>), prêt à afficher.</summary>
+    public static string LockedMessage(string name) =>
+        $"{name} : cette sauvegarde en a déjà au moins {LimitedMachineThreshold}, elle ne peut plus en recevoir.";
+
+    /// <summary>CT à usage unique soumise au seuil (<see cref="LimitedMachineThreshold"/>) dans le jeu de cette sauvegarde.</summary>
+    private static bool IsLimited(SaveFile sav, int key) =>
+        MoveOf(key) is { } move && MachinesOf(sav).ByMove.TryGetValue(move, out var machine) && machine.Limited;
+
+    private static HashSet<int> Locked(SaveFile sav, Dictionary<int, int> counts) =>
+        counts.Where(c => c.Value >= LimitedMachineThreshold && IsLimited(sav, c.Key)).Select(c => c.Key).ToHashSet();
+
+    /// <summary>Quantités sans les CT bloquées.</summary>
+    private static Dictionary<int, int> Visible(SaveFile sav, Dictionary<int, int> counts)
+    {
+        foreach (var key in Locked(sav, counts))
+            counts.Remove(key);
+        return counts;
     }
 
     /// <summary>Poches du sac que le site peut lire et modifier (sans <see cref="UntouchedPouches"/>).</summary>
@@ -287,7 +329,11 @@ public static class SaveBag
     // ---------- CT et DT de chaque jeu ----------
 
     /// <summary>CT ou DT d'un jeu : son objet (numéro de 4e génération et suivantes), la capacité apprise et son numéro (« CT26 »).</summary>
-    private sealed record Machine(int Item, ushort Move, string Label, bool Reusable);
+    private sealed record Machine(int Item, ushort Move, string Label, bool Reusable)
+    {
+        /// <summary>CT à usage unique, soumise au seuil <see cref="LimitedMachineThreshold"/> ; jamais les DT d'Épée/Bouclier.</summary>
+        public bool Limited => !Reusable && Label.StartsWith("CT", StringComparison.Ordinal);
+    }
 
     /// <summary>CT et DT d'un jeu (jamais ses CS), par objet et par capacité.</summary>
     private sealed class Machines(IReadOnlyList<Machine> machines)

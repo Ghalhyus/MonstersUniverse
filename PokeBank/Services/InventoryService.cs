@@ -24,9 +24,11 @@ public sealed record ItemStack(int ItemId, ItemCategory Category, string Name, s
 /// <param name="Items">Objets, Pokéballs, médicaments, baies, CT et DT de son sac (jamais les objets rares ni les CS).</param>
 /// <param name="Capacity">Quantité maximale de chaque objet que son sac accepte ; absent si son jeu ne le connaît pas (dépôt).</param>
 /// <param name="MachineLabels">Numéro dans son jeu de la CT ou de la DT de chaque capacité (« CT26 »), par clé.</param>
+/// <param name="LockedMachines">CT cachées de cette sauvegarde, ni retirées ni déposées (<see cref="SaveBag.LockedMachines"/>).</param>
 public sealed record ItemSource(
     int SaveId, string Label, string TrainerId, string GameName, string? Unsupported,
-    IReadOnlyList<ItemStack> Items, IReadOnlyDictionary<int, int> Capacity, IReadOnlyDictionary<int, string> MachineLabels)
+    IReadOnlyList<ItemStack> Items, IReadOnlyDictionary<int, int> Capacity, IReadOnlyDictionary<int, string> MachineLabels,
+    IReadOnlySet<int> LockedMachines)
 {
     public int Total(ItemCategory category) => Items.Where(i => i.Category == category).Sum(i => i.Count);
     public int CountOf(int itemId) => Items.FirstOrDefault(i => i.ItemId == itemId)?.Count ?? 0;
@@ -221,9 +223,9 @@ public sealed class InventoryService(
         {
             var label = $"{s.GameName} — {s.TrainerName}";
             if (!StoredSaveService.TryRead(s.Data, s.FileName, out var sav))
-                return new ItemSource(s.Id, label, s.TrainerId, s.GameName, "Sauvegarde illisible.", [], new Dictionary<int, int>(), new Dictionary<int, string>());
+                return new ItemSource(s.Id, label, s.TrainerId, s.GameName, "Sauvegarde illisible.", [], new Dictionary<int, int>(), new Dictionary<int, string>(), new HashSet<int>());
             var items = Ordered(SaveBag.ReadItems(sav)).Select(i => Stack(i.Key, i.Value)).ToList();
-            return new ItemSource(s.Id, label, s.TrainerId, s.GameName, SaveBag.Unsupported(sav), items, SaveBag.Capacity(sav), SaveBag.MachineLabels(sav));
+            return new ItemSource(s.Id, label, s.TrainerId, s.GameName, SaveBag.Unsupported(sav), items, SaveBag.Capacity(sav), SaveBag.MachineLabels(sav), SaveBag.LockedMachines(sav));
         }).ToList();
     }
 

@@ -104,6 +104,11 @@ les objets déplacés (« 10 × Poké Ball, 6 × Potion, 1 × Super Bonbon »). 
   l'Ultra Ball des Ultra-Chimères dans Noir 2) est refusé, comme ce qui dépasse le maximum du sac (999 par objet en 4e et
   5e génération, 99 dans les poches de la 3e et pour les CT de la 4e). Une CT réutilisable (5e à 7e génération,
   Let's Go, CT d'Épée/Bouclier, Légendes Z-A) est limitée à 1 par sac ; la retirer l'enlève du jeu.
+- **CT à usage unique** (3e et 4e génération, Diamant Étincelant/Perle Scintillante, Écarlate/Violet ; pas les DT
+  d'Épée/Bouclier) : dès qu'une sauvegarde a **80 exemplaires ou plus** d'une même CT, cette CT y est cachée (sac de la
+  sauvegarde, « Tout », détail d'un objet) et ne peut ni en être retirée ni y être déposée. Seule cette CT de cette
+  sauvegarde est concernée : les autres CT du sac, et la même CT dans une autre sauvegarde, restent normales. Un dépôt ne
+  peut pas l'amener à 80 (79 au plus). Le stockage interne n'a pas de limite. Seuil : `SaveBag.LimitedMachineThreshold`.
 
 Après un retrait (argent ou objets) ou un dépôt, le jeu du joueur n'a pas ces changements : la sauvegarde est donc marquée
 « modifiée sur le serveur ». Sa mise à jour est bloquée tant qu'elle n'a pas été téléchargée (bouton « Télécharger » de

@@ -12,3 +12,6 @@ PokeBank/Data/backups/
 # Déploiement : réglages du serveur (code d'invitation) et clés de connexion locales
 .env
 PokeBank/Data/keys/
+
+# Archives des données du serveur rapatriées sur le PC (comptes et Pokémon de tout le monde)
+/Backups/

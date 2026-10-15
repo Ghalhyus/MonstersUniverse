@@ -481,7 +481,7 @@ public sealed class InventoryServiceTests : IDisposable
     {
         Assert.True((await _saves.AddAsync("sacha", "platine.sav", SaveSessionTests.CreatePlatinumSave())).Ok);
         var platine = (await _saves.ListAsync("sacha")).Single().Id;
-        Assert.Equal(99, (await _inventory.ListItemSourcesAsync("sacha")).Single().Capacity[ToxicTM]); // CT à usage unique en 4e génération
+        Assert.Equal(79, (await _inventory.ListItemSourcesAsync("sacha")).Single().Capacity[ToxicTM]); // CT à usage unique en 4e génération : sous le seuil de 80
         Assert.True((await _inventory.WithdrawItemsAsync("sacha", platine, new Dictionary<int, int> { [ToxicTM] = 3 })).Ok);
 
         var b2 = await Store();
@@ -547,12 +547,83 @@ public sealed class InventoryServiceTests : IDisposable
     public void SaveBag_ConvertsMachinesForThirdGenerationGames()
     {
         var sav = new SAV3E();
-        Assert.Equal(99, SaveBag.Capacity(sav)[EarthquakeTM]);
+        Assert.Equal(79, SaveBag.Capacity(sav)[EarthquakeTM]); // à usage unique : sous le seuil de 80
         Assert.Null(SaveBag.Deposit(sav, new Dictionary<int, int> { [EarthquakeTM] = 2, [FocusPunchTM] = 1 }, i => $"{i}", "Émeraude"));
         Assert.Contains(sav.Inventory.SelectMany(p => p.Items), s => s.Index == 314 && s.Count == 2); // CT26 en numérotation de la 3e génération
         Assert.Equal(new Dictionary<int, int> { [EarthquakeTM] = 2, [FocusPunchTM] = 1 }, SaveBag.ReadItems(sav));
         Assert.Null(SaveBag.Withdraw(sav, new Dictionary<int, int> { [EarthquakeTM] = 2 }, i => $"{i}"));
         Assert.Equal(new Dictionary<int, int> { [FocusPunchTM] = 1 }, SaveBag.ReadItems(sav));
+    }
+
+    [Fact]
+    public void SaveBag_SingleUseMachines_From80Copies_AreHiddenAndLocked()
+    {
+        var sav = new SAV3E();
+        var refused = SaveBag.Deposit(sav, new Dictionary<int, int> { [EarthquakeTM] = 80 }, i => $"{i}", "Émeraude");
+        Assert.Contains("limitée à 79 par sauvegarde", refused);
+        Assert.Null(SaveBag.Deposit(sav, new Dictionary<int, int> { [EarthquakeTM] = 79, [FocusPunchTM] = 1 }, i => $"{i}", "Émeraude"));
+        Assert.NotNull(SaveBag.Deposit(sav, new Dictionary<int, int> { [EarthquakeTM] = 1 }, i => $"{i}", "Émeraude")); // jamais jusqu'à 80
+        Assert.Empty(SaveBag.LockedMachines(sav));
+
+        // 80 exemplaires (venus du jeu) : la CT Séisme est cachée et bloquée dans ce sac, Mitra-Poing ne l'est pas.
+        SaveSessionTests.GiveItems(sav, (314, 1)); // CT26 en numérotation de la 3e génération
+        Assert.Equal([EarthquakeTM], SaveBag.LockedMachines(sav));
+        Assert.Equal(new Dictionary<int, int> { [FocusPunchTM] = 1 }, SaveBag.ReadItems(sav));
+        Assert.NotNull(SaveBag.Withdraw(sav, new Dictionary<int, int> { [EarthquakeTM] = 1 }, i => $"{i}"));
+        Assert.Equal(SaveBag.LockedMessage("Séisme"), SaveBag.Deposit(sav, new Dictionary<int, int> { [EarthquakeTM] = 1 }, _ => "Séisme", "Émeraude"));
+        Assert.Null(SaveBag.Withdraw(sav, new Dictionary<int, int> { [FocusPunchTM] = 1 }, i => $"{i}"));
+        Assert.Contains(sav.Inventory.SelectMany(p => p.Items), s => s.Index == 314 && s.Count == 80); // jamais touchée
+    }
+
+    [Fact]
+    public void SaveBag_ThresholdOnlyConcernsSingleUseMachines()
+    {
+        Assert.Equal(79, SaveBag.Capacity(new SAV9SV())[EarthquakeTM]); // CT149 d'Écarlate/Violet : à usage unique
+        Assert.Equal(79, SaveBag.Capacity(new SAV8BS())[EarthquakeTM]); // CT26 de Diamant Étincelant : à usage unique
+        Assert.Equal(1, SaveBag.Capacity(new SAV7SM())[EarthquakeTM]); // réutilisable
+
+        // DT d'Épée/Bouclier : à usage unique, mais sans seuil.
+        var sav = new SAV8SWSH();
+        Assert.Null(SaveBag.Deposit(sav, new Dictionary<int, int> { [EarthquakeTM] = 500 }, i => $"{i}", "Épée"));
+        Assert.Empty(SaveBag.LockedMachines(sav));
+        Assert.Equal(new Dictionary<int, int> { [EarthquakeTM] = 500 }, SaveBag.ReadItems(sav));
+    }
+
+    [Fact]
+    public async Task SingleUseMachines_From80Copies_AreLockedForThatSaveOnly()
+    {
+        // Deux parties de Platine : Lucas a 85 CT26 Séisme (1 + 84), Aurore 10 (1 + 9).
+        static byte[] Platinum(string ot, int extraEarthquakes)
+        {
+            Assert.True(SaveUtil.TryGetSaveFile(SaveSessionTests.CreatePlatinumSave(), out var sav, "platine.sav"));
+            sav!.OT = ot;
+            SaveSessionTests.GiveItems(sav, (TM26, extraEarthquakes));
+            return sav.Write().ToArray();
+        }
+        Assert.True((await _saves.AddAsync("sacha", "lucas.sav", Platinum("Lucas", 84))).Ok);
+        Assert.True((await _saves.AddAsync("sacha", "aurore.sav", Platinum("Aurore", 9))).Ok);
+        var saves = await _saves.ListAsync("sacha");
+        var lucas = saves.Single(s => s.TrainerName == "Lucas").Id;
+        var aurore = saves.Single(s => s.TrainerName == "Aurore").Id;
+
+        var sources = await _inventory.ListItemSourcesAsync("sacha");
+        var lucasSource = sources.Single(s => s.SaveId == lucas);
+        Assert.Equal(0, lucasSource.CountOf(EarthquakeTM)); // cachée (et donc absente de « Tout »)
+        Assert.Equal([EarthquakeTM], lucasSource.LockedMachines);
+        Assert.Equal(3, lucasSource.CountOf(ToxicTM)); // les autres CT de la sauvegarde restent
+        Assert.Equal(10, sources.Single(s => s.SaveId == aurore).CountOf(EarthquakeTM));
+
+        Assert.False((await _inventory.WithdrawItemsAsync("sacha", lucas, new Dictionary<int, int> { [EarthquakeTM] = 1 })).Ok);
+        Assert.True((await _inventory.WithdrawItemsAsync("sacha", lucas, new Dictionary<int, int> { [ToxicTM] = 3 })).Ok);
+        Assert.True((await _inventory.WithdrawItemsAsync("sacha", aurore, new Dictionary<int, int> { [EarthquakeTM] = 10 })).Ok);
+
+        var refused = await _inventory.DepositItemsAsync("sacha", lucas, new Dictionary<int, int> { [EarthquakeTM] = 1 });
+        Assert.False(refused.Ok);
+        Assert.Contains("au moins 80", refused.Message);
+        Assert.Equal(new Dictionary<int, int> { [EarthquakeTM] = 10, [ToxicTM] = 3 }, await InventoryItems());
+        using var db = _db.NewContext();
+        Assert.True(SaveUtil.TryGetSaveFile((await db.StoredSaves.SingleAsync(s => s.Id == lucas)).Data, out var stored, "lucas.sav"));
+        Assert.Contains(stored!.Inventory.SelectMany(p => p.Items), s => s.Index == TM26 && s.Count == 85); // jamais touchée
     }
 
     // ---------- Baies ----------
