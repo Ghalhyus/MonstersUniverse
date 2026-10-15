@@ -202,7 +202,8 @@ public class SaveSessionTests
     /// Sauvegarde Platine avec <paramref name="count"/> Pokémon d'espèces différentes dans les boîtes, à partir de Tortipouss
     /// (n° 387). Chacun vient d'une vraie rencontre de Platine générée par PKHeX (sauvage, don, échange) : ils sont donc
     /// légaux. Les espèces qu'on ne rencontre pas directement dans Platine (Boskara, qui s'obtient par évolution...) sont sautées.
-    /// 50 000 ₽, des Pokéballs et des médicaments (<see cref="PlatinumSampleItems"/>) dans le sac, pour essayer l'inventaire.
+    /// 50 000 ₽, des Pokéballs, des médicaments (<see cref="PlatinumSampleItems"/>), des CT et des CS (<see cref="PlatinumSampleMachines"/>)
+    /// dans le sac, pour essayer l'inventaire.
     /// </summary>
     internal static byte[] CreatePlatinumSave(int count = 50)
     {
@@ -248,6 +249,7 @@ public class SaveSessionTests
             placed++;
         }
         GiveItems(sav, PlatinumSampleItems);
+        GiveItems(sav, PlatinumSampleMachines);
 
         // PKHeX n'écrit que la copie active : la seconde copie reçoit les mêmes blocs, pour que le jeu trouve les deux à jour.
         var data = sav.Write().ToArray();
@@ -261,6 +263,21 @@ public class SaveSessionTests
     /// </summary>
     internal static readonly (int Item, int Count)[] PlatinumSampleItems =
         [(4, 30), (3, 15), (2, 8), (1, 1), (11, 5), (12, 3), (17, 10), (26, 5), (27, 2), (28, 3), (38, 4), (50, 2)];
+
+    /// <summary>
+    /// CT et CS de la sauvegarde Platine : 2 CT01 Mitra-Poing, 3 CT06 Toxik, 1 CT24 Tonnerre, 1 CT26 Séisme ; CS01 Coupe et
+    /// CS03 Surf, que le site ne doit ni montrer ni toucher.
+    /// </summary>
+    internal static readonly (int Item, int Count)[] PlatinumSampleMachines = [(328, 2), (333, 3), (351, 1), (353, 1), (420, 1), (422, 1)];
+
+    /// <summary>CT de <see cref="PlatinumSampleMachines"/> telles que le site les range : par capacité (sans les CS).</summary>
+    internal static readonly Dictionary<int, int> PlatinumSampleMoves = new()
+    {
+        [SaveBag.MachineKey(264)] = 2, // Mitra-Poing
+        [SaveBag.MachineKey(92)] = 3,  // Toxik
+        [SaveBag.MachineKey(85)] = 1,  // Tonnerre
+        [SaveBag.MachineKey(89)] = 1,  // Séisme
+    };
 
     /// <summary>
     /// Ajoute des objets dans le sac, dans la poche où le jeu les range (« Balls » ou « Médicaments » en 4e génération, Balls
@@ -294,7 +311,7 @@ public class SaveSessionTests
         Assert.IsType<SAV4Pt>(sav);
         Assert.True(sav.ChecksumsValid, sav.ChecksumInfo);
         Assert.Equal(50_000u, sav.Money);
-        Assert.Equal(PlatinumSampleItems.ToDictionary(b => b.Item, b => b.Count), SaveBag.ReadItems(sav));
+        Assert.Equal(PlatinumSampleItems.ToDictionary(b => b.Item, b => b.Count).Concat(PlatinumSampleMoves).ToDictionary(), SaveBag.ReadItems(sav));
         Assert.True(new SaveSession().TryLoad(CreatePlatinumSave(), "platine.sav", out var error), error);
         var pokemon = StoredSaveService.ReadAllPokemon(sav).Select(p => p.Pokemon).ToList();
         Assert.Equal(50, pokemon.Count);

@@ -436,6 +436,124 @@ public sealed class InventoryServiceTests : IDisposable
         Assert.Equal(new Dictionary<int, int> { [PokeBall] = 3 }, SaveBag.ReadItems(sav));
     }
 
+    // ---------- CT et DT ----------
+
+    private const ushort MegaPunch = 5, Cut = 15, Surf = 57, Earthquake = 89, Toxic = 92, RockSmash = 249, FocusPunch = 264, HoneClaws = 468;
+    private static readonly int EarthquakeTM = SaveBag.MachineKey(Earthquake), ToxicTM = SaveBag.MachineKey(Toxic),
+        FocusPunchTM = SaveBag.MachineKey(FocusPunch);
+    private const int TM01 = 328, TM26 = 353, TM94 = 619, HM01 = 420, HM03 = 422;
+
+    [Fact]
+    public async Task Machines_AreStoredByMove_AndGoBackAsTheMachineOfTheTargetGame()
+    {
+        Assert.True((await _saves.AddAsync("sacha", "platine.sav", SaveSessionTests.CreatePlatinumSave())).Ok);
+        var platine = (await _saves.ListAsync("sacha")).Single().Id;
+        var source = (await _inventory.ListItemSourcesAsync("sacha")).Single();
+        Assert.Equal(7, source.Total(ItemCategory.Machines)); // les CS n'apparaissent pas
+        Assert.Equal(("CT26", "CT01"), (source.MachineLabels[EarthquakeTM], source.MachineLabels[FocusPunchTM]));
+
+        var result = await _inventory.WithdrawItemsAsync("sacha", platine,
+            new Dictionary<int, int> { [EarthquakeTM] = 1, [FocusPunchTM] = 2, [ToxicTM] = 3, [PokeBall] = 1 });
+        Assert.True(result.Ok, result.Message);
+        var items = await _inventory.GetItemsAsync("sacha");
+        Assert.Equal([(PokeBall, "Poké Ball"), (FocusPunchTM, "Mitra-Poing"), (EarthquakeTM, "Séisme"), (ToxicTM, "Toxik")],
+            items.Select(i => (i.ItemId, i.Name))); // Pokéballs, puis CT dans l'ordre alphabétique des capacités
+        Assert.All(items.Skip(1), i => Assert.Equal(ItemCategory.Machines, i.Category));
+        Assert.EndsWith("/tm-ground.png", items.Single(i => i.ItemId == EarthquakeTM).SpriteUrl);
+        Assert.Equal("1 × Poké Ball, 2 × CT/DT Mitra-Poing, 1 × CT/DT Séisme, 3 × CT/DT Toxik",
+            (await _inventory.ListOperationsAsync("sacha")).Single().Details);
+
+        // Noir 2 : Séisme y est aussi la CT26 ; Mitra-Poing n'y est apprise par aucune CT.
+        var b2 = await Store(items: [(TM01, 1)]); // CT01 de Noir 2 : Affûtage
+        Assert.Equal(new Dictionary<int, int> { [SaveBag.MachineKey(HoneClaws)] = 1 }, await StoredItems(b2));
+        Assert.True((await _inventory.DepositItemsAsync("sacha", b2, new Dictionary<int, int> { [EarthquakeTM] = 1 })).Ok);
+        Assert.Equal(new Dictionary<int, int> { [SaveBag.MachineKey(HoneClaws)] = 1, [EarthquakeTM] = 1 }, await StoredItems(b2));
+
+        var refused = await _inventory.DepositItemsAsync("sacha", b2, new Dictionary<int, int> { [FocusPunchTM] = 1 });
+        Assert.False(refused.Ok);
+        Assert.Contains("aucune CT ni DT", refused.Message);
+        Assert.False((await _inventory.ListItemSourcesAsync("sacha")).Single(s => s.SaveId == b2).Capacity.ContainsKey(FocusPunchTM));
+    }
+
+    [Fact]
+    public async Task ReusableMachines_AreLimitedToOnePerBag()
+    {
+        Assert.True((await _saves.AddAsync("sacha", "platine.sav", SaveSessionTests.CreatePlatinumSave())).Ok);
+        var platine = (await _saves.ListAsync("sacha")).Single().Id;
+        Assert.Equal(99, (await _inventory.ListItemSourcesAsync("sacha")).Single().Capacity[ToxicTM]); // CT à usage unique en 4e génération
+        Assert.True((await _inventory.WithdrawItemsAsync("sacha", platine, new Dictionary<int, int> { [ToxicTM] = 3 })).Ok);
+
+        var b2 = await Store();
+        Assert.Equal(1, (await _inventory.ListItemSourcesAsync("sacha")).Single(s => s.SaveId == b2).Capacity[ToxicTM]); // réutilisable en 5e
+        var refused = await _inventory.DepositItemsAsync("sacha", b2, new Dictionary<int, int> { [ToxicTM] = 2 });
+        Assert.False(refused.Ok);
+        Assert.Contains("1 au plus", refused.Message);
+        Assert.True((await _inventory.DepositItemsAsync("sacha", b2, new Dictionary<int, int> { [ToxicTM] = 1 })).Ok);
+        Assert.False((await _inventory.DepositItemsAsync("sacha", b2, new Dictionary<int, int> { [ToxicTM] = 1 })).Ok); // déjà dans le sac
+        Assert.Equal(new Dictionary<int, int> { [ToxicTM] = 2 }, await InventoryItems());
+    }
+
+    [Fact]
+    public void SaveBag_NeverTouchesHiddenMachines()
+    {
+        Assert.True(SaveUtil.TryGetSaveFile(SaveSessionTests.CreatePlatinumSave(), out var sav, "platine.sav"));
+        Assert.DoesNotContain(SaveBag.MachineKey(Cut), SaveBag.ReadItems(sav!).Keys);
+        Assert.DoesNotContain(SaveBag.MachineKey(Surf), SaveBag.Capacity(sav!).Keys); // Surf n'est qu'une CS dans Platine
+
+        // Toutes les CT retirées : les CS restent, sans trou dans la poche.
+        Assert.Null(SaveBag.Withdraw(sav!, SaveSessionTests.PlatinumSampleMoves, i => $"{i}"));
+        var pouch = sav!.Inventory.Single(p => p.Type == InventoryType.TMHMs);
+        Assert.Equal([(HM01, 1), (HM03, 1), (0, 0)], pouch.Items.Take(3).Select(s => ((int)s.Index, s.Count)));
+        Assert.NotNull(SaveBag.Deposit(sav, new Dictionary<int, int> { [SaveBag.MachineKey(Surf)] = 1 }, i => $"{i}", "Platine"));
+
+        // Éclate-Roc : CT94 de Noir 2 que l'on peut retirer, mais seulement une CS dans Platine.
+        var b2 = new SAV5B2W2();
+        SaveSessionTests.GiveItems(b2, (TM94, 1));
+        Assert.Equal(new Dictionary<int, int> { [SaveBag.MachineKey(RockSmash)] = 1 }, SaveBag.ReadItems(b2));
+        Assert.False(SaveBag.Capacity(sav).ContainsKey(SaveBag.MachineKey(RockSmash)));
+    }
+
+    [Fact]
+    public void SaveBag_GivesEachMoveTheMachineOfEachGame()
+    {
+        // Séisme : CT26 de la 3e à la 7e génération, DT10 dans Épée/Bouclier, CT149 dans Écarlate/Violet.
+        Assert.Equal("CT26", SaveBag.MachineLabels(new SAV3E())[EarthquakeTM]);
+        Assert.Equal("CT26", SaveBag.MachineLabels(new SAV7SM())[EarthquakeTM]);
+        Assert.Equal("DT10", SaveBag.MachineLabels(new SAV8SWSH())[EarthquakeTM]);
+        Assert.Equal("CT149", SaveBag.MachineLabels(new SAV9SV())[EarthquakeTM]);
+        // CT94 : Éclate-Roc dans X/Y, Force Cachée dans Rubis Oméga/Saphir Alpha.
+        Assert.Equal("CT94", SaveBag.MachineLabels(new SAV6XY())[SaveBag.MachineKey(RockSmash)]);
+        Assert.False(SaveBag.MachineLabels(new SAV6AO()).ContainsKey(SaveBag.MachineKey(RockSmash)));
+        // Diamant Étincelant / Perle Scintillante : Surf est une CT (CT95), pas une CS.
+        Assert.Equal("CT95", SaveBag.MachineLabels(new SAV8BS())[SaveBag.MachineKey(Surf)]);
+        Assert.Equal(229, SaveBag.MachineLabels(new SAV9SV()).Values.Distinct().Count());
+        Assert.Equal(200, SaveBag.MachineLabels(new SAV8SWSH()).Count);
+    }
+
+    [Fact]
+    public void SaveBag_SwordShield_TakesTechnicalRecords_AndReusableMachines()
+    {
+        var sav = new SAV8SWSH();
+        var capacity = SaveBag.Capacity(sav);
+        Assert.Equal(999, capacity[EarthquakeTM]); // DT : à usage unique
+        Assert.Equal(1, capacity[SaveBag.MachineKey(MegaPunch)]); // Ultimapoing : CT00, réutilisable
+        Assert.Null(SaveBag.Deposit(sav, new Dictionary<int, int> { [EarthquakeTM] = 3 }, i => $"{i}", "Épée"));
+        Assert.Equal(new Dictionary<int, int> { [EarthquakeTM] = 3 }, SaveBag.ReadItems(sav));
+        Assert.Contains(sav.Inventory.SelectMany(p => p.Items), s => s.Index == 1140 && s.Count == 3); // objet DT10
+    }
+
+    [Fact]
+    public void SaveBag_ConvertsMachinesForThirdGenerationGames()
+    {
+        var sav = new SAV3E();
+        Assert.Equal(99, SaveBag.Capacity(sav)[EarthquakeTM]);
+        Assert.Null(SaveBag.Deposit(sav, new Dictionary<int, int> { [EarthquakeTM] = 2, [FocusPunchTM] = 1 }, i => $"{i}", "Émeraude"));
+        Assert.Contains(sav.Inventory.SelectMany(p => p.Items), s => s.Index == 314 && s.Count == 2); // CT26 en numérotation de la 3e génération
+        Assert.Equal(new Dictionary<int, int> { [EarthquakeTM] = 2, [FocusPunchTM] = 1 }, SaveBag.ReadItems(sav));
+        Assert.Null(SaveBag.Withdraw(sav, new Dictionary<int, int> { [EarthquakeTM] = 2 }, i => $"{i}"));
+        Assert.Equal(new Dictionary<int, int> { [FocusPunchTM] = 1 }, SaveBag.ReadItems(sav));
+    }
+
     [Fact]
     public void Money_IsFormattedTheFrenchWay()
     {

@@ -1,7 +1,7 @@
 @using PokeBank.Services
 @inject InventoryService InventoryStore
 
-@* Fenêtre de transfert d'objets (Pokéballs, médicaments) entre l'inventaire et le sac d'une sauvegarde stockée, dans un sens
+@* Fenêtre de transfert d'objets (Pokéballs, médicaments, CT et DT) entre l'inventaire et le sac d'une sauvegarde stockée, dans un sens
    ou dans l'autre : sauvegarde → quantité de chaque objet, un onglet par catégorie → confirmation. Une seule opération pour toutes les
    catégories ; seule la copie du serveur est modifiée. *@
 
@@ -88,7 +88,7 @@
                                 <tr>
                                     <td>
                                         <img src="@r.SpriteUrl" alt="" width="24" height="24" class="item-sprite" />
-                                        @r.Name
+                                        @DisplayName(r)
                                         @if (Deposit && RowProblem(r) is { } problem)
                                         {
                                             <div class="small text-muted">@problem</div>
@@ -128,7 +128,7 @@
                         var inStock = Stock.FirstOrDefault(s => s.ItemId == r.ItemId)?.Count ?? 0;
                         var n = Wanted(r);
                         <li>
-                            <strong>@n × @r.Name</strong> —
+                            <strong>@n × @DisplayName(r)</strong> —
                             sac : @inSave → @(Deposit ? inSave + n : inSave - n),
                             inventaire : @inStock → @(Deposit ? inStock - n : inStock + n)
                         </li>
@@ -183,16 +183,22 @@
 
     protected override async Task OnInitializedAsync() => sources = await InventoryStore.ListItemSourcesAsync(UserId);
 
-    /// <summary>« 62 Pokéballs · 12 médicaments dans le sac ».</summary>
+    /// <summary>« 62 Pokéballs · 12 médicaments · 5 CT/DT dans le sac ».</summary>
     private static string BagSummary(ItemSource source)
     {
         if (source.Items.Count == 0)
             return "sac vide";
         var balls = source.Total(ItemCategory.Balls);
         var medicine = source.Total(ItemCategory.Medicine);
+        var machines = source.Total(ItemCategory.Machines);
         return $"{CollectionCapacity.FormatCount(balls)} Pokéball{(balls > 1 ? "s" : "")} · " +
-               $"{CollectionCapacity.FormatCount(medicine)} médicament{(medicine > 1 ? "s" : "")} dans le sac";
+               $"{CollectionCapacity.FormatCount(medicine)} médicament{(medicine > 1 ? "s" : "")} · " +
+               $"{CollectionCapacity.FormatCount(machines)} CT/DT dans le sac";
     }
+
+    /// <summary>Nom d'une ligne ; une CT ou une DT porte son numéro dans le jeu de la sauvegarde choisie (« CT26 Séisme »).</summary>
+    private string DisplayName(ItemStack item) =>
+        chosen is not null && chosen.MachineLabels.TryGetValue(item.ItemId, out var label) ? $"{label} {item.Name}" : item.Name;
 
     private void ChooseSave(ItemSource source)
     {
@@ -209,9 +215,10 @@
         : RowProblem(item) is not null ? 0
         : Math.Min(item.Count, chosen!.Capacity[item.ItemId] - chosen.CountOf(item.ItemId));
 
-    /// <summary>Dépôt impossible pour cet objet : inconnu du jeu ou sac plein.</summary>
+    /// <summary>Dépôt impossible pour cet objet : inconnu du jeu (une capacité qu'il n'apprend que par une CS aussi) ou sac plein.</summary>
     private string? RowProblem(ItemStack item) =>
-        !chosen!.Capacity.TryGetValue(item.ItemId, out var capacity) ? $"n'existe pas dans {chosen.GameName}"
+        !chosen!.Capacity.TryGetValue(item.ItemId, out var capacity)
+            ? item.Category == ItemCategory.Machines ? $"aucune CT ni DT pour cette capacité dans {chosen.GameName}" : $"n'existe pas dans {chosen.GameName}"
         : chosen.CountOf(item.ItemId) >= capacity ? $"sac plein ({capacity} au maximum)"
         : null;
 

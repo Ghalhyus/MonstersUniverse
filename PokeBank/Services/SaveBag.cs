@@ -3,14 +3,21 @@ using PKHeX.Core;
 namespace PokeBank.Services;
 
 /// <summary>Catégories d'objets du sac que le site sait transférer.</summary>
-public enum ItemCategory { Balls, Medicine }
+public enum ItemCategory { Balls, Medicine, Machines }
 
 /// <summary>
-/// Objets du sac d'une sauvegarde (Pokéballs et médicaments), lus et modifiés en mémoire avec PKHeX (le fichier s'écrit
-/// ensuite avec <see cref="SaveFile.Write"/>). Les objets sont repérés par leur numéro PKHeX de 4e génération et suivantes,
-/// le même d'un jeu à l'autre (une Super Ball retirée de Platine peut être déposée dans Noir 2) ; les jeux de 3e génération,
-/// qui numérotent leurs objets autrement, sont convertis. Ils sont cherchés dans toutes les poches du sac : les Balls ont leur
-/// poche en 4e génération mais sont rangées avec les objets dans Noir 2, les médicaments sont avec les objets en 3e génération.
+/// Objets du sac d'une sauvegarde (Pokéballs, médicaments, CT et DT), lus et modifiés en mémoire avec PKHeX (le fichier s'écrit
+/// ensuite avec <see cref="SaveFile.Write"/>). Chaque objet est repéré par une clé, la même d'un jeu à l'autre :
+/// <list type="bullet">
+/// <item>Pokéballs et médicaments : leur numéro PKHeX de 4e génération et suivantes (une Super Ball retirée de Platine peut être
+/// déposée dans Noir 2) ; les jeux de 3e génération, qui numérotent leurs objets autrement, sont convertis ;</item>
+/// <item>CT et DT : la capacité qu'elles apprennent (<see cref="MachineKey"/>), car un même numéro de CT n'apprend pas la même
+/// capacité d'une génération à l'autre (CT01 : Mitra-Poing en Platine, Affûtage en Noir 2). Une CT Séisme retirée de Platine
+/// redevient la CT ou la DT qui apprend Séisme dans le jeu où elle est déposée. Les CS ne sont jamais lues ni modifiées : les
+/// retirer pourrait bloquer la progression du joueur.</item>
+/// </list>
+/// Les objets sont cherchés dans toutes les poches du sac : les Balls ont leur poche en 4e génération mais sont rangées avec les
+/// objets dans Noir 2, les médicaments sont avec les objets en 3e génération.
 /// </summary>
 public static class SaveBag
 {
@@ -31,25 +38,41 @@ public static class SaveBag
     public static readonly IReadOnlySet<int> MedicineItems = new HashSet<int>(
         [.. Enumerable.Range(17, 38), 65, 66, 67, 134, 504, .. Enumerable.Range(565, 7), 591, 645, 708, 709, 852, 903, 1579]);
 
-    /// <summary>Catégorie d'un objet (numéro de 4e génération et suivantes), null si le site ne le transfère pas.</summary>
-    public static ItemCategory? CategoryOf(int item) =>
-        BallItems.Contains(item) ? ItemCategory.Balls
-        : MedicineItems.Contains(item) ? ItemCategory.Medicine
+    /// <summary>Début des clés des CT et DT : <c>MachineKeyBase + numéro de la capacité</c>, au-delà de tout numéro d'objet.</summary>
+    public const int MachineKeyBase = 100_000;
+
+    /// <summary>Clé d'une CT ou d'une DT : la capacité qu'elle apprend.</summary>
+    public static int MachineKey(ushort move) => MachineKeyBase + move;
+
+    /// <summary>Capacité apprise par une clé de CT ou de DT ; null pour une autre clé.</summary>
+    public static ushort? MoveOf(int key) =>
+        key > MachineKeyBase && key - MachineKeyBase <= ushort.MaxValue ? (ushort)(key - MachineKeyBase) : null;
+
+    /// <summary>Catégorie d'une clé d'objet (voir <see cref="SaveBag"/>), null si le site ne la transfère pas.</summary>
+    public static ItemCategory? CategoryOf(int key) =>
+        BallItems.Contains(key) ? ItemCategory.Balls
+        : MedicineItems.Contains(key) ? ItemCategory.Medicine
+        : MoveOf(key) is not null ? ItemCategory.Machines
         : null;
 
     /// <summary>Pourquoi le sac de cette sauvegarde n'est pas pris en charge ; null s'il l'est.</summary>
     public static string? Unsupported(SaveFile sav) =>
         sav.Generation < 3 ? "Les sacs des jeux de 1re et 2e génération ne sont pas pris en charge."
-        : Capacity(sav).Count == 0 ? "Le sac de ce jeu ne peut contenir aucune Pokéball ni aucun médicament."
+        : Capacity(sav).Count == 0 ? "Le sac de ce jeu ne peut contenir aucune Pokéball, aucun médicament ni aucune CT."
         : null;
 
-    /// <summary>Pokéballs et médicaments du sac, et leur quantité (additionnée si un objet occupe plusieurs emplacements).</summary>
+    /// <summary>
+    /// Objets transférables du sac (Pokéballs, médicaments, CT et DT, jamais les CS) par clé, et leur quantité (additionnée si
+    /// un objet occupe plusieurs emplacements).
+    /// </summary>
     public static Dictionary<int, int> ReadItems(SaveFile sav) =>
         sav.Generation < 3 ? [] : Count(sav, Bag(sav.Inventory));
 
     /// <summary>
-    /// Quantité maximale de chaque objet que le sac peut contenir (999 en 4e et 5e génération, 99 dans la poche Objets de la 3e) ;
-    /// un objet que le jeu ne connaît pas est absent (les Balls Noigrume de HGSS n'existent pas dans Platine...).
+    /// Quantité maximale de chaque objet que le sac peut contenir, par clé : 999 en 4e et 5e génération, 99 dans la poche Objets
+    /// de la 3e, et 1 pour une CT réutilisable (5e à 7e génération, Épée/Bouclier, Légendes Z-A). Un objet que le jeu ne connaît
+    /// pas est absent (les Balls Noigrume de HGSS n'existent pas dans Platine, aucune CT n'apprend Mitra-Poing dans Noir 2...),
+    /// comme une capacité que le jeu n'apprend que par une CS (Surf dans Platine).
     /// </summary>
     public static Dictionary<int, int> Capacity(SaveFile sav)
     {
@@ -62,8 +85,17 @@ public static class SaveBag
             if (PouchFor(sav, bag, item) is { } pouch)
                 capacity[item] = pouch.MaxCount;
         }
+        foreach (var machine in MachinesOf(sav).ByMove.Values)
+        {
+            if (PouchFor(sav, bag, machine.Item) is { } pouch)
+                capacity[MachineKey(machine.Move)] = machine.Reusable ? 1 : pouch.MaxCount;
+        }
         return capacity;
     }
+
+    /// <summary>Numéro dans le jeu de la sauvegarde de la CT ou de la DT de chaque capacité (« CT26 », « DT04 »), par clé.</summary>
+    public static Dictionary<int, string> MachineLabels(SaveFile sav) =>
+        sav.Generation < 3 ? [] : MachinesOf(sav).ByMove.Values.ToDictionary(m => MachineKey(m.Move), m => m.Label);
 
     /// <summary>Retire <paramref name="quantities"/> du sac. Message d'erreur, ou null si c'est fait (sac inchangé en cas d'erreur).</summary>
     public static string? Withdraw(SaveFile sav, IReadOnlyDictionary<int, int> quantities, Func<int, string> name)
@@ -76,18 +108,19 @@ public static class SaveBag
         foreach (var (item, quantity) in quantities)
         {
             if (CategoryOf(item) is null)
-                return $"{name(item)} n'est ni une Pokéball ni un médicament.";
+                return $"{name(item)} n'est ni une Pokéball, ni un médicament, ni une CT.";
             if (quantity > have.GetValueOrDefault(item))
                 return $"Le sac ne contient que {have.GetValueOrDefault(item)} × {name(item)}.";
         }
 
+        var machines = MachinesOf(sav);
         var emptied = new HashSet<InventoryPouch>();
         foreach (var (item, quantity) in quantities)
         {
             var left = quantity;
             foreach (var pouch in bag)
             {
-                foreach (var slot in pouch.Items.Where(s => s.Count > 0 && ToNational(sav, s.Index) == item))
+                foreach (var slot in pouch.Items.Where(s => s.Count > 0 && KeyOf(sav, machines, s.Index) == item))
                 {
                     var taken = Math.Min(left, slot.Count);
                     slot.Count -= taken;
@@ -100,7 +133,7 @@ public static class SaveBag
             }
         }
         foreach (var pouch in emptied)
-            pouch.ClearCount0(); // le jeu attend des emplacements sans trou : seules les poches vidées sont tassées
+            pouch.ClearCount0(); // le jeu attend des emplacements sans trou : seules les poches vidées sont tassées (les CS restent)
         sav.Inventory = pouches;
         return null;
     }
@@ -113,21 +146,25 @@ public static class SaveBag
         var pouches = sav.Inventory;
         var bag = Bag(pouches);
         var have = Count(sav, bag);
+        var capacity = Capacity(sav);
         foreach (var (item, quantity) in quantities)
         {
             if (CategoryOf(item) is null)
-                return $"{name(item)} n'est ni une Pokéball ni un médicament.";
-            if (PouchFor(sav, bag, item) is not { } pouch)
-                return $"{name(item)} n'existe pas dans {gameName}.";
+                return $"{name(item)} n'est ni une Pokéball, ni un médicament, ni une CT.";
+            if (!capacity.TryGetValue(item, out var max))
+                return MoveOf(item) is null
+                    ? $"{name(item)} n'existe pas dans {gameName}."
+                    : $"{name(item)} : aucune CT ni DT n'apprend cette capacité dans {gameName}.";
             var current = have.GetValueOrDefault(item);
-            if (current + quantity > pouch.MaxCount)
-                return $"{name(item)} : le sac en contient déjà {current} et en accepte {pouch.MaxCount} au plus " +
-                       $"({pouch.MaxCount - current} de plus).";
+            if (current + quantity > max)
+                return $"{name(item)} : le sac en contient déjà {current} et en accepte {max} au plus ({max - current} de plus).";
         }
 
+        var machines = MachinesOf(sav);
         foreach (var (item, quantity) in quantities)
         {
-            if (PouchFor(sav, bag, item)!.GiveItem(sav, ToGame(sav, item), quantity) < 0)
+            var gameItem = MoveOf(item) is { } move ? machines.ByMove[move].Item : item;
+            if (PouchFor(sav, bag, gameItem)!.GiveItem(sav, ToGame(sav, gameItem), quantity) < 0)
                 return $"Plus de place dans le sac pour {name(item)}.";
         }
         sav.Inventory = pouches;
@@ -153,17 +190,121 @@ public static class SaveBag
     private static int ToNational(SaveFile sav, int index) =>
         sav.Generation == 3 ? ItemConverter.GetItemFuture3((ushort)index) : index;
 
+    /// <summary>Clé d'un objet lu dans le sac (voir <see cref="SaveBag"/>), null si le site ne le transfère pas (CS comprises).</summary>
+    private static int? KeyOf(SaveFile sav, Machines machines, int index)
+    {
+        var item = ToNational(sav, index);
+        if (machines.ByItem.TryGetValue(item, out var machine))
+            return MachineKey(machine.Move);
+        return BallItems.Contains(item) || MedicineItems.Contains(item) ? item : null;
+    }
+
     private static Dictionary<int, int> Count(SaveFile sav, IEnumerable<InventoryPouch> bag)
     {
+        var machines = MachinesOf(sav);
         var counts = new Dictionary<int, int>();
         foreach (var slot in bag.SelectMany(p => p.Items))
         {
             if (slot.Index == 0 || slot.Count <= 0)
                 continue;
-            var item = ToNational(sav, slot.Index);
-            if (CategoryOf(item) is not null)
-                counts[item] = counts.GetValueOrDefault(item) + slot.Count;
+            if (KeyOf(sav, machines, slot.Index) is { } key)
+                counts[key] = counts.GetValueOrDefault(key) + slot.Count;
         }
         return counts;
+    }
+
+    // ---------- CT et DT de chaque jeu ----------
+
+    /// <summary>CT ou DT d'un jeu : son objet (numéro de 4e génération et suivantes), la capacité apprise et son numéro (« CT26 »).</summary>
+    private sealed record Machine(int Item, ushort Move, string Label, bool Reusable);
+
+    /// <summary>CT et DT d'un jeu (jamais ses CS), par objet et par capacité.</summary>
+    private sealed class Machines(IReadOnlyList<Machine> machines)
+    {
+        public readonly Dictionary<int, Machine> ByItem = machines.ToDictionary(m => m.Item);
+        // Une seule CT par capacité dans chaque jeu ; par prudence, la première l'emporte.
+        public readonly Dictionary<ushort, Machine> ByMove = machines.GroupBy(m => m.Move).ToDictionary(g => g.Key, g => g.First());
+    }
+
+    private static readonly Machines None = new([]);
+    private static readonly Lazy<Machines> Gen3 = new(() => new(Numbered(
+        [.. ItemStorage3RS.MachineOnlyTM.ToArray().Select(i => (ushort)ItemConverter.GetItemFuture3(i))],
+        PersonalInfo3.MachineMovesTechnical, "CT", 2, reusable: false)));
+    private static readonly Lazy<Machines> Gen4 = new(() => new(Numbered(
+        ItemStorage4.Machine[..PersonalInfo4.MachineMovesTechnical.Length], PersonalInfo4.MachineMovesTechnical, "CT", 2, reusable: false)));
+    private static readonly Lazy<Machines> Gen5 = new(() => new(Numbered(
+        ItemStorage5.Machine[..95], PersonalInfo5BW.MachineMoves[..95], "CT", 2, reusable: true)));
+    private static readonly Lazy<Machines> XY = new(() => new(Numbered(
+        ItemStorage6XY.Machine[..100], LearnSource6XY.MachineMoves[..100], "CT", 2, reusable: true)));
+    private static readonly Lazy<Machines> ORAS = new(() => new(Numbered(
+        ItemStorage6AO.Machine[..100], LearnSource6AO.MachineMoves[..100], "CT", 2, reusable: true)));
+    private static readonly Lazy<Machines> SM = new(() => new(Numbered(
+        ItemStorage7SM.Machine, PersonalInfo7.MachineMoves, "CT", 2, reusable: true)));
+    private static readonly Lazy<Machines> LGPE = new(() => new(Numbered(
+        ItemStorage7GG.Machine, LearnSource7GG.MachineMoves, "CT", 2, reusable: true)));
+    // Diamant Étincelant / Perle Scintillante : les objets des CS de Platine y sont les CT93 à CT100 (Coupe, Vol, Surf...).
+    private static readonly Lazy<Machines> BDSP = new(() => new(Numbered(
+        ItemStorage8BDSP.Machine, PersonalInfo8BDSP.MachineMoves, "CT", 2, reusable: false)));
+    private static readonly Lazy<Machines> ZA = new(() => new(Numbered(
+        ItemStorage9ZA.TM, PersonalInfo9ZA.MachineMoves, "CT", 3, reusable: true)));
+    private static readonly Lazy<Machines> SWSH = new(() => new(SwordShield()));
+    private static readonly Lazy<Machines> SV = new(() => new(ScarletViolet()));
+
+    /// <summary>CT et DT du jeu de la sauvegarde.</summary>
+    private static Machines MachinesOf(SaveFile sav) => sav.Context switch
+    {
+        EntityContext.Gen3 => Gen3.Value,
+        EntityContext.Gen4 => Gen4.Value,
+        EntityContext.Gen5 => Gen5.Value,
+        EntityContext.Gen6 => sav is SAV6AO or SAV6AODemo ? ORAS.Value : XY.Value,
+        EntityContext.Gen7 => SM.Value,
+        EntityContext.Gen7b => LGPE.Value,
+        EntityContext.Gen8 => SWSH.Value,
+        EntityContext.Gen8b => BDSP.Value,
+        EntityContext.Gen9 => SV.Value,
+        EntityContext.Gen9a => ZA.Value,
+        _ => None, // Légendes Arceus n'a pas de CT
+    };
+
+    /// <summary>CT dans l'ordre de PKHeX : la n-ième (à partir de 1) apprend la n-ième capacité.</summary>
+    private static List<Machine> Numbered(ReadOnlySpan<ushort> items, ReadOnlySpan<ushort> moves, string prefix, int digits, bool reusable)
+    {
+        if (items.Length != moves.Length)
+            throw new InvalidOperationException($"PKHeX : {items.Length} CT pour {moves.Length} capacités.");
+        var machines = new List<Machine>(items.Length);
+        for (var i = 0; i < items.Length; i++)
+            machines.Add(new(items[i], moves[i], prefix + (i + 1).ToString().PadLeft(digits, '0'), reusable));
+        return machines;
+    }
+
+    /// <summary>
+    /// Épée/Bouclier : CT00 à CT99, réutilisables, et DT00 à DT99, à usage unique. PKHeX range les objets ainsi : CT01 à CT99,
+    /// DT00 à DT99, puis CT00 ; les capacités sont dans l'ordre des numéros (CT00 d'abord).
+    /// </summary>
+    private static List<Machine> SwordShield()
+    {
+        var items = ItemStorage8SWSH.MachineRecord;
+        var tm = PersonalInfo8SWSH.MachineMovesTechnical;
+        var tr = PersonalInfo8SWSH.MachineMovesRecord;
+        var machines = new List<Machine> { new(items[^1], tm[0], "CT00", true) };
+        for (var n = 1; n < tm.Length; n++)
+            machines.Add(new(items[n - 1], tm[n], $"CT{n:00}", true));
+        for (var n = 0; n < tr.Length; n++)
+            machines.Add(new(items[tm.Length - 1 + n], tr[n], $"DT{n:00}", false));
+        return machines;
+    }
+
+    /// <summary>
+    /// Écarlate/Violet : CT001 à CT229, à usage unique. Les capacités sont dans l'ordre des numéros, à partir d'une CT000 qui
+    /// n'existe pas dans le jeu ; PKHeX range les objets ainsi : CT001 à CT099, cet objet CT000 (ignoré), puis CT100 à CT229.
+    /// </summary>
+    private static List<Machine> ScarletViolet()
+    {
+        var items = ItemStorage9SV.Machine;
+        var moves = PersonalInfo9SV.MachineMoves;
+        var machines = new List<Machine>();
+        for (var n = 1; n < moves.Length; n++)
+            machines.Add(new(items[n < 100 ? n - 1 : n], moves[n], $"CT{n:000}", false));
+        return machines;
     }
 }

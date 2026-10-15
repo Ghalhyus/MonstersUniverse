@@ -24,8 +24,9 @@ dotnet test
 Pour la régénérer : `POKEBANK_SAMPLE_OUT=chemin/fichier.sav dotnet test`.
 
 `exemple-platine.sav` est une sauvegarde Platine (dresseur Lucas, 50 000 ₽) avec 50 Pokémon légaux d'espèces différentes,
-tirés des vraies rencontres du jeu, et dans le sac 62 Pokéballs (Poké, Super, Hyper, Master, Luxe et Honor Ball) et
-26 médicaments (Potion, Super Potion, Total Soin, Rappel, Huile, Super Bonbon).
+tirés des vraies rencontres du jeu, et dans le sac 62 Pokéballs (Poké, Super, Hyper, Master, Luxe et Honor Ball),
+26 médicaments (Potion, Super Potion, Total Soin, Rappel, Huile, Super Bonbon), 7 CT (2 CT01 Mitra-Poing, 3 CT06 Toxik,
+CT24 Tonnerre, CT26 Séisme) et deux CS (Coupe, Surf) que le site ne doit ni montrer ni toucher.
 
 Pour simuler « j'ai rejoué un peu » et passer la règle anti-copie de « Mes sauvegardes » (voir l'inventaire plus bas),
 `POKEBANK_ADD_PLAYTIME=chemin/fichier.sav dotnet test` ajoute une heure de jeu au fichier, modifié sur place (n'importe quel jeu). Pour la régénérer : `POKEBANK_SAMPLE_PT_OUT=chemin/fichier.sav dotnet test`.
@@ -53,20 +54,27 @@ et tous ses Pokémon (équipe, boîtes, pension, Boîte Combat…) apparaissent 
 
 ### Inventaire (Pokédollars et objets)
 
-La page « Inventaire » affiche le porte-monnaie du compte, ses objets (une carte par catégorie : Pokéballs, médicaments) et
+La page « Inventaire » affiche le porte-monnaie du compte, ses objets (une carte par catégorie : Pokéballs, médicaments, CT / DT) et
 le journal de ses opérations. « Retirer de l'argent »
 ouvre une fenêtre en trois étapes (sauvegarde stockée → montant libre → confirmation) : la somme est retirée **de la
 copie stockée sur le serveur** et créditée sur le porte-monnaie, en une seule transaction (copie avant/après dans
 `Data/backups/`). Il n'y a pas encore de transfert du porte-monnaie vers une sauvegarde.
 
-Les **objets** (Pokéballs et médicaments) vont dans les deux sens, avec la même fenêtre en trois étapes (sauvegarde
+Les **objets** (Pokéballs, médicaments, CT et DT) vont dans les deux sens, avec la même fenêtre en trois étapes (sauvegarde
 stockée → quantité de chaque objet, par catégorie → confirmation) : « Retirer d'une sauvegarde » les prend dans le sac de la
 copie stockée, « Déposer dans une sauvegarde » les y ajoute. Une même opération peut mêler les catégories ; le journal liste
 les objets déplacés (« 10 × Poké Ball, 6 × Potion, 1 × Super Bonbon »). Règles (`Services/SaveBag.cs`) :
 
 - Catégories : toutes les Pokéballs (`SaveBag.BallItems`) et tout ce que les jeux de la 4e à la 9e génération rangent dans
   leur poche Médicaments (`SaveBag.MedicineItems` : soins, statuts, Rappel, Huile/Élixir, vitamines, PP Plus/Max,
-  Super Bonbon, Plumes...).
+  Super Bonbon, Plumes...), et les CT et DT (Disques Techniques d'Épée/Bouclier), dans une même catégorie. Les **CS ne
+  sont jamais montrées ni modifiées** (les retirer pourrait bloquer la progression du joueur) : elles restent dans le sac,
+  même quand toutes les CT de la poche sont retirées.
+- Les CT et DT sont rangées **par capacité** (« Séisme »), pas par numéro : un même numéro n'apprend pas la même capacité
+  d'une génération à l'autre (CT01 : Mitra-Poing en Platine, Affûtage en Noir 2). Au dépôt, le site donne la CT ou la DT
+  qui apprend cette capacité dans le jeu choisi (Séisme : CT26 dans Platine, DT10 dans Épée/Bouclier, CT149 dans
+  Écarlate/Violet) ; si aucune ne l'apprend, ou seulement une CS (Surf dans Platine), le dépôt est refusé. Correspondances
+  numéro → capacité de chaque jeu : listes PKHeX, dans `SaveBag` (Épée/Bouclier et Écarlate/Violet ont un ordre particulier).
 - Un objet est repéré par son numéro d'objet PKHeX de 4e génération, le même d'un jeu à l'autre : une Super Ball retirée
   de Platine peut être déposée dans Noir 2. Les jeux de 3e génération numérotent leurs objets autrement (Potion = 13 au lieu
   de 17) : ils sont convertis. L'objet est cherché dans toutes les poches du sac (Balls dans la poche « Balls » en
@@ -74,7 +82,8 @@ les objets déplacés (« 10 × Poké Ball, 6 × Potion, 1 × Super Bonbon »). 
   3e génération. Les jeux de 1re et 2e génération ne sont pas pris en charge.
 - Pas de limite sur le site. Au dépôt, le jeu limite : un objet qu'il ne connaît pas (ex. la Plume Santé dans Platine,
   l'Ultra Ball des Ultra-Chimères dans Noir 2) est refusé, comme ce qui dépasse le maximum du sac (999 par objet en 4e et
-  5e génération, 99 dans la poche Objets de la 3e).
+  5e génération, 99 dans les poches de la 3e et pour les CT de la 4e). Une CT réutilisable (5e à 7e génération,
+  Let's Go, CT d'Épée/Bouclier, Légendes Z-A) est limitée à 1 par sac ; la retirer l'enlève du jeu.
 
 Après un retrait (argent ou objets) ou un dépôt, le jeu du joueur n'a pas ces changements : la sauvegarde est donc marquée
 « modifiée sur le serveur ». Sa mise à jour est bloquée tant qu'elle n'a pas été téléchargée (bouton « Télécharger » de
@@ -109,14 +118,14 @@ est incompatible (espèce, attaques ou objets inexistants dans le jeu, conversio
 | `PokeBank/Services/StoredSaveService.cs` | Stockage, mise à jour et suppression des sauvegardes stockées |
 | `PokeBank/Services/SaveIdentity.cs` | Empreinte d'une sauvegarde (unicité sur le serveur) |
 | `PokeBank/Services/InventoryService.cs` | Inventaire : retrait de Pokédollars, retrait et dépôt d'objets (sauvegardes stockées), achat d'emplacements, journal |
-| `PokeBank/Services/SaveBag.cs` | Objets du sac d'une sauvegarde (catégories Pokéballs et médicaments) : lecture, retrait, dépôt (PKHeX) |
+| `PokeBank/Services/SaveBag.cs` | Objets du sac d'une sauvegarde (Pokéballs, médicaments, CT/DT par capacité, jamais les CS) : lecture, retrait, dépôt (PKHeX) |
 | `PokeBank/Services/CollectionCapacity.cs` | Taille maximale de la collection : règles, occupation, messages |
 | `PokeBank/Components/Pages/Inventory.razor` | Page « Inventaire » (solde, objets par catégorie, journal, fenêtre de retrait d'argent) |
 | `PokeBank/Components/Shared/ItemTransferDialog.razor` | Fenêtre de retrait / dépôt d'objets (toutes catégories en une opération) |
 | `PokeBank/Data/BankPokemon.cs` | Table des Pokémon (octets bruts + métadonnées ; `StoredSaveId` si lecture seule) |
 | `PokeBank/Data/StoredSave.cs` | Table des sauvegardes stockées |
 | `PokeBank/Data/Wallet.cs` | Tables du porte-monnaie et du journal des opérations |
-| `PokeBank/Data/OwnedItem.cs` | Table des objets de l'inventaire (Pokéballs, médicaments) |
+| `PokeBank/Data/OwnedItem.cs` | Table des objets de l'inventaire (Pokéballs, médicaments ; CT/DT sous une clé de capacité, `SaveBag.MachineKey`) |
 
 Ajouter une migration après modification du modèle :
 

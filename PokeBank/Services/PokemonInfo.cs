@@ -38,18 +38,34 @@ public sealed class PokemonInfo
     public static string SpriteUrl(ushort species, bool shiny) =>
         $"https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/{(shiny ? "shiny/" : "")}{species}.png";
 
-    /// <summary>Nom français d'un objet (numéro PKHeX).</summary>
-    public string ItemName(int item) => Get(_strings.itemlist, item, $"Objet n°{item}");
+    /// <summary>Nom français d'un objet par sa clé (voir <see cref="SaveBag"/>) : « Super Ball », « CT/DT Séisme ».</summary>
+    public string ItemName(int key) =>
+        SaveBag.MoveOf(key) is { } move ? $"CT/DT {MoveName(move)}" : Get(_strings.itemlist, key, $"Objet n°{key}");
 
-    /// <summary>Image d'un objet chez PokéAPI, nommée d'après son nom anglais (« Poké Ball » → poke-ball.png).</summary>
-    public static string ItemSpriteUrl(int item)
+    /// <summary>Nom court d'un objet, sous le titre de sa catégorie : celui de la capacité pour une CT ou une DT (« Séisme »).</summary>
+    public string ShortItemName(int key) => SaveBag.MoveOf(key) is { } move ? MoveName(move) : ItemName(key);
+
+    public string MoveName(ushort move) => Get(_strings.movelist, move, $"Capacité n°{move}");
+
+    /// <summary>
+    /// Image d'un objet chez PokéAPI, nommée d'après son nom anglais (« Poké Ball » → poke-ball.png) ; pour une CT ou une DT,
+    /// la CT du type de la capacité (tm-ground.png).
+    /// </summary>
+    public static string ItemSpriteUrl(int key)
     {
-        var name = Get(EnglishItems, item, "");
+        var name = SaveBag.MoveOf(key) is { } move ? $"tm-{Get(EnglishTypes, MoveType(move), "normal")}" : Get(EnglishItems, key, "");
         var slug = name.ToLowerInvariant().Replace("é", "e").Replace(' ', '-').Replace(".", "").Replace("'", "");
         return $"https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/{slug}.png";
     }
 
+    /// <summary>Type d'une capacité dans les jeux récents (Charme est de type Fée depuis la 6e génération).</summary>
+    private static byte MoveType(ushort move) =>
+        move < MoveInfo.GetTypeTable(EntityContext.Gen9).Length ? MoveInfo.GetType(move, EntityContext.Gen9)
+        : move < MoveInfo.GetTypeTable(EntityContext.Gen9a).Length ? MoveInfo.GetType(move, EntityContext.Gen9a)
+        : (byte)0;
+
     private static readonly IReadOnlyList<string> EnglishItems = GameInfo.GetStrings("en").itemlist;
+    private static readonly IReadOnlyList<string> EnglishTypes = GameInfo.GetStrings("en").types;
 
     public static bool IsLegal(PKM pk) => new LegalityAnalysis(pk, StorageSlotType.Box).Valid;
 
