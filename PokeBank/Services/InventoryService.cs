@@ -14,14 +14,14 @@ public sealed record WithdrawResult(bool Ok, string Message, long Balance = 0);
 
 public sealed record PurchaseResult(bool Ok, string Message, int Limit = 0, long Balance = 0);
 
-/// <summary>Objet de l'inventaire ou du sac d'une sauvegarde (Pokéball, médicament, CT ou DT), prêt à afficher.</summary>
+/// <summary>Objet de l'inventaire ou du sac d'une sauvegarde (Pokéball, médicament, baie, CT ou DT), prêt à afficher.</summary>
 /// <param name="ItemId">Clé de l'objet (voir <see cref="SaveBag"/>) : pour une CT ou une DT, la capacité qu'elle apprend.</param>
 /// <param name="Name">Nom sous le titre de sa catégorie (pour une CT ou une DT, celui de la capacité).</param>
 public sealed record ItemStack(int ItemId, ItemCategory Category, string Name, string SpriteUrl, int Count);
 
 /// <summary>Sauvegarde stockée telle que proposée pour un transfert d'objets.</summary>
 /// <param name="Unsupported">Raison pour laquelle son sac n'est pas pris en charge ; null s'il l'est.</param>
-/// <param name="Items">Pokéballs, médicaments, CT et DT de son sac (jamais les CS).</param>
+/// <param name="Items">Pokéballs, médicaments, baies, CT et DT de son sac (jamais les CS).</param>
 /// <param name="Capacity">Quantité maximale de chaque objet que son sac accepte ; absent si son jeu ne le connaît pas (dépôt).</param>
 /// <param name="MachineLabels">Numéro dans son jeu de la CT ou de la DT de chaque capacité (« CT26 »), par clé.</param>
 public sealed record ItemSource(
@@ -41,13 +41,14 @@ public sealed record ItemCategories(ItemCategory Category, string Title, string 
     [
         new(ItemCategory.Balls, "Pokéballs", "Aucune Pokéball pour l'instant : retires-en du sac d'une de tes sauvegardes stockées."),
         new(ItemCategory.Medicine, "Médicaments", "Aucun médicament pour l'instant : retires-en du sac d'une de tes sauvegardes stockées."),
+        new(ItemCategory.Berries, "Baies", "Aucune baie pour l'instant : retires-en du sac d'une de tes sauvegardes stockées."),
         new(ItemCategory.Machines, "CT / DT", "Aucune CT ni DT pour l'instant : retires-en du sac d'une de tes sauvegardes stockées."),
     ];
 }
 
 /// <summary>
 /// Inventaire du site : un porte-monnaie de Pokédollars, alimenté en retirant de l'argent des sauvegardes stockées, et des
-/// objets (Pokéballs, médicaments, CT et DT rangées par capacité), retirés du sac des sauvegardes stockées ou déposés dedans. Seule la copie du serveur est
+/// objets (Pokéballs, médicaments, baies, CT et DT rangées par capacité), retirés du sac des sauvegardes stockées ou déposés dedans. Seule la copie du serveur est
 /// modifiée ; la partie est alors marquée « modifiée sur le serveur » (voir <see cref="SaveModification"/>). Chaque mouvement
 /// est inscrit dans un journal.
 /// </summary>
@@ -193,9 +194,9 @@ public sealed class InventoryService(
         return new(true, $"{FormatMoney(amount)} retirés de « {label} ». Solde : {FormatMoney(balance)}.", balance);
     }
 
-    // ---------- Objets (Pokéballs, médicaments, CT et DT) ----------
+    // ---------- Objets (Pokéballs, médicaments, baies, CT et DT) ----------
 
-    /// <summary>Objets de l'inventaire : les Pokéballs, les médicaments puis les CT et DT (voir <see cref="Ordered"/>).</summary>
+    /// <summary>Objets de l'inventaire : les Pokéballs, les médicaments, les baies puis les CT et DT (voir <see cref="Ordered"/>).</summary>
     public async Task<List<ItemStack>> GetItemsAsync(string ownerId)
     {
         await using var db = await dbFactory.CreateDbContextAsync();
@@ -206,7 +207,7 @@ public sealed class InventoryService(
         return Ordered(items.ToDictionary(i => i.ItemId, i => i.Count)).Select(i => Stack(i.Key, i.Value)).ToList();
     }
 
-    /// <summary>Sauvegardes stockées de l'utilisateur, avec les Pokéballs, médicaments, CT et DT de leur sac (lus dans le fichier).</summary>
+    /// <summary>Sauvegardes stockées de l'utilisateur, avec les Pokéballs, médicaments, baies, CT et DT de leur sac (lus dans le fichier).</summary>
     public async Task<List<ItemSource>> ListItemSourcesAsync(string ownerId)
     {
         await using var db = await dbFactory.CreateDbContextAsync();
@@ -226,7 +227,7 @@ public sealed class InventoryService(
     }
 
     /// <summary>
-    /// Retire des objets (Pokéballs, médicaments, CT et DT, mélangés si besoin) du sac de la sauvegarde stockée et les ajoute à
+    /// Retire des objets (Pokéballs, médicaments, baies, CT et DT, mélangés si besoin) du sac de la sauvegarde stockée et les ajoute à
     /// l'inventaire, en une seule opération. La partie est marquée « modifiée sur le serveur » : le jeu du joueur a toujours ces objets.
     /// </summary>
     public Task<ItemTransferResult> WithdrawItemsAsync(string ownerId, int saveId, IReadOnlyDictionary<int, int> quantities) =>
@@ -321,7 +322,7 @@ public sealed class InventoryService(
         new(item, SaveBag.CategoryOf(item) ?? ItemCategory.Balls, info.ShortItemName(item), PokemonInfo.ItemSpriteUrl(item), count);
 
     /// <summary>
-    /// Pokéballs d'abord, puis médicaments, chacun dans l'ordre des numéros d'objets, puis CT et DT dans l'ordre alphabétique
+    /// Pokéballs d'abord, puis médicaments et baies, chacun dans l'ordre des numéros d'objets, puis CT et DT dans l'ordre alphabétique
     /// des capacités (leur numéro change d'un jeu à l'autre).
     /// </summary>
     private IEnumerable<KeyValuePair<int, int>> Ordered(IReadOnlyDictionary<int, int> items) =>

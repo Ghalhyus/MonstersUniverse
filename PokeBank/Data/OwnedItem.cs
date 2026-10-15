@@ -1,7 +1,7 @@
 namespace PokeBank.Data;
 
 /// <summary>
-/// Objet de l'inventaire du site (Pokéball, médicament, CT ou DT), retiré du sac d'une sauvegarde stockée ou à y déposer.
+/// Objet de l'inventaire du site (Pokéball, médicament, baie, CT ou DT), retiré du sac d'une sauvegarde stockée ou à y déposer.
 /// Une ligne par objet et par compte ; elle disparaît quand la quantité retombe à 0.
 /// </summary>
 public class OwnedItem

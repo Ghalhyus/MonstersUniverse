@@ -554,6 +554,71 @@ public sealed class InventoryServiceTests : IDisposable
         Assert.Equal(new Dictionary<int, int> { [FocusPunchTM] = 1 }, SaveBag.ReadItems(sav));
     }
 
+    // ---------- Baies ----------
+
+    private const int CheriBerry = 149, OranBerry = 155, SitrusBerry = 158, EnigmaBerry = 208, GoldenRazzBerry = 862, BerryJuice = 43;
+
+    [Fact]
+    public async Task Berries_GoFromPlatinumToBlack2_WithTheOtherCategories()
+    {
+        Assert.True((await _saves.AddAsync("sacha", "platine.sav", SaveSessionTests.CreatePlatinumSave())).Ok);
+        var platine = (await _saves.ListAsync("sacha")).Single().Id;
+        Assert.Equal(23, (await _inventory.ListItemSourcesAsync("sacha")).Single().Total(ItemCategory.Berries));
+
+        var result = await _inventory.WithdrawItemsAsync("sacha", platine,
+            new Dictionary<int, int> { [OranBerry] = 10, [EnigmaBerry] = 1, [EarthquakeTM] = 1, [PokeBall] = 1 });
+        Assert.True(result.Ok, result.Message);
+        Assert.Equal([(PokeBall, ItemCategory.Balls), (OranBerry, ItemCategory.Berries), (EnigmaBerry, ItemCategory.Berries), (EarthquakeTM, ItemCategory.Machines)],
+            (await _inventory.GetItemsAsync("sacha")).Select(i => (i.ItemId, i.Category)));
+        Assert.Equal("1 × Poké Ball, 10 × Baie Oran, 1 × Baie Enigma, 1 × CT/DT Séisme", (await _inventory.ListOperationsAsync("sacha")).Single().Details);
+        Assert.DoesNotContain(OranBerry, (await StoredItems(platine)).Keys);
+
+        // La Baie Enigma est une baie normale à partir de la 4e génération : Noir 2 l'accepte.
+        var b2 = await Store(items: [(OranBerry, 2)]);
+        Assert.Equal(999, (await _inventory.ListItemSourcesAsync("sacha")).Single(s => s.SaveId == b2).Capacity[OranBerry]);
+        Assert.True((await _inventory.DepositItemsAsync("sacha", b2, new Dictionary<int, int> { [OranBerry] = 4, [EnigmaBerry] = 1 })).Ok);
+        Assert.Equal(new Dictionary<int, int> { [OranBerry] = 6, [EnigmaBerry] = 1 }, await StoredItems(b2));
+        Assert.Equal(new Dictionary<int, int> { [PokeBall] = 1, [OranBerry] = 6, [EarthquakeTM] = 1 }, await InventoryItems());
+    }
+
+    [Fact]
+    public void SaveBag_LeavesTheEnigmaBerryOfThirdGenerationGamesAlone()
+    {
+        var sav = new SAV3E();
+        Assert.False(SaveBag.Capacity(sav).ContainsKey(EnigmaBerry));
+        Assert.Equal(999, SaveBag.Capacity(sav)[OranBerry]); // poche Baies de la 3e génération
+
+        var refused = SaveBag.Deposit(sav, new Dictionary<int, int> { [EnigmaBerry] = 1 }, i => $"{i}", "Émeraude");
+        Assert.Contains("e-Reader", refused);
+
+        // Baie Enigma de l'e-Reader (175 en numérotation de la 3e génération) et Baies Oran : seules les Oran sont lues et retirées.
+        var pouches = sav.Inventory;
+        var berries = pouches.Single(p => p.Type == InventoryType.Berries);
+        berries.Items[0].Index = 175;
+        berries.Items[0].Count = 1;
+        sav.Inventory = pouches;
+        Assert.Null(SaveBag.Deposit(sav, new Dictionary<int, int> { [OranBerry] = 5 }, i => $"{i}", "Émeraude"));
+        Assert.Equal(new Dictionary<int, int> { [OranBerry] = 5 }, SaveBag.ReadItems(sav));
+        Assert.NotNull(SaveBag.Withdraw(sav, new Dictionary<int, int> { [EnigmaBerry] = 1 }, i => $"{i}"));
+        Assert.Null(SaveBag.Withdraw(sav, new Dictionary<int, int> { [OranBerry] = 5 }, i => $"{i}"));
+        Assert.Equal([(175, 1), (0, 0)], sav.Inventory.Single(p => p.Type == InventoryType.Berries).Items.Take(2).Select(s => ((int)s.Index, s.Count)));
+    }
+
+    [Fact]
+    public void SaveBag_KnowsEveryBerryOfTheBag()
+    {
+        Assert.Equal(ItemCategory.Berries, SaveBag.CategoryOf(CheriBerry));
+        Assert.Equal(ItemCategory.Medicine, SaveBag.CategoryOf(BerryJuice)); // Jus de Baie : un médicament
+        Assert.Null(SaveBag.CategoryOf(2550)); // Baie Pêcha Mythique : objet rare d'Écarlate/Violet
+
+        // Baies de capture de Let's Go : rangées avec les Balls, inconnues des autres jeux.
+        var letsGo = SaveBag.Capacity(new SAV7b());
+        Assert.True(letsGo.ContainsKey(GoldenRazzBerry));
+        Assert.False(letsGo.ContainsKey(SitrusBerry));
+        Assert.False(SaveBag.Capacity(new SAV5B2W2()).ContainsKey(GoldenRazzBerry));
+        Assert.True(SaveBag.Capacity(new SAV9ZA()).ContainsKey(2659)); // Extra Baie Sitrus
+    }
+
     [Fact]
     public void Money_IsFormattedTheFrenchWay()
     {

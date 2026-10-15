@@ -1,7 +1,7 @@
 @using PokeBank.Services
 @inject InventoryService InventoryStore
 
-@* Fenêtre de transfert d'objets (Pokéballs, médicaments, CT et DT) entre l'inventaire et le sac d'une sauvegarde stockée, dans un sens
+@* Fenêtre de transfert d'objets (Pokéballs, médicaments, baies, CT et DT) entre l'inventaire et le sac d'une sauvegarde stockée, dans un sens
    ou dans l'autre : sauvegarde → quantité de chaque objet, un onglet par catégorie → confirmation. Une seule opération pour toutes les
    catégories ; seule la copie du serveur est modifiée. *@
 
@@ -183,16 +183,18 @@
 
     protected override async Task OnInitializedAsync() => sources = await InventoryStore.ListItemSourcesAsync(UserId);
 
-    /// <summary>« 62 Pokéballs · 12 médicaments · 5 CT/DT dans le sac ».</summary>
+    /// <summary>« 62 Pokéballs · 12 médicaments · 20 baies · 5 CT/DT dans le sac ».</summary>
     private static string BagSummary(ItemSource source)
     {
         if (source.Items.Count == 0)
             return "sac vide";
         var balls = source.Total(ItemCategory.Balls);
         var medicine = source.Total(ItemCategory.Medicine);
+        var berries = source.Total(ItemCategory.Berries);
         var machines = source.Total(ItemCategory.Machines);
         return $"{CollectionCapacity.FormatCount(balls)} Pokéball{(balls > 1 ? "s" : "")} · " +
                $"{CollectionCapacity.FormatCount(medicine)} médicament{(medicine > 1 ? "s" : "")} · " +
+               $"{CollectionCapacity.FormatCount(berries)} baie{(berries > 1 ? "s" : "")} · " +
                $"{CollectionCapacity.FormatCount(machines)} CT/DT dans le sac";
     }
 
