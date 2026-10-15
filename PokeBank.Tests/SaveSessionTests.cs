@@ -202,7 +202,7 @@ public class SaveSessionTests
     /// Sauvegarde Platine avec <paramref name="count"/> Pokémon d'espèces différentes dans les boîtes, à partir de Tortipouss
     /// (n° 387). Chacun vient d'une vraie rencontre de Platine générée par PKHeX (sauvage, don, échange) : ils sont donc
     /// légaux. Les espèces qu'on ne rencontre pas directement dans Platine (Boskara, qui s'obtient par évolution...) sont sautées.
-    /// 50 000 ₽ en poche, pour essayer les retraits de l'inventaire.
+    /// 50 000 ₽ et des Pokéballs (<see cref="PlatinumSampleBalls"/>) dans le sac, pour essayer l'inventaire.
     /// </summary>
     internal static byte[] CreatePlatinumSave(int count = 50)
     {
@@ -247,11 +247,27 @@ public class SaveSessionTests
             sav.SetBoxSlotAtIndex(pk, placed / sav.BoxSlotCount, placed % sav.BoxSlotCount);
             placed++;
         }
+        GiveBalls(sav, PlatinumSampleBalls);
 
         // PKHeX n'écrit que la copie active : la seconde copie reçoit les mêmes blocs, pour que le jeu trouve les deux à jour.
         var data = sav.Write().ToArray();
         data.AsSpan(0, SAV4Pt.GeneralSize + storageSize).CopyTo(data.AsSpan(partition));
         return data;
+    }
+
+    /// <summary>Sac de la sauvegarde Platine : 30 Poké Ball, 15 Super Ball, 8 Hyper Ball, 1 Master Ball, 5 Luxe Ball, 3 Honor Ball.</summary>
+    internal static readonly (int Item, int Count)[] PlatinumSampleBalls = [(4, 30), (3, 15), (2, 8), (1, 1), (11, 5), (12, 3)];
+
+    /// <summary>Ajoute des Balls dans le sac, dans la poche où le jeu les range (« Balls » en 4e génération, « Objets » en 5e).</summary>
+    internal static void GiveBalls(SaveFile sav, params (int Item, int Count)[] balls)
+    {
+        var pouches = sav.Inventory;
+        foreach (var (item, count) in balls)
+        {
+            var pouch = pouches.First(p => p.Type != InventoryType.PCItems && p.CanContain((ushort)item));
+            Assert.True(pouch.GiveItem(sav, (ushort)item, count) > 0);
+        }
+        sav.Inventory = pouches;
     }
 
     /// <summary>Bloc Gen 4 vide avec son pied : compteurs de sauvegarde, taille du bloc et signature du jeu.</summary>
@@ -271,6 +287,7 @@ public class SaveSessionTests
         Assert.IsType<SAV4Pt>(sav);
         Assert.True(sav.ChecksumsValid, sav.ChecksumInfo);
         Assert.Equal(50_000u, sav.Money);
+        Assert.Equal(PlatinumSampleBalls.ToDictionary(b => b.Item, b => b.Count), SaveBag.ReadBalls(sav));
         Assert.True(new SaveSession().TryLoad(CreatePlatinumSave(), "platine.sav", out var error), error);
         var pokemon = StoredSaveService.ReadAllPokemon(sav).Select(p => p.Pokemon).ToList();
         Assert.Equal(50, pokemon.Count);

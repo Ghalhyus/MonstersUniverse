@@ -60,7 +60,7 @@ else
                     <div class="ms-auto d-flex flex-wrap gap-2">
                         <a class="btn btn-sm btn-outline-secondary" href="collection?source=@s.Id">Voir ses Pokémon</a>
                         <button class="btn btn-sm btn-outline-secondary" @onclick="() => DownloadSave(s)" disabled="@busy">Télécharger</button>
-                        @* Après un retrait d'argent sur le serveur : bloqué tant que la version modifiée n'a pas été téléchargée. *@
+                        @* Après une modification sur le serveur (argent, Pokéballs) : bloqué tant que la version modifiée n'a pas été téléchargée. *@
                         <label class="btn btn-sm btn-outline-primary mb-0 @(busy || s.MustDownloadBeforeUpdate ? "disabled" : "")"
                                title="@(s.MustDownloadBeforeUpdate ? "Télécharge d'abord la version modifiée sur le serveur" : null)">
                             Mettre à jour
@@ -73,8 +73,8 @@ else
                 @if (s.ModifiedOnServer)
                 {
                     <div class="alert alert-info small mt-2 mb-0">
-                        Un retrait de @InventoryService.FormatMoney(s.WithdrawnOnServer) a modifié cette sauvegarde sur le serveur :
-                        ton jeu a toujours cet argent.
+                        @(char.ToUpperInvariant(s.ServerChanges[0]) + s.ServerChanges[1..]) a modifié cette sauvegarde sur le serveur :
+                        la sauvegarde de ton jeu n'a pas ces changements.
                         @if (s.MustDownloadBeforeUpdate)
                         {
                             <text><strong>Télécharge-la et remplace celle de ton jeu</strong> ; la mise à jour est bloquée en attendant.</text>

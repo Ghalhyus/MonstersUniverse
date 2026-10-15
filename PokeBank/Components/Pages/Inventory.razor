@@ -2,6 +2,7 @@
 @attribute [Authorize]
 @using System.Security.Claims
 @using Microsoft.AspNetCore.Authorization
+@using PokeBank.Components.Shared
 @using PokeBank.Data
 @using PokeBank.Services
 @inject InventoryService InventoryStore
@@ -9,8 +10,9 @@
 
 <PageTitle>Inventaire</PageTitle>
 
-@* Inventaire du site : pour l'instant le porte-monnaie de Pokédollars et son journal. L'argent vient des sauvegardes
-   stockées ; seule la copie du serveur est modifiée (la mise à jour de la sauvegarde est ensuite encadrée). *@
+@* Inventaire du site : le porte-monnaie de Pokédollars, les Pokéballs et le journal. L'argent et les Balls viennent des
+   sauvegardes stockées (les Balls peuvent aussi y retourner) ; seule la copie du serveur est modifiée (la mise à jour de la
+   sauvegarde est ensuite encadrée). *@
 
 <h1 class="mb-3">Inventaire</h1>
 
@@ -32,6 +34,38 @@
     </div>
 </div>
 
+<div class="card mb-4">
+    <div class="card-body">
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+            <div>
+                <div class="small text-muted">Pokéballs</div>
+                <div class="fw-semibold">@CollectionCapacity.FormatCount(balls.Sum(b => b.Count)) Ball@(balls.Sum(b => b.Count) > 1 ? "s" : "")</div>
+            </div>
+            <div class="ms-auto d-flex flex-wrap gap-2">
+                <button class="btn btn-outline-primary" @onclick="() => OpenBalls(deposit: false)">Retirer d'une sauvegarde</button>
+                <button class="btn btn-outline-primary" @onclick="() => OpenBalls(deposit: true)" disabled="@(balls.Count == 0)">Déposer dans une sauvegarde</button>
+            </div>
+        </div>
+        @if (balls.Count == 0)
+        {
+            <p class="text-muted small mb-0">Aucune Pokéball pour l'instant : retires-en du sac d'une de tes sauvegardes stockées.</p>
+        }
+        else
+        {
+            <div class="ball-grid">
+                @foreach (var ball in balls)
+                {
+                    <div class="ball-tile" title="@ball.Name">
+                        <img src="@ball.SpriteUrl" alt="" width="32" height="32" class="ball-sprite" />
+                        <span class="ball-name">@ball.Name</span>
+                        <span class="ball-count">× @CollectionCapacity.FormatCount(ball.Count)</span>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+</div>
+
 <h2 class="h5">Journal des opérations</h2>
 @if (operations.Count == 0)
 {
@@ -50,10 +84,17 @@ else
                     <tr>
                         <td class="text-nowrap">@op.At.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
                         <td>@KindLabel(op.Kind)</td>
-                        <td>@(string.IsNullOrEmpty(op.Details) ? op.SaveLabel : op.Details)</td>
-                        <td class="text-end text-nowrap @(op.Amount >= 0 ? "text-success" : "text-danger")">
-                            @(op.Amount >= 0 ? "+" : "")@InventoryService.FormatMoney(op.Amount)
-                        </td>
+                        <td>@string.Join(" · ", new[] { op.SaveLabel, op.Details }.Where(t => !string.IsNullOrEmpty(t)))</td>
+                        @if (IsBallOperation(op.Kind))
+                        {
+                            <td class="text-end text-muted">—</td>
+                        }
+                        else
+                        {
+                            <td class="text-end text-nowrap @(op.Amount >= 0 ? "text-success" : "text-danger")">
+                                @(op.Amount >= 0 ? "+" : "")@InventoryService.FormatMoney(op.Amount)
+                            </td>
+                        }
                         <td class="text-end text-nowrap">@InventoryService.FormatMoney(op.BalanceAfter)</td>
                     </tr>
                 }
@@ -139,6 +180,11 @@ else
     </div>
 }
 
+@if (ballDialog is { } deposit)
+{
+    <BallTransferDialog Deposit="deposit" UserId="@userId" Stock="balls" OnDone="BallsDone" OnCancel="() => ballDialog = null" />
+}
+
 @code {
     [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = default!;
 
@@ -147,6 +193,8 @@ else
     private string userId = "";
     private long balance;
     private List<WalletOperationView> operations = [];
+    private List<ItemStack> balls = [];
+    private bool? ballDialog; // fenêtre des Pokéballs : null fermée, true dépôt, false retrait
 
     private WithdrawStep step;
     private List<MoneySource>? sources;
@@ -173,14 +221,34 @@ else
     {
         balance = await InventoryStore.GetBalanceAsync(userId);
         operations = await InventoryStore.ListOperationsAsync(userId);
+        balls = await InventoryStore.GetBallsAsync(userId);
     }
 
     private static string KindLabel(WalletOperationKind kind) => kind switch
     {
         WalletOperationKind.WithdrawFromSave => "Retrait d'une sauvegarde",
         WalletOperationKind.BuyCollectionSlots => "Achat d'emplacements",
+        WalletOperationKind.WithdrawBallsFromSave => "Pokéballs retirées d'une sauvegarde",
+        WalletOperationKind.DepositBallsToSave => "Pokéballs déposées dans une sauvegarde",
         _ => kind.ToString(),
     };
+
+    private static bool IsBallOperation(WalletOperationKind kind) =>
+        kind is WalletOperationKind.WithdrawBallsFromSave or WalletOperationKind.DepositBallsToSave;
+
+    private void OpenBalls(bool deposit)
+    {
+        message = null;
+        ballDialog = deposit;
+    }
+
+    private async Task BallsDone(ItemTransferResult result)
+    {
+        message = result.Message;
+        messageIsError = !result.Ok;
+        ballDialog = null;
+        await LoadWallet();
+    }
 
     private async Task OpenWithdraw()
     {

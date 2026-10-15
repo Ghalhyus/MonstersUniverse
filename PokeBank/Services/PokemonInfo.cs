@@ -38,6 +38,19 @@ public sealed class PokemonInfo
     public static string SpriteUrl(ushort species, bool shiny) =>
         $"https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/{(shiny ? "shiny/" : "")}{species}.png";
 
+    /// <summary>Nom français d'un objet (numéro PKHeX).</summary>
+    public string ItemName(int item) => Get(_strings.itemlist, item, $"Objet n°{item}");
+
+    /// <summary>Image d'un objet chez PokéAPI, nommée d'après son nom anglais (« Poké Ball » → poke-ball.png).</summary>
+    public static string ItemSpriteUrl(int item)
+    {
+        var name = Get(EnglishItems, item, "");
+        var slug = name.ToLowerInvariant().Replace("é", "e").Replace(' ', '-').Replace(".", "").Replace("'", "");
+        return $"https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/{slug}.png";
+    }
+
+    private static readonly IReadOnlyList<string> EnglishItems = GameInfo.GetStrings("en").itemlist;
+
     public static bool IsLegal(PKM pk) => new LegalityAnalysis(pk, StorageSlotType.Box).Valid;
 
     public PokemonView Describe(PKM pk, bool? isLegal = null)

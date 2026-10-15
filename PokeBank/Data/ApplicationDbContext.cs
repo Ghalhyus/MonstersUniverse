@@ -10,6 +10,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<SaveModification> SaveModifications => Set<SaveModification>();
     public DbSet<Wallet> Wallets => Set<Wallet>();
     public DbSet<WalletOperation> WalletOperations => Set<WalletOperation>();
+    public DbSet<OwnedItem> OwnedItems => Set<OwnedItem>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -45,6 +46,12 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             e.HasOne(o => o.Owner).WithMany().HasForeignKey(o => o.OwnerId).OnDelete(DeleteBehavior.Cascade);
             // Supprimer une sauvegarde garde l'historique : le libellé reste dans SaveLabel.
             e.HasOne(o => o.StoredSave).WithMany().HasForeignKey(o => o.StoredSaveId).OnDelete(DeleteBehavior.SetNull);
+        });
+
+        builder.Entity<OwnedItem>(e =>
+        {
+            e.HasKey(i => new { i.OwnerId, i.ItemId });
+            e.HasOne(i => i.Owner).WithMany().HasForeignKey(i => i.OwnerId).OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

@@ -5,14 +5,17 @@ using PokeBank.Data;
 namespace PokeBank.Services;
 
 /// <summary>Sauvegarde stockée, telle qu'affichée dans « Mes sauvegardes » (sans le fichier).</summary>
-/// <param name="ModifiedOnServer">Le serveur a modifié le fichier (retrait de Pokédollars) depuis le dernier envoi.</param>
+/// <param name="ModifiedOnServer">Le serveur a modifié le fichier (argent, Pokéballs) depuis le dernier envoi.</param>
 /// <param name="MustDownloadBeforeUpdate">Modifiée sur le serveur et pas encore téléchargée : « Mettre à jour » est bloqué.</param>
 public sealed record StoredSaveInfo(
     int Id, string FileName, string GameName, byte Generation, string TrainerName, string TrainerId,
     int PlayTimeSeconds, int PokemonCount, DateTime UploadedAt, DateTime UpdatedAt,
-    bool ModifiedOnServer, bool MustDownloadBeforeUpdate, long WithdrawnOnServer)
+    bool ModifiedOnServer, bool MustDownloadBeforeUpdate, long WithdrawnOnServer, bool BallsChangedOnServer)
 {
     public string Label => $"{GameName} — {TrainerName}";
+
+    /// <summary>« un retrait de 5 000 ₽ et un transfert de Pokéballs » (voir <see cref="StoredSaveService.DescribeServerChanges"/>).</summary>
+    public string ServerChanges => StoredSaveService.DescribeServerChanges(WithdrawnOnServer, BallsChangedOnServer);
 }
 
 public enum StoreStatus { Ok, Invalid, AlreadyStored, NotFound, WrongTrainer, OlderPlayTime, ModifiedOnServer, Conflict, CollectionFull }
@@ -51,7 +54,7 @@ public sealed class StoredSaveService(
                 orderby s.UploadedAt
                 select new StoredSaveInfo(s.Id, s.FileName, s.GameName, s.Generation, s.TrainerName, s.TrainerId,
                     s.PlayTimeSeconds, s.PokemonCount, s.UploadedAt, s.UpdatedAt,
-                    m != null, m != null && !s.DownloadedSinceModification, m != null ? m.Withdrawn : 0))
+                    m != null, m != null && !s.DownloadedSinceModification, m != null ? m.Withdrawn : 0, m != null && m.BallsChanged))
             .ToListAsync();
     }
 
@@ -87,7 +90,7 @@ public sealed class StoredSaveService(
 
         // Partie déjà modifiée par le serveur, puis supprimée : on ne peut la renvoyer que dans la version rendue ou plus avancée.
         var modification = await db.SaveModifications.FindAsync(identity.Key);
-        if (CheckServerModification(modification, identity, sav) is { } refused)
+        if (CheckServerModification(modification, identity, data) is { } refused)
             return refused;
 
         var pokemon = ReadAllPokemon(sav).ToList();
@@ -141,8 +144,8 @@ public sealed class StoredSaveService(
         {
             if (!save.DownloadedSinceModification)
                 return new(StoreStatus.ModifiedOnServer,
-                    $"Un retrait de {InventoryService.FormatMoney(modification.Withdrawn)} a modifié cette sauvegarde sur le serveur : télécharge-la et remplace celle de ton jeu avant de la mettre à jour.");
-            if (CheckServerModification(modification, identity, sav) is { } refused)
+                    $"{Capitalize(DescribeServerChanges(modification))} a modifié cette sauvegarde sur le serveur : télécharge-la et remplace celle de ton jeu avant de la mettre à jour.");
+            if (CheckServerModification(modification, identity, data) is { } refused)
                 return refused;
         }
         else if (identity.PlayTimeSeconds < save.PlayTimeSeconds && !acceptOlder)
@@ -199,20 +202,42 @@ public sealed class StoredSaveService(
 
     /// <summary>
     /// Refuse le fichier d'une partie modifiée par le serveur s'il n'est pas plus avancé que la version modifiée :
-    /// c'est alors l'ancienne sauvegarde du jeu, qui contient encore l'argent retiré. Seule exception, la version
-    /// modifiée elle-même (même temps de jeu, pas plus d'argent), rendue au joueur par « Télécharger » ou la suppression.
+    /// c'est alors l'ancienne sauvegarde du jeu, qui n'a pas ces changements (argent ou Balls retirés encore là, Balls
+    /// déposées absentes). Seule exception, la version modifiée elle-même, rendue au joueur par « Télécharger » ou la
+    /// suppression : même temps de jeu et fichier identique (même argent ou moins pour les traces sans empreinte).
     /// </summary>
-    private static StoreResult? CheckServerModification(SaveModification? modification, SaveIdentity identity, SaveFile sav)
+    private static StoreResult? CheckServerModification(SaveModification? modification, SaveIdentity identity, byte[] data)
     {
         if (modification is null || identity.PlayTimeSeconds > modification.PlayTimeSeconds)
             return null;
-        if (identity.PlayTimeSeconds == modification.PlayTimeSeconds && sav.Money <= modification.MoneyAfter)
+        if (identity.PlayTimeSeconds == modification.PlayTimeSeconds && IsServerVersion(modification, data))
             return null;
         return new(StoreStatus.ModifiedOnServer,
-            $"Un retrait de {InventoryService.FormatMoney(modification.Withdrawn)} a modifié cette partie sur le serveur, et ce fichier n'est pas plus avancé " +
+            $"{Capitalize(DescribeServerChanges(modification))} a modifié cette partie sur le serveur, et ce fichier n'est pas plus avancé " +
             $"({SaveIdentity.FormatPlayTime(modification.PlayTimeSeconds)} → {SaveIdentity.FormatPlayTime(identity.PlayTimeSeconds)}) : c'est sans doute l'ancienne " +
-            "sauvegarde de ton jeu, qui contient encore l'argent retiré. Utilise la version rendue par PokeBank (« Télécharger » ou suppression), joue un peu, puis réessaie.");
+            "sauvegarde de ton jeu, qui n'a pas ces changements. Utilise la version rendue par PokeBank (« Télécharger » ou suppression), joue un peu, puis réessaie.");
     }
+
+    private static bool IsServerVersion(SaveModification modification, byte[] data) =>
+        modification.DataHash is { } hash
+            ? hash == SaveModification.Hash(data)
+            : TryRead(data, "", out var sav) && sav.Money <= modification.MoneyAfter; // trace posée avant l'empreinte (argent seulement)
+
+    /// <summary>Ce que le serveur a changé dans la partie : « un retrait de 5 000 ₽ », « un transfert de Pokéballs », ou les deux.</summary>
+    public static string DescribeServerChanges(long withdrawn, bool ballsChanged)
+    {
+        var parts = new List<string>(2);
+        if (withdrawn > 0)
+            parts.Add($"un retrait de {InventoryService.FormatMoney(withdrawn)}");
+        if (ballsChanged)
+            parts.Add("un transfert de Pokéballs");
+        return parts.Count == 0 ? "une modification" : string.Join(" et ", parts);
+    }
+
+    private static string DescribeServerChanges(SaveModification modification) =>
+        DescribeServerChanges(modification.Withdrawn, modification.BallsChanged);
+
+    private static string Capitalize(string text) => text.Length == 0 ? text : char.ToUpperInvariant(text[0]) + text[1..];
 
     /// <summary>Le joueur a envoyé une partie plus avancée que la version modifiée : la trace est levée, tout redevient normal.</summary>
     private static void ClearIfMoreAdvanced(ApplicationDbContext db, SaveModification? modification, SaveIdentity identity, StoredSave save)
