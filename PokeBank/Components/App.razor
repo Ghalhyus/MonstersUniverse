@@ -28,6 +28,30 @@
             URL.revokeObjectURL(url);
         };
 
+        // Largeur de la fenêtre (« Ma collection ») : 0 pour une fenêtre étroite (téléphone), sinon 1 + le nombre de largeurs
+        // dépassées, en pixels physiques (une fenêtre plein écran sur un 3440 × 1440 compte pour 3440, quelle que soit la
+        // mise à l'échelle de Windows ou le zoom : les deux sont compensés par devicePixelRatio). Le composant est prévenu
+        // à chaque changement de tranche (fenêtre redimensionnée ou déplacée sur un autre écran, téléphone tourné).
+        window.watchScreenSize = (narrowWidth, windowWidths, component) => {
+            const size = () => {
+                if (innerWidth < narrowWidth) return 0;
+                const physicalWidth = Math.round(innerWidth * devicePixelRatio);
+                return 1 + windowWidths.filter(w => physicalWidth > w).length;
+            };
+            let last = size();
+            const onResize = () => {
+                const current = size();
+                if (current === last) return;
+                last = current;
+                component.invokeMethodAsync("OnScreenSizeChanged", current);
+            };
+            addEventListener("resize", onResize);
+            return {
+                size,
+                dispose: () => removeEventListener("resize", onResize),
+            };
+        };
+
         // Glisser-déposer des Pokémon : la logique est côté serveur (Bank.razor), qui marque les zones
         // acceptant le Pokémon en cours de glissement (.drop-active / .drop-target). Ici, uniquement ce
         // que le navigateur exige de façon synchrone (un aller-retour serveur à chaque "dragover" serait trop lent).

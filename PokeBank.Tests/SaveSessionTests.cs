@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using PKHeX.Core;
 using PokeBank.Services;
 
@@ -195,5 +196,93 @@ public class SaveSessionTests
         var path = Environment.GetEnvironmentVariable("POKEBANK_SAMPLE_OUT");
         if (string.IsNullOrEmpty(path)) return;
         File.WriteAllBytes(path, CreateBw2Save());
+    }
+
+    /// <summary>
+    /// Sauvegarde Platine avec <paramref name="count"/> Pokémon d'espèces différentes dans les boîtes, à partir de Tortipouss
+    /// (n° 387). Chacun vient d'une vraie rencontre de Platine générée par PKHeX (sauvage, don, échange) : ils sont donc
+    /// légaux. Les espèces qu'on ne rencontre pas directement dans Platine (Boskara, qui s'obtient par évolution...) sont sautées.
+    /// 50 000 ₽ en poche, pour essayer les retraits de l'inventaire.
+    /// </summary>
+    internal static byte[] CreatePlatinumSave(int count = 50)
+    {
+        // PKHeX ne sait pas écrire une sauvegarde Gen 4 créée vide (new SAV4Pt() plante dans Write) : on part d'un
+        // fichier brut dont les blocs « général » et « boîtes » ont un pied valide, dans les deux copies du fichier.
+        const int partition = 0x40000, storageSize = 0x121E4;
+        var raw = new byte[SaveUtil.SIZE_G4RAW];
+        raw.AsSpan().Fill(0xFF); // mémoire vierge : les blocs annexes (Panthéon, vidéos...) restent non initialisés
+        foreach (var start in new[] { 0, partition })
+        {
+            InitBlock4(raw.AsSpan(start, SAV4Pt.GeneralSize));
+            InitBlock4(raw.AsSpan(start + SAV4Pt.GeneralSize, storageSize));
+        }
+
+        var sav = new SAV4Pt(raw)
+        {
+            OT = "Lucas",
+            TID16 = 24680,
+            SID16 = 13579,
+            Language = (int)LanguageID.French,
+            Money = 50_000,
+            PlayedHours = 12,
+            PlayedMinutes = 34,
+        };
+        for (int b = 0; b < sav.BoxCount; b++)
+        {
+            sav.SetBoxName(b, $"BOÎTE {b + 1}");
+            for (int s = 0; s < sav.BoxSlotCount; s++)
+                sav.SetBoxSlotAtIndex(sav.BlankPKM, b, s); // des octets à zéro ne font pas un emplacement vide en Gen 4 (chiffrement)
+        }
+
+        int placed = 0;
+        for (ushort species = 387; placed < count && species <= sav.MaxSpeciesID; species++)
+        {
+            var template = new PK4 { Species = species };
+            // Les œufs passent en premier, mais ils donnent la forme de base au niveau 1 : on veut l'espèce elle-même.
+            var encounter = EncounterMovesetGenerator.GenerateEncounters(template, sav, ReadOnlyMemory<ushort>.Empty, GameVersion.Pt)
+                .FirstOrDefault(e => e.Species == species && !e.IsEgg);
+            if (encounter is null)
+                continue; // pas de rencontre directe dans Platine
+            var pk = encounter.ConvertToPKM(sav);
+            sav.SetBoxSlotAtIndex(pk, placed / sav.BoxSlotCount, placed % sav.BoxSlotCount);
+            placed++;
+        }
+
+        // PKHeX n'écrit que la copie active : la seconde copie reçoit les mêmes blocs, pour que le jeu trouve les deux à jour.
+        var data = sav.Write().ToArray();
+        data.AsSpan(0, SAV4Pt.GeneralSize + storageSize).CopyTo(data.AsSpan(partition));
+        return data;
+    }
+
+    /// <summary>Bloc Gen 4 vide avec son pied : compteurs de sauvegarde, taille du bloc et signature du jeu.</summary>
+    private static void InitBlock4(Span<byte> block)
+    {
+        block.Clear();
+        BinaryPrimitives.WriteUInt32LittleEndian(block[^0x14..], 1); // compteur principal
+        BinaryPrimitives.WriteUInt32LittleEndian(block[^0x10..], 1); // compteur secondaire
+        BinaryPrimitives.WriteUInt32LittleEndian(block[^0xC..], (uint)block.Length);
+        BinaryPrimitives.WriteUInt32LittleEndian(block[^0x8..], SAV4.MAGIC_JAPAN_INTL);
+    }
+
+    [Fact]
+    public void PlatinumSample_Has50LegalPokemon()
+    {
+        Assert.True(SaveUtil.TryGetSaveFile(CreatePlatinumSave(), out var sav, "platine.sav"));
+        Assert.IsType<SAV4Pt>(sav);
+        Assert.True(sav.ChecksumsValid, sav.ChecksumInfo);
+        Assert.Equal(50_000u, sav.Money);
+        Assert.True(new SaveSession().TryLoad(CreatePlatinumSave(), "platine.sav", out var error), error);
+        var pokemon = StoredSaveService.ReadAllPokemon(sav).Select(p => p.Pokemon).ToList();
+        Assert.Equal(50, pokemon.Count);
+        Assert.All(pokemon, pk => Assert.True(PokemonInfo.IsLegal(pk), $"{pk.Species} illégal"));
+    }
+
+    /// <summary>Comme <see cref="WriteSampleSave_WhenRequested"/>, pour la sauvegarde Platine : POKEBANK_SAMPLE_PT_OUT.</summary>
+    [Fact]
+    public void WritePlatinumSampleSave_WhenRequested()
+    {
+        var path = Environment.GetEnvironmentVariable("POKEBANK_SAMPLE_PT_OUT");
+        if (string.IsNullOrEmpty(path)) return;
+        File.WriteAllBytes(path, CreatePlatinumSave());
     }
 }

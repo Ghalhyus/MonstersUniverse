@@ -1,5 +1,6 @@
 @page "/collection"
 @attribute [Authorize]
+@implements IAsyncDisposable
 @using System.Security.Claims
 @using Microsoft.AspNetCore.Authorization
 @using PokeBank.Components.Shared
@@ -116,12 +117,24 @@ else
 }
 
 @code {
-    private const int MinColumns = 3, MaxColumns = 20, DefaultColumns = 10;
+    private const int MinColumns = 3, MaxColumns = 20;
     private const string BankSource = "banque";
+
+    /// <summary>
+    /// Colonnes par défaut selon la largeur de la fenêtre : étroite (téléphone, moins de <see cref="NarrowWidth"/> px affichés),
+    /// puis en pixels physiques : jusqu'à 1920 (plein écran 1080p), jusqu'à 2560 (plein écran 1440p), au-delà (3440 × 1440, 4K...).
+    /// Les pixels physiques ne dépendent pas de la mise à l'échelle de Windows : plein écran sur un 3440 × 1440 à 150 % = 3440.
+    /// </summary>
+    private const int NarrowWidth = 641;
+    private static readonly int[] WindowWidths = [1920, 2560];
+    private static readonly int[] ColumnsByScreen = [5, 10, 15, 20];
 
     [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = default!;
 
-    /// <summary>Nombre de colonnes gardé dans l'adresse (?colonnes=12) pour survivre à un rechargement.</summary>
+    /// <summary>
+    /// Nombre de colonnes choisi au curseur, gardé dans l'adresse (?colonnes=12) pour survivre à un rechargement.
+    /// Absent : il suit la largeur de la fenêtre (<see cref="screenColumns"/>).
+    /// </summary>
     [SupplyParameterFromQuery(Name = "colonnes")] private int? ColumnsFromQuery { get; set; }
     /// <summary>Origine affichée, gardée dans l'adresse : vide (tout), « banque » ou l'identifiant d'une sauvegarde stockée.</summary>
     [SupplyParameterFromQuery(Name = "source")] private string? SourceFromQuery { get; set; }
@@ -130,7 +143,10 @@ else
     private string search = "";
     private string source = "";
     private bool sourceInitialized;
-    private int columns = DefaultColumns;
+    private int columns = ColumnsByScreen[1];
+    private int screenColumns = ColumnsByScreen[1]; // largeur de fenêtre inconnue tant que la page n'est pas interactive
+    private DotNetObjectReference<Collection>? selfRef;
+    private IJSObjectReference? screenWatcher;
     private int total;
     private int listVersion;   // clé de Virtualize : l'incrémenter recrée la liste
     private int reloadRequest;
@@ -160,7 +176,7 @@ else
     // Les paramètres d'adresse sont lus ici (et non dans OnInitialized) pour suivre aussi les navigations ultérieures.
     protected override async Task OnParametersSetAsync()
     {
-        columns = Math.Clamp(ColumnsFromQuery ?? DefaultColumns, MinColumns, MaxColumns);
+        columns = Math.Clamp(ColumnsFromQuery ?? screenColumns, MinColumns, MaxColumns);
         var fromQuery = SourceFromQuery ?? "";
         if (!sourceInitialized || fromQuery != source)
         {
@@ -197,8 +213,47 @@ else
 
     private void ColumnsChanged() => listVersion++;
 
+    /// <summary>Choix au curseur ; revenir à la valeur de la fenêtre rend la main à sa largeur.</summary>
     private void RememberColumns() =>
-        Nav.NavigateTo(Nav.GetUriWithQueryParameter("colonnes", columns == DefaultColumns ? null : columns), replace: true);
+        Nav.NavigateTo(Nav.GetUriWithQueryParameter("colonnes", columns == screenColumns ? null : columns), replace: true);
+
+    // ---------- Largeur de la fenêtre ----------
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        selfRef = DotNetObjectReference.Create(this);
+        screenWatcher = await JS.InvokeAsync<IJSObjectReference>("watchScreenSize", NarrowWidth, WindowWidths, selfRef);
+        ApplyScreenSize(await screenWatcher.InvokeAsync<int>("size"));
+    }
+
+    /// <summary>Appelé par le navigateur quand la largeur de la fenêtre change de tranche (redimensionnée, déplacée sur un autre écran).</summary>
+    [JSInvokable]
+    public Task OnScreenSizeChanged(int size) => InvokeAsync(() => ApplyScreenSize(size));
+
+    private void ApplyScreenSize(int size)
+    {
+        screenColumns = ColumnsByScreen[Math.Clamp(size, 0, ColumnsByScreen.Length - 1)];
+        if (ColumnsFromQuery is not null || columns == screenColumns)
+            return; // nombre choisi au curseur : la taille de la fenêtre n'y touche pas
+        columns = screenColumns;
+        listVersion++;
+        StateHasChanged();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (screenWatcher is not null)
+        {
+            try
+            {
+                await screenWatcher.InvokeVoidAsync("dispose");
+                await screenWatcher.DisposeAsync();
+            }
+            catch (JSDisconnectedException) { } // onglet fermé : plus rien à nettoyer côté navigateur
+        }
+        selfRef?.Dispose();
+    }
 
     /// <summary>Fin d'un achat d'emplacements (fenêtre de la jauge).</summary>
     private async Task OnPurchase(PurchaseResult result)
