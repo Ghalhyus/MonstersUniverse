@@ -193,7 +193,8 @@ h1:focus {
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    width: min(32rem, calc(100vw - 2rem));
+    /* 32rem au moins (ou toute la largeur d'un téléphone), puis 35 % de la fenêtre sur les grands écrans, 56rem au plus */
+    width: min(calc(100vw - 2rem), clamp(32rem, 35vw, 56rem));
     max-height: calc(100vh - 2rem);
     overflow-y: auto;
 }
