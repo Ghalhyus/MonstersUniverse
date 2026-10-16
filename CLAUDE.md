@@ -105,6 +105,9 @@ sans jeton (variable `GITHUB_TOKEN`) ; le script les limite.
   de PKHeX (selon le jeu du Pokémon : `EntityContext`) mis en forme, puis les noms de PokéAPI (`Aliases`, `Suffixes`) ; sinon
   l'image de l'espèce. Méga-Évolution : `ItemStorage9ZA.GetExpectedMegaStoneOrPrimalOrb` ; PKHeX ne marque comme méga qu'une
   forme jumelle (« M-Mega », pas « F-Mega »).
+- Les colonnes des filtres de « Ma collection » (`Type1`, `Nature`, `IvHp`... : `PokemonTraits.Fill`) sont remplies à
+  l'enregistrement (`BankService.CreateEntry`) et au démarrage pour les Pokémon plus anciens (`FillFilterDetailsAsync`,
+  repère : `Nature` null). Un nouveau filtre qui demande une nouvelle colonne suit le même chemin.
 - `BankPokemon.Gender` et `HeldItem` (pour l'image) sont remplis au démarrage pour les Pokémon plus anciens
   (`BankService.FillSpriteDetailsAsync`).
 - Tests : `PokemonSpritesTests` (formes, femelles, Méga, et la liste des formes de PKHeX sans image), `RealSavesTests`

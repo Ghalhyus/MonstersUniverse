@@ -66,6 +66,11 @@ public sealed partial class PokemonInfo
 
     public string MoveName(ushort move) => Get(_strings.movelist, move, $"Capacité n°{move}");
 
+    /// <summary>Noms français des types, natures et talents (filtres de « Ma collection »), par index PKHeX.</summary>
+    public string TypeName(byte type) => Get(_strings.types, type);
+    public string NatureName(byte nature) => Get(_strings.natures, nature);
+    public string AbilityName(int ability) => Get(_strings.abilitylist, ability, $"Talent n°{ability}");
+
     /// <summary>
     /// Image d'un objet, servie par le site (wwwroot/images/objets, rassemblées par outils/images.py) : par numéro
     /// d'objet (1.png) ; pour une CT ou une DT, la CT du type de la capacité (ct-ground.png). Un objet sans image affiche
@@ -97,7 +102,7 @@ public sealed partial class PokemonInfo
             pk.IsShiny,
             pk.IsEgg,
             pk.Gender switch { 0 => "♂", 1 => "♀", _ => "" },
-            Get(_strings.natures, (int)pk.Nature),
+            Get(_strings.natures, PokemonTraits.Nature(pk)), // 1re et 2e génération : celle de leur transfert
             Get(_strings.abilitylist, pk.Ability),
             pk.HeldItem == 0 ? "—" : Get(_items, pk.HeldItem),
             new[] { pk.Move1, pk.Move2, pk.Move3, pk.Move4 }.Where(m => m != 0).Select(m => Get(_strings.movelist, m)).ToList(),

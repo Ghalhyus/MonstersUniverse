@@ -9,8 +9,11 @@ namespace PokeBank.Services;
 public sealed record BankListItem(int Id, ushort Species, string SpeciesName, string Nickname, byte Level, bool IsShiny, bool IsEgg, bool IsLegal, int? StoredSaveId,
     string SpriteUrl);
 
-/// <summary>Filtre de « Ma collection » : tout, la banque seule, ou une sauvegarde stockée.</summary>
-public readonly record struct CollectionFilter(bool BankOnly = false, int? StoredSaveId = null)
+/// <summary>
+/// Filtre de « Ma collection » : tout, la banque seule, ou une sauvegarde stockée ; <paramref name="Criteria"/> ajoute les
+/// filtres des pastilles (type, nature, IV...).
+/// </summary>
+public readonly record struct CollectionFilter(bool BankOnly = false, int? StoredSaveId = null, PokemonCriteria? Criteria = null)
 {
     public static readonly CollectionFilter All = new();
     public static readonly CollectionFilter Bank = new(BankOnly: true);
@@ -61,6 +64,14 @@ public sealed class BankService(
             .Select(p => new BankListItem(p.Id, p.Species, p.SpeciesName, p.Nickname, p.Level, p.IsShiny, p.IsEgg, p.IsLegal, p.StoredSaveId,
                 PokemonSprites.Url(p.Species, p.Form, (EntityContext)p.Context, p.Gender == 1, p.HeldItem ?? 0, p.IsShiny, p.IsEgg)))
             .ToListAsync(ct);
+    }
+
+    /// <summary>Talents présents dans la collection (hors œufs), pour la liste du filtre « Talent ».</summary>
+    public async Task<List<int>> ListAbilitiesAsync(string ownerId)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+        return await db.BankPokemon.Where(p => p.OwnerId == ownerId && !p.IsEgg && p.Ability > 0)
+            .Select(p => p.Ability).Distinct().ToListAsync();
     }
 
     /// <summary>Occupation de la collection (banque + sauvegardes stockées) et sa limite.</summary>
@@ -136,6 +147,30 @@ public sealed class BankService(
         }
     }
 
+    /// <summary>
+    /// Remplit les caractéristiques des filtres (<see cref="PokemonTraits"/> : types, nature, talent, IV, forme, Méga) des
+    /// Pokémon enregistrés avant leur ajout (migration <c>CollectionFilters</c>), en relisant leurs octets ; appelé au
+    /// démarrage, ne fait rien une fois tout rempli (repère : nature null).
+    /// </summary>
+    public static async Task FillFilterDetailsAsync(ApplicationDbContext db)
+    {
+        while (true)
+        {
+            var batch = await db.BankPokemon.Where(p => p.Nature == null).OrderBy(p => p.Id).Take(500).ToListAsync();
+            if (batch.Count == 0)
+                return;
+            foreach (var entry in batch)
+            {
+                if (ToPkm(entry) is { } pk)
+                    PokemonTraits.Fill(entry, pk);
+                else
+                    entry.Nature = 0; // octets illisibles : rien à filtrer, mais ne pas les relire à chaque démarrage
+            }
+            await db.SaveChangesAsync();
+            db.ChangeTracker.Clear();
+        }
+    }
+
     /// <summary>Pokémon d'un utilisateur, filtrés par origine et par espèce / surnom (sans tri).</summary>
     private static IQueryable<BankPokemon> Filtered(ApplicationDbContext db, string ownerId, string? search, CollectionFilter filter)
     {
@@ -149,6 +184,8 @@ public sealed class BankService(
             var s = $"%{search.Trim()}%";
             query = query.Where(p => EF.Functions.Like(p.SpeciesName, s) || EF.Functions.Like(p.Nickname, s));
         }
+        if (filter.Criteria is { } criteria)
+            query = criteria.Apply(query);
         return query.OrderByDescending(p => p.DepositedAt).ThenBy(p => p.Position).ThenByDescending(p => p.Id);
     }
 
@@ -159,7 +196,7 @@ public sealed class BankService(
     public static BankPokemon CreateEntry(PokemonInfo info, PKM pk, string ownerId, DateTime now)
     {
         var view = info.Describe(pk);
-        return new BankPokemon
+        var entry = new BankPokemon
         {
             OwnerId = ownerId,
             Data = pk.DecryptedBoxData,
@@ -180,6 +217,8 @@ public sealed class BankService(
             OriginGame = view.OriginGame,
             DepositedAt = now,
         };
+        PokemonTraits.Fill(entry, pk); // types, nature, IV... pour les filtres de « Ma collection »
+        return entry;
     }
 
     /// <summary>

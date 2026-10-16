@@ -3,6 +3,7 @@
 @implements IAsyncDisposable
 @using System.Security.Claims
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.WebUtilities
 @using PokeBank.Components.Shared
 @using PokeBank.Data
 @using PokeBank.Services
@@ -60,12 +61,14 @@
                @bind="columns" @bind:event="oninput" @bind:after="ColumnsChanged" @onchange="RememberColumns" />
         <span class="fw-semibold">@columns</span>
     </label>
+    @* Filtres en pastilles (type, sexe, nature, talent, IV, forme, Méga, chromatique, œuf), gardés dans l'adresse. *@
+    <CollectionFilterChips Value="criteria" ValueChanged="CriteriaChanged" Abilities="abilities" />
 </div>
 
 @if (total == 0)
 {
     <p class="text-muted">
-        @(string.IsNullOrWhiteSpace(search) && source == "" ? "Ta collection est vide pour l'instant. Dépose des Pokémon depuis « Transfert » ou ajoute une sauvegarde dans « Mes sauvegardes »." : "Aucun Pokémon ne correspond.")
+        @(string.IsNullOrWhiteSpace(search) && source == "" && criteria.IsEmpty ? "Ta collection est vide pour l'instant. Dépose des Pokémon depuis « Transfert » ou ajoute une sauvegarde dans « Mes sauvegardes »." : "Aucun Pokémon ne correspond.")
     </p>
 }
 else
@@ -181,6 +184,8 @@ else
     private int reloadRequest;
 
     private List<StoredSaveInfo> saves = []; // pour le filtre et l'origine affichée des Pokémon stockés
+    private PokemonCriteria criteria = PokemonCriteria.None; // filtres des pastilles, gardés dans l'adresse
+    private List<int> abilities = []; // talents de la collection, proposés par le filtre « Talent »
 
     private CollectionUsage usage = new(0, CollectionCapacity.DefaultLimit);
 
@@ -191,15 +196,16 @@ else
     private PokemonView? selectedView;
 
     private CollectionFilter Filter =>
-        source == BankSource ? CollectionFilter.Bank
+        (source == BankSource ? CollectionFilter.Bank
         : int.TryParse(source, out var id) ? CollectionFilter.Save(id)
-        : CollectionFilter.All;
+        : CollectionFilter.All) with { Criteria = criteria };
 
     protected override async Task OnInitializedAsync()
     {
         userId = (await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
         saves = await Saves.ListAsync(userId);
         usage = await BankStore.GetUsageAsync(userId);
+        abilities = await BankStore.ListAbilitiesAsync(userId);
     }
 
     // Les paramètres d'adresse sont lus ici (et non dans OnInitialized) pour suivre aussi les navigations ultérieures.
@@ -208,11 +214,14 @@ else
         columns = Math.Clamp(ColumnsFromQuery ?? screenColumns, MinColumns, MaxColumns);
         var fromQuery = SourceFromQuery ?? "";
         var sortFromQuery = SortFromAddress();
-        if (!sourceInitialized || fromQuery != source || sortFromQuery != sort)
+        var query = QueryHelpers.ParseQuery(Nav.ToAbsoluteUri(Nav.Uri).Query);
+        var criteriaFromQuery = PokemonCriteria.FromQuery(name => query.TryGetValue(name, out var value) ? value.ToString() : null);
+        if (!sourceInitialized || fromQuery != source || sortFromQuery != sort || criteriaFromQuery.Key != criteria.Key)
         {
             sourceInitialized = true;
             source = fromQuery;
             sort = sortFromQuery;
+            criteria = criteriaFromQuery;
             await Reload();
         }
     }
@@ -287,6 +296,14 @@ else
     private async Task SourceChanged()
     {
         Nav.NavigateTo(Nav.GetUriWithQueryParameter("source", source == "" ? null : source), replace: true);
+        await Reload();
+    }
+
+    /// <summary>Pastilles modifiées : nouvelle adresse (sans ajout à l'historique), puis rechargement.</summary>
+    private async Task CriteriaChanged(PokemonCriteria value)
+    {
+        criteria = value;
+        Nav.NavigateTo(Nav.GetUriWithQueryParameters(value.ToQuery()), replace: true);
         await Reload();
     }
 

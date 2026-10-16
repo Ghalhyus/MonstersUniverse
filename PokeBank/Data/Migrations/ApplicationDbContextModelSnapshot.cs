@@ -218,6 +218,9 @@ namespace PokeBank.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
+                    b.Property<int>("Ability")
+                        .HasColumnType("INTEGER");
+
                     b.Property<byte>("Context")
                         .HasColumnType("INTEGER");
 
@@ -235,6 +238,9 @@ namespace PokeBank.Migrations
                     b.Property<byte>("Form")
                         .HasColumnType("INTEGER");
 
+                    b.Property<byte>("FormKind")
+                        .HasColumnType("INTEGER");
+
                     b.Property<byte?>("Gender")
                         .HasColumnType("INTEGER");
 
@@ -250,11 +256,35 @@ namespace PokeBank.Migrations
                     b.Property<bool>("IsShiny")
                         .HasColumnType("INTEGER");
 
+                    b.Property<byte>("IvAtk")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<byte>("IvDef")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<byte>("IvHp")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<byte>("IvSpA")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<byte>("IvSpD")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<byte>("IvSpe")
+                        .HasColumnType("INTEGER");
+
                     b.Property<byte>("Level")
                         .HasColumnType("INTEGER");
 
                     b.Property<string>("Location")
                         .HasColumnType("TEXT");
+
+                    b.Property<bool>("MegaReady")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<byte?>("Nature")
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("Nickname")
                         .IsRequired()
@@ -287,6 +317,12 @@ namespace PokeBank.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<int?>("StoredSaveId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<byte>("Type1")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<byte>("Type2")
                         .HasColumnType("INTEGER");
 
                     b.HasKey("Id");

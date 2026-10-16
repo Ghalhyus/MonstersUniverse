@@ -32,6 +32,27 @@ public class BankPokemon
     /// </summary>
     public byte? Gender { get; set; }
     public int? HeldItem { get; set; }
+
+    // Filtres de « Ma collection » (Services.PokemonTraits) : remplis à l'enregistrement, et au démarrage pour les Pokémon
+    // enregistrés avant leur ajout (BankService.FillFilterDetailsAsync, qui repère ceux dont la nature est null).
+    /// <summary>Types des jeux récents (index PKHeX : 0 Normal ... 17 Fée) ; un seul type : deux fois le même.</summary>
+    public byte Type1 { get; set; }
+    public byte Type2 { get; set; }
+    /// <summary>Nature (index PKHeX) ; null tant que le démarrage n'a pas rempli les filtres de ce Pokémon.</summary>
+    public byte? Nature { get; set; }
+    /// <summary>Talent (index PKHeX) ; 0 : aucun (1re et 2e génération).</summary>
+    public int Ability { get; set; }
+    /// <summary>IV de 0 à 31 (1re et 2e génération ramenées à cette échelle).</summary>
+    public byte IvHp { get; set; }
+    public byte IvAtk { get; set; }
+    public byte IvDef { get; set; }
+    public byte IvSpA { get; set; }
+    public byte IvSpD { get; set; }
+    public byte IvSpe { get; set; }
+    public Services.FormKind FormKind { get; set; }
+    /// <summary>Tient la gemme (ou l'orbe) de sa Méga-Évolution : affiché méga-évolué.</summary>
+    public bool MegaReady { get; set; }
+
     public bool IsShiny { get; set; }
     public bool IsEgg { get; set; }
     public bool IsLegal { get; set; }
