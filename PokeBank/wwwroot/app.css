@@ -223,6 +223,8 @@ h1:focus {
 .inventory-layout { display: flex; align-items: flex-start; gap: 1rem; }
 .inventory-main { flex: 1; min-width: 0; }
 .inventory-search { max-width: 24rem; }
+.inventory-sort { display: flex; align-items: center; gap: .25rem; }
+.inventory-sort .form-select { width: auto; }
 .journal-panel {
     flex: 0 0 33.333%;
     min-width: 420px;

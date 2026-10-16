@@ -9,6 +9,7 @@
 @inject WalletState Wallet
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
+@inject PokemonInfo Info
 
 <PageTitle>Inventaire</PageTitle>
 
@@ -98,6 +99,16 @@
         </select>
         <input type="search" class="form-control form-control-sm inventory-search" placeholder="Rechercher par nom…"
                aria-label="Rechercher par nom" @bind="search" @bind:event="oninput" />
+        @* Tri de l'onglet affiché : chaque onglet garde le sien, retenu par le navigateur. *@
+        <div class="inventory-sort">
+            <select class="form-select form-select-sm" aria-label="Trier cet onglet" value="@SortSlugs[CurrentSort.By]" @onchange="SortChanged">
+                @foreach (var (by, slug) in SortSlugs)
+                {
+                    <option value="@slug">Tri : @SortLabel(by)</option>
+                }
+            </select>
+            <button type="button" class="btn btn-sm btn-outline-secondary text-nowrap" title="Inverser l'ordre" @onclick="ReverseSort">@OrderLabel</button>
+        </div>
         <div class="btn-group btn-group-sm ms-auto" role="group" aria-label="Affichage">
             <button type="button" class="btn @(grid ? "btn-outline-secondary" : "btn-secondary")" aria-pressed="@(grid ? "false" : "true")"
                     @onclick="() => SetView(grid: false)">Liste</button>
@@ -129,7 +140,7 @@
     @{
         var current = ItemCategories.All.First(c => c.Category == tab);
         var all = view.Where(i => i.Category == tab).ToList();
-        var shown = all.Where(Matches).ToList();
+        var shown = Sort(all.Where(Matches));
         var clickable = source == AllSource;
     }
     @if (source != InternalSource && saves is null)
@@ -380,6 +391,29 @@ else if (panel == SidePanel.Detail && detail is { } d)
     /// <summary>Choix « Liste » / « Grille », retenu par le navigateur.</summary>
     private const string ViewStorageKey = "pokebank.inventaire.affichage";
 
+    /// <summary>
+    /// Critère de tri d'un onglet : « par défaut » (numéro d'objet commun à tous les jeux, qui garde ensemble les Balls, les
+    /// pierres, les potions... ; nom de la capacité pour les CT), nom ou quantité. À égalité de quantité, par nom.
+    /// </summary>
+    private enum ItemSortBy { Default, Name, Quantity }
+
+    /// <summary>Tri d'un onglet : croissant par défaut, <paramref name="Descending"/> l'inverse.</summary>
+    private readonly record struct ItemSort(ItemSortBy By = ItemSortBy.Default, bool Descending = false);
+
+    /// <summary>Nom de chaque critère dans le navigateur (et valeur de la liste).</summary>
+    private static readonly IReadOnlyDictionary<ItemSortBy, string> SortSlugs = new Dictionary<ItemSortBy, string>
+    {
+        [ItemSortBy.Default] = "defaut",
+        [ItemSortBy.Name] = "nom",
+        [ItemSortBy.Quantity] = "quantite",
+    };
+
+    /// <summary>Tri de chaque onglet, retenu par le navigateur (« objets » → « quantite:desc »...).</summary>
+    private const string SortStorageKey = "pokebank.inventaire.tris";
+
+    private static readonly System.Globalization.CompareOptions IgnoreCaseAndAccents =
+        System.Globalization.CompareOptions.IgnoreCase | System.Globalization.CompareOptions.IgnoreNonSpace;
+
     private static readonly System.Globalization.CompareInfo French = System.Globalization.CultureInfo.GetCultureInfo("fr-FR").CompareInfo;
 
     private ItemCategory tab = ItemCategory.Items;
@@ -389,6 +423,7 @@ else if (panel == SidePanel.Detail && detail is { } d)
     private List<ItemSource>? saves; // sacs des sauvegardes stockées, lus après le premier affichage
     private SidePanel panel; // fermé à chaque arrivée sur la page
     private ItemStack? detail; // objet dont le détail est affiché (source « Tout »)
+    private Dictionary<ItemCategory, ItemSort> sorts = []; // tri de chaque onglet ; absent : tri par défaut
 
     private string userId = "";
     private long balance;
@@ -435,6 +470,7 @@ else if (panel == SidePanel.Detail && detail is { } d)
         try
         {
             grid = await JS.InvokeAsync<string?>("localStorage.getItem", ViewStorageKey) == "grille";
+            sorts = ReadSorts(await JS.InvokeAsync<string?>("localStorage.getItem", SortStorageKey));
         }
         catch (JSException)
         {
@@ -443,6 +479,92 @@ else if (panel == SidePanel.Detail && detail is { } d)
         // Lecture des sacs après le premier affichage : l'inventaire interne s'affiche sans attendre les fichiers.
         saves = await InventoryStore.ListItemSourcesAsync(userId);
         StateHasChanged();
+    }
+
+    // ---------- Tri de chaque onglet ----------
+
+    private ItemSort CurrentSort => sorts.GetValueOrDefault(tab);
+
+    private static string SortLabel(ItemSortBy by) => by switch
+    {
+        ItemSortBy.Name => "Nom",
+        ItemSortBy.Quantity => "Quantité",
+        _ => "Par défaut",
+    };
+
+    /// <summary>Texte du bouton de sens : l'ordre affiché (cliquer l'inverse).</summary>
+    private string OrderLabel => (CurrentSort.By, CurrentSort.Descending) switch
+    {
+        (ItemSortBy.Name, false) => "↑ A → Z",
+        (ItemSortBy.Name, true) => "↓ Z → A",
+        (_, false) => "↑ Croissant",
+        (_, true) => "↓ Décroissant",
+    };
+
+    /// <summary>
+    /// Objets de l'onglet dans l'ordre choisi. « Par défaut » garde l'ordre de l'inventaire (voir <see cref="ItemSortBy"/>) ;
+    /// le nom d'une CT est celui de sa capacité, sans son numéro (« CT26 ») ni les numéros ajoutés pour « Tout ».
+    /// </summary>
+    private List<ItemStack> Sort(IEnumerable<ItemStack> stacks)
+    {
+        var byName = Comparer<string>.Create((a, b) => French.Compare(a, b, IgnoreCaseAndAccents));
+        var sort = CurrentSort;
+        return (sort.By, sort.Descending) switch
+        {
+            (ItemSortBy.Name, false) => stacks.OrderBy(SortName, byName).ToList(),
+            (ItemSortBy.Name, true) => stacks.OrderByDescending(SortName, byName).ToList(),
+            (ItemSortBy.Quantity, false) => stacks.OrderBy(i => i.Count).ThenBy(SortName, byName).ToList(),
+            (ItemSortBy.Quantity, true) => stacks.OrderByDescending(i => i.Count).ThenBy(SortName, byName).ToList(),
+            (_, true) => stacks.Reverse().ToList(),
+            _ => stacks.ToList(),
+        };
+    }
+
+    private string SortName(ItemStack item) => SaveBag.MoveOf(item.ItemId) is { } move ? Info.MoveName(move) : item.Name;
+
+    private async Task SortChanged(ChangeEventArgs e)
+    {
+        var by = SortSlugs.FirstOrDefault(s => s.Value == e.Value?.ToString()).Key;
+        await SaveSort(new ItemSort(by)); // nouveau critère : croissant
+    }
+
+    private Task ReverseSort() => SaveSort(CurrentSort with { Descending = !CurrentSort.Descending });
+
+    private async Task SaveSort(ItemSort sort)
+    {
+        if (sort == default)
+            sorts.Remove(tab);
+        else
+            sorts[tab] = sort;
+        try
+        {
+            var stored = sorts.ToDictionary(s => TabSlugs[s.Key], s => SortSlugs[s.Value.By] + (s.Value.Descending ? ":desc" : ""));
+            await JS.InvokeVoidAsync("localStorage.setItem", SortStorageKey, System.Text.Json.JsonSerializer.Serialize(stored));
+        }
+        catch (JSException)
+        {
+            // pas retenu : le tri vaut pour cette visite
+        }
+    }
+
+    /// <summary>Tris retenus par le navigateur ; une valeur illisible est ignorée (tri par défaut).</summary>
+    private static Dictionary<ItemCategory, ItemSort> ReadSorts(string? json)
+    {
+        var sorts = new Dictionary<ItemCategory, ItemSort>();
+        try
+        {
+            foreach (var (tabSlug, value) in System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(json ?? "{}") ?? [])
+            {
+                var parts = value.Split(':');
+                if (TabSlugs.FirstOrDefault(t => t.Value == tabSlug) is { Value: not null } category
+                    && SortSlugs.FirstOrDefault(s => s.Value == parts[0]) is { Value: not null } by)
+                    sorts[category.Key] = new ItemSort(by.Key, parts.Length > 1 && parts[1] == "desc");
+            }
+        }
+        catch (System.Text.Json.JsonException)
+        {
+        }
+        return sorts;
     }
 
     private bool Searching => !string.IsNullOrWhiteSpace(search);
