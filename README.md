@@ -56,6 +56,13 @@ et tous ses Pokémon (équipe, boîtes, pension, Boîte Combat…) apparaissent 
 (ni retrait vers un jeu, ni téléchargement `.pkX`). « Mettre à jour » remplace le fichier et tous ses Pokémon ;
 « Supprimer » renvoie d'abord le fichier à l'utilisateur. Une copie est gardée dans `Data/backups/` à chaque fois.
 
+Partout où une sauvegarde stockée est nommée (« Jeu — Dresseur »), son **nom de fichier** l'accompagne, pour distinguer
+deux parties du même jeu : en petit gris en dessous dans les fenêtres de choix (argent, objets), le détail d'un objet, la
+fiche d'un Pokémon et le journal ; à la suite (« Noire — Ghal · noir.sav ») dans les listes déroulantes et l'infobulle
+d'un Pokémon, qui n'ont qu'une ligne. Le journal garde le nom qu'avait le fichier au moment de l'opération, dans le même
+texte que « Jeu — Dresseur » après un retour à la ligne (`WalletOperation.SaveLabelOf`) ; les opérations plus anciennes ont
+reçu le nom actuel du fichier (migration `JournalFileNames`), sauf celles dont la sauvegarde avait été supprimée.
+
 - Une même partie ne peut être stockée **qu'une fois sur tout le serveur**, tous comptes confondus. Elle est reconnue
   par génération + jeu + ID dresseur / ID secret + nom du dresseur (`SaveIdentity`) ; c'est dissuasif, pas infaillible
   (PKHeX permet de modifier ces valeurs). Les jeux de 1re et 2e génération n'ont pas d'ID secret.

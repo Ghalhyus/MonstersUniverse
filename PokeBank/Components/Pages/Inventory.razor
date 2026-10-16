@@ -93,7 +93,7 @@
             {
                 @foreach (var save in saves)
                 {
-                    <option value="@SaveSource(save.SaveId)">@save.Label</option>
+                    <option value="@SaveSource(save.SaveId)">@save.LabelAndFile</option>
                 }
             }
         </select>
@@ -244,7 +244,13 @@
                             }
                         </div>
                         <div class="d-flex gap-2 small text-muted">
-                            <span>@string.Join(" · ", new[] { op.SaveLabel, op.Details }.Where(t => !string.IsNullOrEmpty(t)))</span>
+                            <span>
+                                @string.Join(" · ", new[] { op.SaveName, op.Details }.Where(t => !string.IsNullOrEmpty(t)))
+                                @if (op.SaveFileName is { } file)
+                                {
+                                    <span class="d-block small">@file</span>
+                                }
+                            </span>
                             <span class="ms-auto text-nowrap" title="Solde après l'opération">@InventoryService.FormatMoney(op.BalanceAfter)</span>
                         </div>
                     </li>
@@ -263,10 +269,16 @@ else if (panel == SidePanel.Detail && detail is { } d)
             <button type="button" class="btn-close ms-auto" aria-label="Fermer le détail" @onclick="ClosePanel"></button>
         </div>
         <ul class="list-group list-group-flush">
-            @foreach (var (label, count) in DetailRows(d.ItemId))
+            @foreach (var (label, file, count) in DetailRows(d.ItemId))
             {
                 <li class="list-group-item d-flex gap-2">
-                    <span>@label</span>
+                    <span>
+                        @label
+                        @if (file is not null)
+                        {
+                            <span class="d-block small text-muted">@file</span>
+                        }
+                    </span>
                     <span class="ms-auto fw-semibold text-nowrap">× @CollectionCapacity.FormatCount(count)</span>
                 </li>
             }
@@ -306,7 +318,10 @@ else if (panel == SidePanel.Detail && detail is { } d)
                                 var s = source;
                                 <button type="button" class="list-group-item list-group-item-action d-flex align-items-center gap-2"
                                         disabled="@(s.Money is null or 0)" @onclick="() => ChooseSave(s)">
-                                    <span><strong>@s.Label</strong> <span class="small text-muted">(@s.TrainerId)</span></span>
+                                    <span>
+                                        <strong>@s.Label</strong> <span class="small text-muted">(@s.TrainerId)</span>
+                                        <span class="d-block small text-muted">@s.FileName</span>
+                                    </span>
                                     <span class="ms-auto text-nowrap">@(s.Money is { } m ? InventoryService.FormatMoney(m) : "argent illisible")</span>
                                 </button>
                             }
@@ -632,17 +647,17 @@ else if (panel == SidePanel.Detail && detail is { } d)
     /// Où se trouve un objet (source « Tout ») : l'inventaire interne puis chaque sauvegarde qui en a ; pour une sauvegarde qui a
     /// un PC d'objets (1re à 3e génération), le sac et le PC à part (« Rouge / Bleu — Red (CT26, PC) »).
     /// </summary>
-    private IEnumerable<(string Label, int Count)> DetailRows(int itemId)
+    private IEnumerable<(string Label, string? File, int Count)> DetailRows(int itemId)
     {
         if (items.FirstOrDefault(i => i.ItemId == itemId) is { } owned)
-            yield return ("Interne", owned.Count);
+            yield return ("Interne", null, owned.Count);
         foreach (var save in saves ?? [])
         {
             var machine = save.MachineLabels.GetValueOrDefault(itemId);
             if (!save.HasPc)
             {
                 if (save.CountOf(itemId) is var count and > 0)
-                    yield return (machine is null ? save.Label : $"{save.Label} ({machine})", count);
+                    yield return (machine is null ? save.Label : $"{save.Label} ({machine})", save.FileName, count);
                 continue;
             }
             foreach (var place in new[] { BagPlace.Bag, BagPlace.Pc })
@@ -650,7 +665,7 @@ else if (panel == SidePanel.Detail && detail is { } d)
                 if (save.CountIn(itemId, place) is var count and > 0)
                 {
                     var where = place == BagPlace.Pc ? "PC" : "sac";
-                    yield return ($"{save.Label} ({(machine is null ? where : $"{machine}, {where}")})", count);
+                    yield return ($"{save.Label} ({(machine is null ? where : $"{machine}, {where}")})", save.FileName, count);
                 }
             }
         }

@@ -45,6 +45,10 @@ dotnet test PokeBank.Tests/PokeBank.Tests.csproj --artifacts-path <dossier tempo
 Migration EF : la générer dans une **copie** du projet (`PokeBank` copié dans un dossier temporaire, `dotnet ef migrations add
 <Nom>` dessus), puis recopier les fichiers de `Data/Migrations` (migration, designer, snapshot). La base se met à jour
 toute seule au démarrage (`Database.Migrate()`). Le code doit compiler avant de générer la migration.
+La copie génère l'espace de noms `PokeBank.Data.Migrations` : le remettre à `PokeBank.Migrations` comme les autres. Une
+migration qui modifie des données (SQL seul, sans changement de modèle : `GameNames`, `JournalFileNames`) se teste dans
+`MigrationsTests` (base migrée jusqu'à la précédente, lignes ajoutées, puis migration complète et retour) : les autres
+tests créent la base avec `EnsureCreated`, sans passer par les migrations.
 
 ## Tester dans le navigateur
 

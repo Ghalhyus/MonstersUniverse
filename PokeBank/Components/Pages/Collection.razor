@@ -40,7 +40,7 @@
         <option value="@BankSource">Stockage interne</option>
         @foreach (var s in saves)
         {
-            <option value="@s.Id">💾 @s.Label</option>
+            <option value="@s.Id">💾 @s.LabelAndFile</option>
         }
     </select>
     @* Tri : critère, puis sens (les œufs restent à la fin). *@
@@ -80,7 +80,7 @@ else
                         var item = p;
                         var stored = item.StoredSaveId is { } sid ? saves.FirstOrDefault(x => x.Id == sid) : null;
                         <PokemonSlot Sprite="@item.SpriteUrl"
-                                     Title="@($"{item.Nickname} ({item.SpeciesName}) N.{item.Level}{(stored is null ? "" : $" — sauvegarde {stored.Label}")}")"
+                                     Title="@($"{item.Nickname} ({item.SpeciesName}) N.{item.Level}{(stored is null ? "" : $" — sauvegarde {stored.LabelAndFile}")}")"
                                      Level="item.Level"
                                      Shiny="item.IsShiny"
                                      Marker="@(item.StoredSaveId is null ? null : "💾")"
@@ -111,8 +111,13 @@ else
                 @if (selected.StoredSaveId is { } sid)
                 {
                     @* Sauvegarde stockée : lecture seule, pas de fichier .pkX à télécharger. *@
+                    var save = saves.FirstOrDefault(s => s.Id == sid);
                     <small class="text-muted">
-                        💾 @(saves.FirstOrDefault(s => s.Id == sid)?.Label ?? "Sauvegarde stockée") · @selected.Location
+                        💾 @(save?.Label ?? "Sauvegarde stockée") · @selected.Location
+                        @if (save is not null)
+                        {
+                            <span class="d-block">@save.FileName</span>
+                        }
                     </small>
                 }
                 else

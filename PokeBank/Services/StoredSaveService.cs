@@ -14,6 +14,9 @@ public sealed record StoredSaveInfo(
 {
     public string Label => $"{GameName} — {TrainerName}";
 
+    /// <summary>« Noire — Ghal · noir.sav », pour une liste déroulante ou une infobulle (une seule ligne, sans mise en forme).</summary>
+    public string LabelAndFile => $"{Label} · {FileName}";
+
     /// <summary>« un retrait de 5 000 ₽ et un transfert d'objets » (voir <see cref="StoredSaveService.DescribeServerChanges"/>).</summary>
     public string ServerChanges => StoredSaveService.DescribeServerChanges(WithdrawnOnServer, ItemsChangedOnServer);
 }

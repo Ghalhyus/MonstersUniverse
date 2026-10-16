@@ -38,7 +38,17 @@ public class WalletOperation
     /// <summary>Sauvegarde concernée ; vidé si elle est supprimée depuis (le libellé reste).</summary>
     public int? StoredSaveId { get; set; }
     public StoredSave? StoredSave { get; set; }
+    /// <summary>
+    /// « Jeu — Dresseur », puis le nom du fichier de la sauvegarde à ce moment-là après un retour à la ligne
+    /// (« Rouge / Bleu — Red\nrouge.sav », voir <see cref="SaveLabelOf"/>). Les opérations d'avant la migration
+    /// JournalFileNames ont reçu le nom du fichier qu'avait alors la sauvegarde, si elle existait encore.
+    /// </summary>
     public string SaveLabel { get; set; } = "";
     /// <summary>Précision affichée dans le journal (ex. « +200 emplacements (1 000 → 1 200) », « 10 × Poké Ball, 2 × Hyper Ball »).</summary>
     public string Details { get; set; } = "";
+
+    /// <summary>Séparateur du nom du fichier dans <see cref="SaveLabel"/> : aucun nom de jeu ni de dresseur n'en contient.</summary>
+    public const char FileSeparator = '\n';
+
+    public static string SaveLabelOf(StoredSave save) => $"{save.GameName} — {save.TrainerName}{FileSeparator}{save.FileName}";
 }

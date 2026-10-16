@@ -6,9 +6,16 @@ namespace PokeBank.Services;
 
 /// <summary>Sauvegarde stockée telle que proposée pour un retrait de Pokédollars.</summary>
 /// <param name="Money">Argent dans le fichier stocké ; null si PKHeX ne sait pas le lire pour ce jeu.</param>
-public sealed record MoneySource(int SaveId, string Label, string TrainerId, long? Money);
+public sealed record MoneySource(int SaveId, string Label, string TrainerId, string FileName, long? Money);
 
-public sealed record WalletOperationView(DateTime At, WalletOperationKind Kind, long Amount, long BalanceAfter, string SaveLabel, string Details);
+public sealed record WalletOperationView(DateTime At, WalletOperationKind Kind, long Amount, long BalanceAfter, string SaveLabel, string Details)
+{
+    /// <summary>« Jeu — Dresseur » de <see cref="SaveLabel"/>.</summary>
+    public string SaveName => SaveLabel.Split(WalletOperation.FileSeparator)[0];
+
+    /// <summary>Nom du fichier de la sauvegarde au moment de l'opération ; null s'il n'est pas connu.</summary>
+    public string? SaveFileName => SaveLabel.Split(WalletOperation.FileSeparator) is [_, var file, ..] && file != "" ? file : null;
+}
 
 public sealed record WithdrawResult(bool Ok, string Message, long Balance = 0);
 
@@ -32,13 +39,16 @@ public sealed record ItemStack(int ItemId, ItemCategory Category, string Name, s
 /// <param name="PcItems">Ceux de son PC d'objets (1re à 3e génération) ; null si son jeu n'en a pas.</param>
 /// <param name="PcCapacity">Comme <paramref name="Capacity"/>, pour son PC ; null si son jeu n'en a pas.</param>
 public sealed record ItemSource(
-    int SaveId, string Label, string TrainerId, string GameName, string? Unsupported,
+    int SaveId, string Label, string TrainerId, string FileName, string GameName, string? Unsupported,
     IReadOnlyList<ItemStack> Items, IReadOnlyList<ItemStack> BagItems, IReadOnlyDictionary<int, int> Capacity,
     IReadOnlyDictionary<int, string> MachineLabels, IReadOnlySet<int> LockedMachines,
     IReadOnlyList<ItemStack>? PcItems = null, IReadOnlyDictionary<int, int>? PcCapacity = null)
 {
     /// <summary>La sauvegarde a un PC d'objets, à côté du sac (1re à 3e génération).</summary>
     public bool HasPc => PcItems is not null;
+
+    /// <summary>« Noire — Ghal · noir.sav », pour une liste déroulante (une seule ligne, sans mise en forme).</summary>
+    public string LabelAndFile => $"{Label} · {FileName}";
 
     public int Total(ItemCategory category) => Items.Where(i => i.Category == category).Sum(i => i.Count);
 
@@ -161,7 +171,7 @@ public sealed class InventoryService(
             .OrderBy(s => s.UploadedAt)
             .Select(s => new { s.Id, s.GameName, s.TrainerName, s.TrainerId, s.FileName, s.Data })
             .ToListAsync();
-        return saves.Select(s => new MoneySource(s.Id, $"{s.GameName} — {s.TrainerName}", s.TrainerId,
+        return saves.Select(s => new MoneySource(s.Id, $"{s.GameName} — {s.TrainerName}", s.TrainerId, s.FileName,
                 StoredSaveService.TryRead(s.Data, s.FileName, out var sav) ? sav.Money : null))
             .ToList();
     }
@@ -246,10 +256,10 @@ public sealed class InventoryService(
         {
             var label = $"{s.GameName} — {s.TrainerName}";
             if (!StoredSaveService.TryRead(s.Data, s.FileName, out var sav))
-                return new ItemSource(s.Id, label, s.TrainerId, s.GameName, "Sauvegarde illisible.", [], [], new Dictionary<int, int>(),
+                return new ItemSource(s.Id, label, s.TrainerId, s.FileName, s.GameName, "Sauvegarde illisible.", [], [], new Dictionary<int, int>(),
                     new Dictionary<int, string>(), new HashSet<int>());
             var hasPc = SaveBag.HasPc(sav);
-            return new ItemSource(s.Id, label, s.TrainerId, s.GameName, SaveBag.Unsupported(sav),
+            return new ItemSource(s.Id, label, s.TrainerId, s.FileName, s.GameName, SaveBag.Unsupported(sav),
                 Stacks(SaveBag.ReadItems(sav)), Stacks(SaveBag.ReadItems(sav, BagPlace.Bag)), SaveBag.Capacity(sav),
                 SaveBag.MachineLabels(sav), SaveBag.LockedMachines(sav),
                 hasPc ? Stacks(SaveBag.ReadItems(sav, BagPlace.Pc)) : null, hasPc ? SaveBag.Capacity(sav, BagPlace.Pc) : null);
@@ -453,7 +463,7 @@ public sealed class InventoryService(
             Amount = amount,
             BalanceAfter = balanceAfter,
             StoredSaveId = save.Id,
-            SaveLabel = $"{save.GameName} — {save.TrainerName}",
+            SaveLabel = WalletOperation.SaveLabelOf(save),
             Details = details,
         });
 }

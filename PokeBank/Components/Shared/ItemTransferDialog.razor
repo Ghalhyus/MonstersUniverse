@@ -30,10 +30,11 @@
                         @foreach (var source in sources)
                         {
                             var s = source;
-                            @* Nom de la sauvegarde, puis le contenu du sac en dessous (il peut passer à la ligne). *@
+                            @* Nom de la sauvegarde, son fichier, puis le contenu du sac en dessous (il peut passer à la ligne). *@
                             <button type="button" class="list-group-item list-group-item-action"
                                     disabled="@(s.Unsupported is not null || (!Deposit && s.Items.Count == 0))" @onclick="() => ChooseSave(s)">
                                 <span class="d-block"><strong>@s.Label</strong> <span class="small text-muted text-nowrap">(@s.TrainerId)</span></span>
+                                <span class="d-block small text-muted">@s.FileName</span>
                                 <span class="d-block small text-muted">@(s.Unsupported ?? BagSummary(s))</span>
                             </button>
                         }

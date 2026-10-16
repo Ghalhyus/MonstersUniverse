@@ -60,6 +60,8 @@ public sealed class InventoryServiceTests : IDisposable
     {
         var id = await Store();
         Assert.Equal(100_000, (await _inventory.ListMoneySourcesAsync("sacha")).Single().Money);
+        Assert.Equal("Ludo.sav", (await _inventory.ListMoneySourcesAsync("sacha")).Single().FileName);
+        Assert.Equal("Jeu de génération 5 — Ludo · Ludo.sav", (await _inventory.ListItemSourcesAsync("sacha")).Single().LabelAndFile);
 
         var result = await _inventory.WithdrawFromSaveAsync("sacha", id, 30_000);
         Assert.True(result.Ok, result.Message);
@@ -202,7 +204,7 @@ public sealed class InventoryServiceTests : IDisposable
 
         Assert.Equal(25_000, await _inventory.GetBalanceAsync("sacha"));
         var op = Assert.Single(await _inventory.ListOperationsAsync("sacha"));
-        Assert.Contains("Ludo", op.SaveLabel);
+        Assert.Equal(("Jeu de génération 5 — Ludo", "Ludo.sav"), (op.SaveName, op.SaveFileName)); // le fichier reste aussi
         using var db = _db.NewContext();
         Assert.Null((await db.WalletOperations.SingleAsync()).StoredSaveId);
     }
