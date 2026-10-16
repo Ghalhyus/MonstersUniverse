@@ -52,6 +52,25 @@
             };
         };
 
+        // Nombre de colonnes de la grille automatique d'objets (« Inventaire ») : mesuré sur une grille vide de même largeur
+        // (.item-grid-probe), dont le navigateur calcule les colonnes avec les règles de .item-grid. Le composant est prévenu
+        // à chaque changement (fenêtre redimensionnée, journal ouvert ou fermé).
+        window.watchGridColumns = (probe, component) => {
+            const count = () => getComputedStyle(probe).gridTemplateColumns.split(" ").filter(t => t).length;
+            let last = count();
+            const observer = new ResizeObserver(() => {
+                const current = count();
+                if (current === last) return;
+                last = current;
+                component.invokeMethodAsync("OnGridColumnsChanged", current);
+            });
+            observer.observe(probe);
+            return {
+                count,
+                dispose: () => observer.disconnect(),
+            };
+        };
+
         // Glisser-déposer des Pokémon : la logique est côté serveur (Bank.razor), qui marque les zones
         // acceptant le Pokémon en cours de glissement (.drop-active / .drop-target). Ici, uniquement ce
         // que le navigateur exige de façon synchrone (un aller-retour serveur à chaque "dragover" serait trop lent).

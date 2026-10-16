@@ -10,6 +10,7 @@
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
 @inject PokemonInfo Info
+@implements IAsyncDisposable
 
 <PageTitle>Inventaire</PageTitle>
 
@@ -109,7 +110,22 @@
             </select>
             <button type="button" class="btn btn-sm btn-outline-secondary text-nowrap" title="Inverser l'ordre" @onclick="ReverseSort">@OrderLabel</button>
         </div>
-        <div class="btn-group btn-group-sm ms-auto" role="group" aria-label="Affichage">
+        @if (grid)
+        {
+            @* Colonnes de la grille : automatiques (selon la largeur) tant qu'aucun nombre n'est choisi au curseur. *@
+            <label class="inventory-columns small ms-auto">
+                Colonnes
+                <input type="range" class="form-range" min="@MinGridColumns" max="@MaxGridColumns"
+                       value="@(gridColumns ?? Math.Clamp(autoColumns, MinGridColumns, MaxGridColumns))" @oninput="GridColumnsChanged" />
+                <span class="fw-semibold">@(gridColumns?.ToString() ?? (autoColumns > 0 ? $"Auto ({autoColumns})" : "Auto"))</span>
+            </label>
+            @if (gridColumns is not null)
+            {
+                <button type="button" class="btn btn-sm btn-outline-secondary" title="Colonnes selon la largeur de la fenêtre"
+                        @onclick="() => SetGridColumns(null)">Auto</button>
+            }
+        }
+        <div class="btn-group btn-group-sm @(grid ? "" : "ms-auto")" role="group" aria-label="Affichage">
             <button type="button" class="btn @(grid ? "btn-outline-secondary" : "btn-secondary")" aria-pressed="@(grid ? "false" : "true")"
                     @onclick="() => SetView(grid: false)">Liste</button>
             <button type="button" class="btn @(grid ? "btn-secondary" : "btn-outline-secondary")" aria-pressed="@(grid ? "true" : "false")"
@@ -137,6 +153,7 @@
         }
     }
 
+    <div class="item-grid item-grid-probe" aria-hidden="true" @ref="gridProbe"></div>
     @{
         var current = ItemCategories.All.First(c => c.Category == tab);
         var all = view.Where(i => i.Category == tab).ToList();
@@ -157,7 +174,7 @@
     }
     else if (grid)
     {
-        <div class="item-grid">
+        <div class="item-grid @(gridColumns is null ? "" : "item-grid-fixed")" style="@(gridColumns is { } n ? $"--item-columns: {n}" : null)">
             @foreach (var item in shown)
             {
                 var i = item;
@@ -406,6 +423,16 @@ else if (panel == SidePanel.Detail && detail is { } d)
     /// <summary>Choix « Liste » / « Grille », retenu par le navigateur.</summary>
     private const string ViewStorageKey = "pokebank.inventaire.affichage";
 
+    /// <summary>Nombre de colonnes de la grille choisi au curseur, retenu par le navigateur (absent : automatique).</summary>
+    private const string ColumnsStorageKey = "pokebank.inventaire.colonnes";
+    private const int MinGridColumns = 1, MaxGridColumns = 10;
+
+    private int? gridColumns; // choisi au curseur ; null : autant de colonnes que la largeur en permet
+    private int autoColumns; // colonnes de la grille automatique, mesurées par le navigateur (0 : pas encore)
+    private ElementReference gridProbe;
+    private IJSObjectReference? columnsWatcher;
+    private DotNetObjectReference<Inventory>? selfRef;
+
     /// <summary>
     /// Critère de tri d'un onglet : « par défaut » (numéro d'objet commun à tous les jeux, qui garde ensemble les Balls, les
     /// pierres, les potions... ; nom de la capacité pour les CT), nom ou quantité. À égalité de quantité, par nom.
@@ -485,12 +512,17 @@ else if (panel == SidePanel.Detail && detail is { } d)
         try
         {
             grid = await JS.InvokeAsync<string?>("localStorage.getItem", ViewStorageKey) == "grille";
+            gridColumns = int.TryParse(await JS.InvokeAsync<string?>("localStorage.getItem", ColumnsStorageKey), out var n)
+                && n is >= MinGridColumns and <= MaxGridColumns ? n : null;
             sorts = ReadSorts(await JS.InvokeAsync<string?>("localStorage.getItem", SortStorageKey));
         }
         catch (JSException)
         {
             // stockage du navigateur indisponible (navigation privée...) : on reste sur la liste
         }
+        selfRef = DotNetObjectReference.Create(this);
+        columnsWatcher = await JS.InvokeAsync<IJSObjectReference>("watchGridColumns", gridProbe, selfRef);
+        autoColumns = await columnsWatcher.InvokeAsync<int>("count");
         // Lecture des sacs après le premier affichage : l'inventaire interne s'affiche sans attendre les fichiers.
         saves = await InventoryStore.ListItemSourcesAsync(userId);
         StateHasChanged();
@@ -701,6 +733,53 @@ else if (panel == SidePanel.Detail && detail is { } d)
     {
         detail = null;
         panel = SidePanel.None;
+    }
+
+    // ---------- Colonnes de la grille ----------
+
+    /// <summary>Appelé par le navigateur quand la grille automatique change de nombre de colonnes.</summary>
+    [JSInvokable]
+    public Task OnGridColumnsChanged(int count) => InvokeAsync(() =>
+    {
+        autoColumns = count;
+        StateHasChanged();
+    });
+
+    private Task GridColumnsChanged(ChangeEventArgs e) =>
+        int.TryParse(e.Value?.ToString(), out var n) ? SetGridColumns(Math.Clamp(n, MinGridColumns, MaxGridColumns)) : Task.CompletedTask;
+
+    /// <summary>Nombre de colonnes choisi (null : automatique), retenu par le navigateur.</summary>
+    private async Task SetGridColumns(int? columns)
+    {
+        gridColumns = columns;
+        try
+        {
+            if (columns is { } n)
+                await JS.InvokeVoidAsync("localStorage.setItem", ColumnsStorageKey, n.ToString());
+            else
+                await JS.InvokeVoidAsync("localStorage.removeItem", ColumnsStorageKey);
+        }
+        catch (JSException)
+        {
+            // pas retenu : le choix vaut pour cette visite
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (columnsWatcher is not null)
+        {
+            try
+            {
+                await columnsWatcher.InvokeVoidAsync("dispose");
+                await columnsWatcher.DisposeAsync();
+            }
+            catch (JSDisconnectedException)
+            {
+                // circuit fermé : le navigateur a déjà tout oublié
+            }
+        }
+        selfRef?.Dispose();
     }
 
     private async Task SetView(bool grid)
