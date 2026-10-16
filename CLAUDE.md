@@ -89,12 +89,22 @@ toute seule au démarrage (`Database.Migrate()`). Le code doit compiler avant de
 
 ## Images des Pokémon et des objets
 
-Servies par le site, plus rien n'est chargé depuis GitHub : `wwwroot/images/pokemon/<numéro d'espèce>.png` et
-`pokemon/chromatique/`, `wwwroot/images/objets/<numéro d'objet>.png` (numéros de PKHeX, ceux de `SaveBag`), `ct-<type>.png`,
-et dans chaque dossier un `inconnu.png` affiché en remplacement (`onerror` des balises, composant `ItemSprite` pour les
-objets). `outils/images.py` les rassemble (Python seul, garde les fichiers présents) : le relancer après une mise à jour
-de PKHeX.Core (nouvelles espèces), en changeant la version en tête du script. `RealSavesTests` vérifie que chaque espèce
-et chaque objet des vraies sauvegardes a son image.
+Servies par le site, plus rien n'est chargé depuis GitHub : `wwwroot/images/pokemon/<numéro d'espèce>.png`,
+`<numéro>-<forme>.png` (nom de forme de PokéAPI), `femelle/`, et les mêmes sous `pokemon/chromatique/` ;
+`wwwroot/images/objets/<numéro d'objet>.png` (numéros de PKHeX, ceux de `SaveBag`), `ct-<type>.png` ; dans chaque dossier
+un `inconnu.png` affiché en remplacement (`onerror` des balises, composant `ItemSprite` pour les objets).
+`outils/images.py` les rassemble (Python seul, garde les fichiers présents) : le relancer après une mise à jour de
+PKHeX.Core (nouvelles espèces), en changeant la version en tête du script. L'API GitHub n'accepte que 60 appels par heure
+sans jeton (variable `GITHUB_TOKEN`) ; le script les limite.
+
+- `PokemonSprites` choisit l'image parmi les fichiers présents (liste lue au démarrage, `PokemonSprites.Load`) : nom de forme
+  de PKHeX (selon le jeu du Pokémon : `EntityContext`) mis en forme, puis les noms de PokéAPI (`Aliases`, `Suffixes`) ; sinon
+  l'image de l'espèce. Méga-Évolution : `ItemStorage9ZA.GetExpectedMegaStoneOrPrimalOrb` ; PKHeX ne marque comme méga qu'une
+  forme jumelle (« M-Mega », pas « F-Mega »).
+- `BankPokemon.Gender` et `HeldItem` (pour l'image) sont remplis au démarrage pour les Pokémon plus anciens
+  (`BankService.FillSpriteDetailsAsync`).
+- Tests : `PokemonSpritesTests` (formes, femelles, Méga, et la liste des formes de PKHeX sans image), `RealSavesTests`
+  (chaque espèce, chaque objet des vraies sauvegardes).
 
 ## Ajouter une catégorie d'objets à l'inventaire
 

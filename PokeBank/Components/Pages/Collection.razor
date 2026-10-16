@@ -79,7 +79,7 @@ else
                     {
                         var item = p;
                         var stored = item.StoredSaveId is { } sid ? saves.FirstOrDefault(x => x.Id == sid) : null;
-                        <PokemonSlot Sprite="@PokemonInfo.SpriteUrl(item.Species, item.IsShiny)"
+                        <PokemonSlot Sprite="@item.SpriteUrl"
                                      Title="@($"{item.Nickname} ({item.SpeciesName}) N.{item.Level}{(stored is null ? "" : $" — sauvegarde {stored.Label}")}")"
                                      Level="item.Level"
                                      Shiny="item.IsShiny"

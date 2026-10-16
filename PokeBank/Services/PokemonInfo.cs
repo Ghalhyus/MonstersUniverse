@@ -57,13 +57,6 @@ public sealed partial class PokemonInfo
     public string GameName(SaveFile sav) =>
         sav.Version == GameVersion.Any ? $"Jeu de génération {sav.Generation}" : GameName(sav.Version);
 
-    /// <summary>
-    /// Image d'une espèce, servie par le site (wwwroot/images/pokemon, rassemblées par outils/images.py) ; une espèce sans
-    /// image affiche inconnu.png.
-    /// </summary>
-    public static string SpriteUrl(ushort species, bool shiny) =>
-        $"images/pokemon/{(shiny ? "chromatique/" : "")}{species}.png";
-
     /// <summary>Nom français d'un objet par sa clé (voir <see cref="SaveBag"/>) : « Super Ball », « CT/DT Séisme ».</summary>
     public string ItemName(int key) =>
         SaveBag.MoveOf(key) is { } move ? $"CT/DT {MoveName(move)}" : Get(_items, key, $"Objet n°{key}");
@@ -113,7 +106,7 @@ public sealed partial class PokemonInfo
             GameName(pk.Version),
             isLegal ?? IsLegal(pk),
             pk.Extension.ToUpperInvariant(),
-            SpriteUrl(pk.Species, pk.IsShiny));
+            PokemonSprites.Url(pk));
     }
 
     private static string Get(IReadOnlyList<string> list, int index, string fallback = "?") =>

@@ -98,14 +98,14 @@ public sealed class RealSavesTests : IDisposable
     public void Pokemon_AllSpeciesHaveAnImage()
     {
         var missing = Enumerable.Range(1, (int)Species.MAX_COUNT - 1)
-            .SelectMany(s => new[] { PokemonInfo.SpriteUrl((ushort)s, false), PokemonInfo.SpriteUrl((ushort)s, true) })
+            .SelectMany(s => new[] { false, true }.Select(shiny => PokemonSprites.Url((ushort)s, 0, EntityContext.Gen9, false, 0, shiny)))
             .Where(url => !File.Exists(Path.Combine(WebRoot(), url)))
             .ToList();
         Assert.True(missing.Count == 0, $"images manquantes (outils/images.py) : {string.Join(", ", missing.Take(10))}");
     }
 
     /// <summary>Dossier wwwroot du site, retrouvé depuis ce fichier source (les tests peuvent être compilés ailleurs).</summary>
-    private static string WebRoot([System.Runtime.CompilerServices.CallerFilePath] string source = "") =>
+    internal static string WebRoot([System.Runtime.CompilerServices.CallerFilePath] string source = "") =>
         Path.Combine(Path.GetDirectoryName(source)!, "..", "PokeBank", "wwwroot");
 
     /// <summary>Octets de chaque Pokémon de l'équipe et des boîtes, dans l'ordre.</summary>

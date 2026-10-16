@@ -6,7 +6,8 @@ namespace PokeBank.Services;
 
 /// <summary>Ce qu'il faut pour afficher un Pokémon de la banque dans une grille.</summary>
 /// <param name="StoredSaveId">Renseigné pour un Pokémon d'une sauvegarde stockée (lecture seule).</param>
-public sealed record BankListItem(int Id, ushort Species, string SpeciesName, string Nickname, byte Level, bool IsShiny, bool IsEgg, bool IsLegal, int? StoredSaveId);
+public sealed record BankListItem(int Id, ushort Species, string SpeciesName, string Nickname, byte Level, bool IsShiny, bool IsEgg, bool IsLegal, int? StoredSaveId,
+    string SpriteUrl);
 
 /// <summary>Filtre de « Ma collection » : tout, la banque seule, ou une sauvegarde stockée.</summary>
 public readonly record struct CollectionFilter(bool BankOnly = false, int? StoredSaveId = null)
@@ -57,7 +58,8 @@ public sealed class BankService(
         return await Sorted(Filtered(db, ownerId, search, filter), sort)
             .Skip(skip)
             .Take(take)
-            .Select(p => new BankListItem(p.Id, p.Species, p.SpeciesName, p.Nickname, p.Level, p.IsShiny, p.IsEgg, p.IsLegal, p.StoredSaveId))
+            .Select(p => new BankListItem(p.Id, p.Species, p.SpeciesName, p.Nickname, p.Level, p.IsShiny, p.IsEgg, p.IsLegal, p.StoredSaveId,
+                PokemonSprites.Url(p.Species, p.Form, (EntityContext)p.Context, p.Gender == 1, p.HeldItem ?? 0, p.IsShiny, p.IsEgg)))
             .ToListAsync(ct);
     }
 
@@ -112,6 +114,28 @@ public sealed class BankService(
         }
     }
 
+    /// <summary>
+    /// Remplit <see cref="BankPokemon.Gender"/> et <see cref="BankPokemon.HeldItem"/> des Pokémon enregistrés avant leur
+    /// ajout (migration <c>SpriteDetails</c>), en relisant leurs octets ; appelé au démarrage, ne fait rien une fois tout rempli.
+    /// </summary>
+    public static async Task FillSpriteDetailsAsync(ApplicationDbContext db)
+    {
+        while (true)
+        {
+            var batch = await db.BankPokemon.Where(p => p.Gender == null).OrderBy(p => p.Id).Take(500).ToListAsync();
+            if (batch.Count == 0)
+                return;
+            foreach (var entry in batch)
+            {
+                var pk = ToPkm(entry);
+                entry.Gender = (byte)(pk?.Gender ?? 2);
+                entry.HeldItem = pk?.HeldItem ?? 0;
+            }
+            await db.SaveChangesAsync();
+            db.ChangeTracker.Clear();
+        }
+    }
+
     /// <summary>Pokémon d'un utilisateur, filtrés par origine et par espèce / surnom (sans tri).</summary>
     private static IQueryable<BankPokemon> Filtered(ApplicationDbContext db, string ownerId, string? search, CollectionFilter filter)
     {
@@ -147,6 +171,8 @@ public sealed class BankService(
             SortName = BankPokemon.SortKey(view.SpeciesName),
             Nickname = view.Nickname,
             Level = pk.CurrentLevel,
+            Gender = pk.Gender,
+            HeldItem = pk.HeldItem,
             IsShiny = pk.IsShiny,
             IsEgg = pk.IsEgg,
             IsLegal = view.IsLegal,

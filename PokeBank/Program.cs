@@ -67,7 +67,9 @@ using (var scope = app.Services.CreateScope())
     var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
     db.Database.Migrate();
     await BankService.FillSortNamesAsync(db); // nom de tri des Pokémon enregistrés avant son ajout
+    await BankService.FillSpriteDetailsAsync(db); // sexe et objet tenu (image) des Pokémon enregistrés avant leur ajout
 }
+PokemonSprites.Load(app.Environment.WebRootPath); // images des Pokémon et de leurs formes
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())

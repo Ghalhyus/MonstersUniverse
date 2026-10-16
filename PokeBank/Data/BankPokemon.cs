@@ -26,6 +26,12 @@ public class BankPokemon
     public string SortName { get; set; } = "";
     public string Nickname { get; set; } = "";
     public byte Level { get; set; }
+    /// <summary>
+    /// Sexe (0 mâle, 1 femelle, 2 aucun) et objet tenu, pour l'image (femelle différente, Méga-Évolution) : null pour les
+    /// Pokémon enregistrés avant leur ajout, le temps que le démarrage les remplisse (BankService.FillSpriteDetailsAsync).
+    /// </summary>
+    public byte? Gender { get; set; }
+    public int? HeldItem { get; set; }
     public bool IsShiny { get; set; }
     public bool IsEgg { get; set; }
     public bool IsLegal { get; set; }

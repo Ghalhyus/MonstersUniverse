@@ -87,7 +87,7 @@
                     var slot = s;
                     var pk = Session.GetSlot(currentBox, slot);
                     var locked = Session.IsLocked(currentBox, slot);
-                    <PokemonSlot Sprite="@(pk is null ? null : PokemonInfo.SpriteUrl(pk.Species, pk.IsShiny))"
+                    <PokemonSlot Sprite="@(pk is null ? null : PokemonSprites.Url(pk))"
                                  Title="@(pk is null ? "" : $"{SpeciesFr(pk)} N.{pk.CurrentLevel}")"
                                  Level="@(pk?.CurrentLevel ?? 0)"
                                  Shiny="@(pk?.IsShiny ?? false)"
@@ -177,7 +177,7 @@
                 @foreach (var entry in bankEntries.Skip(bankPage * PageSize).Take(PageSize))
                 {
                     var e = entry;
-                    <PokemonSlot Sprite="@PokemonInfo.SpriteUrl(e.Species, e.IsShiny)"
+                    <PokemonSlot Sprite="@PokemonSprites.Url(e)"
                                  Title="@($"{e.Nickname} ({e.SpeciesName}) N.{e.Level}")"
                                  Level="e.Level"
                                  Shiny="e.IsShiny"

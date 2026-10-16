@@ -62,6 +62,16 @@ et tous ses Pokémon (équipe, boîtes, pension, Boîte Combat…) apparaissent 
 - Tant qu'elle est stockée, la sauvegarde est **refusée dans « Transfert »** (au chargement et à la validation).
 - Une mise à jour avec moins de temps de jeu que la version stockée demande confirmation (ancienne copie ?).
 
+### Images des Pokémon
+
+Partout (collection, « Transfert », fiche d'un Pokémon), l'image suit le Pokémon : sa **forme** (Rattata d'Alola, Zarbi B,
+Pikachu casquette...), sa **femelle** quand elle est différente du mâle (Pikachu, Rapasdepic...), sa version chromatique.
+Un Pokémon qui **tient sa Méga-Gemme** est montré méga-évolué (Mysdibule avec Mysdibulite → Méga-Mysdibule ; Dracaufite X
+ou Y → Méga-Dracaufeu X ou Y), de même Kyogre et Groudon avec leur orbe (Primo-Résurgence). Méga-Rayquaza n'a pas de gemme :
+jamais montré. Un œuf garde l'image de son espèce. Une forme sans image à elle (identique à la forme de base, ou absente
+de PokéAPI : Koraidon, Miraidon, Méga-Zygarde...) prend celle de l'espèce (liste dans `PokemonSpritesTests`). Les images
+Gigamax sont rassemblées mais pas encore utilisées.
+
 ### Inventaire (Pokédollars et objets)
 
 La page « Inventaire » affiche le porte-monnaie du compte et le « Stockage » de ses objets : un onglet par catégorie
@@ -170,7 +180,8 @@ est incompatible (espèce, attaques ou objets inexistants dans le jeu, conversio
 | `PokeBank/Components/Pages/Inventory.razor` | Page « Inventaire » (solde, stockage en onglets avec recherche, tri par onglet, liste/grille et choix de la source — interne, tout, une sauvegarde —, journal et détail d'un objet en panneau latéral, fenêtre de retrait d'argent) |
 | `PokeBank/Components/Shared/ItemTransferDialog.razor` | Fenêtre de retrait / dépôt d'objets (toutes catégories en une opération ; onglets Sac / PC pour les jeux de 1re à 3e génération) |
 | `PokeBank/Components/Shared/ItemSprite.razor` | Image d'un objet ; celle de l'objet inconnu quand le site n'en a pas |
-| `PokeBank/wwwroot/images/` | Images servies par le site : `pokemon/<numéro d'espèce>.png` (et `pokemon/chromatique/`), `objets/<numéro d'objet>.png`, `objets/ct-<type>.png` pour les CT/DT, un `inconnu.png` dans chaque dossier |
+| `PokeBank/Services/PokemonSprites.cs` | Choix de l'image d'un Pokémon : forme (noms de PKHeX → noms de PokéAPI), Méga-Évolution selon l'objet tenu, femelle, chromatique |
+| `PokeBank/wwwroot/images/` | Images servies par le site : `pokemon/<numéro d'espèce>.png`, `pokemon/<numéro>-<forme>.png` (`19-alola.png`, `6-mega-x.png`, `6-gmax.png`), `pokemon/femelle/`, `pokemon/chromatique/` (mêmes sous-dossiers), `objets/<numéro d'objet>.png`, `objets/ct-<type>.png` pour les CT/DT, un `inconnu.png` dans chaque dossier |
 | `outils/images.py` | Rassemble ces images (PokéAPI ; pour les objets, puis pokesprite et PKHeX par numéro d'objet) ; à relancer pour en ajouter |
 | `PokeBank/Data/BankPokemon.cs` | Table des Pokémon (octets bruts + métadonnées ; `StoredSaveId` si lecture seule) |
 | `PokeBank/Data/StoredSave.cs` | Table des sauvegardes stockées |
@@ -224,7 +235,7 @@ Réglages avancés (variables d'environnement, jamais de secret dans `appsetting
 
 - Licence : PKHeX est sous GPL-3.0 ; si tu publies ce code, il doit l'être sous GPL aussi (voir « Crédits »).
 - Les images des Pokémon et des objets sont copiées dans le site (`wwwroot/images`, par `outils/images.py`) : le navigateur
-  ne charge plus rien depuis GitHub. Une image par espèce (normale ou chromatique), sans les formes (Alola, Galar...). Pour
+  ne charge plus rien depuis GitHub. Les formes, femelles et Méga-Évolutions sont décrites plus haut (« Images des Pokémon »). Pour
   les objets, PokéAPI les nomme d'après le nom anglais, qui ne correspond pas toujours, et n'a pas ceux d'Épée/Bouclier. Aucune source n'a les bonbons de Let's Go, les objets de
   Légendes Arceus et Z-A ni les ingrédients et matériaux d'Écarlate/Violet : ils affichent l'objet inconnu, en attendant
   qu'on dépose leur image sous leur numéro d'objet.
@@ -239,7 +250,8 @@ PokeBank s'appuie sur le travail d'autres projets :
 | Projet | Utilisé pour | Licence |
 |---|---|---|
 | [PKHeX](https://github.com/kwsch/PKHeX) (Kaphotics et contributeurs), paquet `PKHeX.Core` | Lecture et écriture des sauvegardes, Pokémon, sacs, noms français, légalité ; images d'objets « Big Items » et « Artwork Items » (`outils/images.py`) | GPL-3.0 |
-| [PokéAPI sprites](https://github.com/PokeAPI/sprites) | Images des Pokémon (normales et chromatiques), de la plupart des objets et des CT (`wwwroot/images`) | CC0 1.0 pour le dépôt ; images © The Pokémon Company |
+| [PokéAPI sprites](https://github.com/PokeAPI/sprites) | Images des Pokémon (normales et chromatiques, formes, femelles, Méga-Évolutions, Gigamax), de la plupart des objets et des CT (`wwwroot/images`) | CC0 1.0 pour le dépôt ; images © The Pokémon Company |
+| [PokéAPI](https://github.com/PokeAPI/pokeapi) (données) | Liste des formes de chaque espèce et des espèces dont la femelle est différente (tables `pokemon`, `pokemon_forms`, `pokemon_species`, lues par `outils/images.py`) | BSD-3-Clause |
 | [PokéSprite](https://github.com/msikma/pokesprite) (msikma) | Images d'objets absentes de PokéAPI, retrouvées par numéro d'objet (`data/item-map.json`) | MIT ; images © Nintendo / Creatures Inc. / GAME FREAK Inc. |
 | [Bootstrap](https://getbootstrap.com) | Mise en page et composants de l'interface (`wwwroot/lib/bootstrap`) | MIT |
 | [ASP.NET Core, Blazor, Identity, Entity Framework Core](https://dotnet.microsoft.com) (Microsoft) | Site, comptes, accès à la base | MIT |

@@ -235,6 +235,12 @@ namespace PokeBank.Migrations
                     b.Property<byte>("Form")
                         .HasColumnType("INTEGER");
 
+                    b.Property<byte?>("Gender")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("HeldItem")
+                        .HasColumnType("INTEGER");
+
                     b.Property<bool>("IsEgg")
                         .HasColumnType("INTEGER");
 

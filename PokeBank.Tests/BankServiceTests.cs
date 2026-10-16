@@ -106,6 +106,27 @@ public sealed class BankServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task FillSpriteDetails_ReadsGenderAndHeldItem_FromTheStoredBytes()
+    {
+        var pk = SaveSessionTests.CreatePk5(25, 20);
+        pk.Gender = 1;
+        pk.HeldItem = 234; // Restes
+        using (var db = _db.NewContext())
+        {
+            var entry = BankService.CreateEntry(new PokemonInfo(), pk, "ondine", DateTime.UtcNow);
+            Assert.Equal(((byte?)1, (int?)234), (entry.Gender, entry.HeldItem)); // rempli dès l'enregistrement
+            (entry.Gender, entry.HeldItem) = (null, null); // comme un Pokémon enregistré avant la migration SpriteDetails
+            db.BankPokemon.Add(entry);
+            db.SaveChanges();
+
+            await BankService.FillSpriteDetailsAsync(db);
+            var filled = db.BankPokemon.Single(p => p.Id == entry.Id);
+            Assert.Equal(((byte?)1, (int?)234), (filled.Gender, filled.HeldItem));
+            Assert.DoesNotContain(db.BankPokemon, p => p.Gender == null); // octets illisibles : sans sexe, sans objet
+        }
+    }
+
+    [Fact]
     public async Task Get_RefusesSomeoneElsesPokemon()
     {
         Assert.NotNull(await _bank.GetAsync("ondine", 26));
