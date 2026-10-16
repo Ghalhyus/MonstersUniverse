@@ -43,6 +43,16 @@
             <option value="@s.Id">💾 @s.Label</option>
         }
     </select>
+    @* Tri : critère, puis sens (les œufs restent à la fin). *@
+    <div class="collection-sort">
+        <select class="form-select form-select-sm" aria-label="Trier par" value="@SortChoices.First(c => c.By == sort.By).Slug" @onchange="SortChanged">
+            @foreach (var choice in SortChoices)
+            {
+                <option value="@choice.Slug">Tri : @choice.Label</option>
+            }
+        </select>
+        <button type="button" class="btn btn-sm btn-outline-secondary text-nowrap" title="Inverser l'ordre" @onclick="ReverseSort">@OrderLabel</button>
+    </div>
     <a class="small" href="sauvegardes">Gérer mes sauvegardes</a>
     <label class="collection-columns small">
         Colonnes
@@ -138,6 +148,20 @@ else
     [SupplyParameterFromQuery(Name = "colonnes")] private int? ColumnsFromQuery { get; set; }
     /// <summary>Origine affichée, gardée dans l'adresse : vide (tout), « banque » ou l'identifiant d'une sauvegarde stockée.</summary>
     [SupplyParameterFromQuery(Name = "source")] private string? SourceFromQuery { get; set; }
+    /// <summary>Tri gardé dans l'adresse : « arrivee » (absent), « nom » ou « pokedex ».</summary>
+    [SupplyParameterFromQuery(Name = "tri")] private string? SortFromQuery { get; set; }
+    /// <summary>Sens gardé dans l'adresse (« asc », « desc ») quand il n'est pas celui du critère (récents d'abord, ou croissant).</summary>
+    [SupplyParameterFromQuery(Name = "ordre")] private string? OrderFromQuery { get; set; }
+
+    /// <summary>Nom de chaque critère dans l'adresse et dans la liste.</summary>
+    private static readonly (CollectionSortBy By, string Slug, string Label)[] SortChoices =
+    [
+        (CollectionSortBy.Arrival, "arrivee", "Arrivée"),
+        (CollectionSortBy.Name, "nom", "Nom"),
+        (CollectionSortBy.Dex, "pokedex", "N° Pokédex"),
+    ];
+
+    private CollectionSort sort;
 
     private string userId = "";
     private string search = "";
@@ -178,19 +202,69 @@ else
     {
         columns = Math.Clamp(ColumnsFromQuery ?? screenColumns, MinColumns, MaxColumns);
         var fromQuery = SourceFromQuery ?? "";
-        if (!sourceInitialized || fromQuery != source)
+        var sortFromQuery = SortFromAddress();
+        if (!sourceInitialized || fromQuery != source || sortFromQuery != sort)
         {
             sourceInitialized = true;
             source = fromQuery;
+            sort = sortFromQuery;
             await Reload();
         }
+    }
+
+    /// <summary>Tri lu dans l'adresse : sens par défaut du critère, sauf « ordre » contraire.</summary>
+    private CollectionSort SortFromAddress()
+    {
+        var by = SortChoices.FirstOrDefault(c => c.Slug == SortFromQuery, SortChoices[0]).By;
+        var descending = OrderFromQuery is "asc" or "desc" ? OrderFromQuery == "desc" : DescendingByDefault(by);
+        return new(by, descending != DescendingByDefault(by));
+    }
+
+    /// <summary>L'arrivée montre les plus récents d'abord ; le nom et le numéro sont croissants.</summary>
+    private static bool DescendingByDefault(CollectionSortBy by) => by == CollectionSortBy.Arrival;
+
+    private bool Descending => DescendingByDefault(sort.By) != sort.Reversed;
+
+    /// <summary>Texte du bouton de sens : l'ordre affiché (cliquer l'inverse).</summary>
+    private string OrderLabel => (sort.By, Descending) switch
+    {
+        (CollectionSortBy.Arrival, true) => "↓ Récents d'abord",
+        (CollectionSortBy.Arrival, false) => "↑ Anciens d'abord",
+        (CollectionSortBy.Name, false) => "↑ A → Z",
+        (CollectionSortBy.Name, true) => "↓ Z → A",
+        (_, false) => "↑ Croissant",
+        (_, true) => "↓ Décroissant",
+    };
+
+    private async Task SortChanged(ChangeEventArgs e)
+    {
+        var by = SortChoices.FirstOrDefault(c => c.Slug == e.Value?.ToString(), SortChoices[0]).By;
+        sort = new(by); // nouveau critère : son sens par défaut
+        await ApplySort();
+    }
+
+    private async Task ReverseSort()
+    {
+        sort = sort with { Reversed = !sort.Reversed };
+        await ApplySort();
+    }
+
+    private async Task ApplySort()
+    {
+        var slug = SortChoices.First(c => c.By == sort.By).Slug;
+        Nav.NavigateTo(Nav.GetUriWithQueryParameters(new Dictionary<string, object?>
+        {
+            ["tri"] = sort.By == CollectionSortBy.Arrival ? null : slug,
+            ["ordre"] = sort.Reversed ? (Descending ? "desc" : "asc") : null,
+        }), replace: true);
+        await Reload();
     }
 
     /// <summary>Appelé par Virtualize pour les lignes à afficher : on ne lit que ces Pokémon-là en base.</summary>
     private async ValueTask<ItemsProviderResult<BankListItem[]>> LoadRows(ItemsProviderRequest request)
     {
         var cols = columns;
-        var items = await BankStore.GetRangeAsync(userId, search, request.StartIndex * cols, request.Count * cols, Filter, request.CancellationToken);
+        var items = await BankStore.GetRangeAsync(userId, search, request.StartIndex * cols, request.Count * cols, Filter, sort, request.CancellationToken);
         var rowCount = (total + cols - 1) / cols;
         return new ItemsProviderResult<BankListItem[]>(items.Chunk(cols), rowCount);
     }

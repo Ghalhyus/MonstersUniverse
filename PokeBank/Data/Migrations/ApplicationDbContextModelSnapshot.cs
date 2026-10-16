@@ -269,6 +269,10 @@ namespace PokeBank.Migrations
                     b.Property<int>("Position")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("SortName")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.Property<ushort>("Species")
                         .HasColumnType("INTEGER");
 

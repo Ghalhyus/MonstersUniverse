@@ -63,7 +63,11 @@ var app = builder.Build();
 
 // Crée / met à jour la base SQLite au démarrage.
 using (var scope = app.Services.CreateScope())
-    scope.ServiceProvider.GetRequiredService<ApplicationDbContext>().Database.Migrate();
+{
+    var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    db.Database.Migrate();
+    await BankService.FillSortNamesAsync(db); // nom de tri des Pokémon enregistrés avant son ajout
+}
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())

@@ -16,6 +16,16 @@ public readonly record struct CollectionFilter(bool BankOnly = false, int? Store
     public static CollectionFilter Save(int id) => new(StoredSaveId: id);
 }
 
+/// <summary>Critère de tri de « Ma collection ».</summary>
+public enum CollectionSortBy { Arrival, Name, Dex }
+
+/// <summary>
+/// Tri de « Ma collection » : par arrivée (les plus récents d'abord), par nom d'espèce ou par numéro de Pokédex (croissants) ;
+/// <paramref name="Reversed"/> inverse ce sens. Les œufs sont toujours à la fin, par arrivée (leur espèce reste cachée) ; à
+/// égalité (même espèce), les plus récents d'abord.
+/// </summary>
+public readonly record struct CollectionSort(CollectionSortBy By = CollectionSortBy.Arrival, bool Reversed = false);
+
 public sealed class BankService(
     IDbContextFactory<ApplicationDbContext> dbFactory,
     PokemonInfo info,
@@ -40,10 +50,11 @@ public sealed class BankService(
     /// Une tranche de la collection, sans les octets du Pokémon (affichage seulement) :
     /// la page « Ma collection » charge ainsi au fur et à mesure du défilement.
     /// </summary>
-    public async Task<List<BankListItem>> GetRangeAsync(string ownerId, string? search, int skip, int take, CollectionFilter filter = default, CancellationToken ct = default)
+    public async Task<List<BankListItem>> GetRangeAsync(string ownerId, string? search, int skip, int take, CollectionFilter filter = default,
+        CollectionSort sort = default, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        return await Query(db, ownerId, search, filter)
+        return await Sorted(Filtered(db, ownerId, search, filter), sort)
             .Skip(skip)
             .Take(take)
             .Select(p => new BankListItem(p.Id, p.Species, p.SpeciesName, p.Nickname, p.Level, p.IsShiny, p.IsEgg, p.IsLegal, p.StoredSaveId))
@@ -67,7 +78,42 @@ public sealed class BankService(
     /// Pokémon d'un utilisateur, filtrés par origine et par espèce / surnom, du plus récent au plus ancien
     /// (et, dans une même sauvegarde stockée, dans l'ordre équipe → boîtes → reste).
     /// </summary>
-    private static IQueryable<BankPokemon> Query(ApplicationDbContext db, string ownerId, string? search, CollectionFilter filter)
+    private static IQueryable<BankPokemon> Query(ApplicationDbContext db, string ownerId, string? search, CollectionFilter filter) =>
+        Filtered(db, ownerId, search, filter).OrderByDescending(p => p.DepositedAt).ThenBy(p => p.Position).ThenByDescending(p => p.Id);
+
+    /// <summary>Tri choisi dans « Ma collection » (voir <see cref="CollectionSort"/>).</summary>
+    private static IQueryable<BankPokemon> Sorted(IQueryable<BankPokemon> query, CollectionSort sort)
+    {
+        var eggsLast = query.OrderBy(p => p.IsEgg);
+        var sorted = (sort.By, sort.Reversed) switch
+        {
+            (CollectionSortBy.Name, false) => eggsLast.ThenBy(p => p.IsEgg ? "" : p.SortName).ThenBy(p => p.IsEgg ? 0 : p.Form),
+            (CollectionSortBy.Name, true) => eggsLast.ThenByDescending(p => p.IsEgg ? "" : p.SortName).ThenBy(p => p.IsEgg ? 0 : p.Form),
+            (CollectionSortBy.Dex, false) => eggsLast.ThenBy(p => p.IsEgg ? 0 : p.Species).ThenBy(p => p.IsEgg ? 0 : p.Form),
+            (CollectionSortBy.Dex, true) => eggsLast.ThenByDescending(p => p.IsEgg ? 0 : p.Species).ThenBy(p => p.IsEgg ? 0 : p.Form),
+            (CollectionSortBy.Arrival, true) => eggsLast.ThenBy(p => p.DepositedAt).ThenByDescending(p => p.Position).ThenBy(p => p.Id),
+            _ => eggsLast,
+        };
+        return sorted.ThenByDescending(p => p.DepositedAt).ThenBy(p => p.Position).ThenByDescending(p => p.Id);
+    }
+
+    /// <summary>
+    /// Remplit <see cref="BankPokemon.SortName"/> des Pokémon enregistrés avant son ajout (migration <c>SortName</c>) ; appelé
+    /// au démarrage, ne fait rien une fois tout rempli.
+    /// </summary>
+    public static async Task FillSortNamesAsync(ApplicationDbContext db)
+    {
+        var names = await db.BankPokemon.Where(p => p.SortName == "" && p.SpeciesName != "").Select(p => p.SpeciesName).Distinct().ToListAsync();
+        foreach (var name in names)
+        {
+            var key = BankPokemon.SortKey(name);
+            await db.BankPokemon.Where(p => p.SortName == "" && p.SpeciesName == name)
+                .ExecuteUpdateAsync(p => p.SetProperty(x => x.SortName, key));
+        }
+    }
+
+    /// <summary>Pokémon d'un utilisateur, filtrés par origine et par espèce / surnom (sans tri).</summary>
+    private static IQueryable<BankPokemon> Filtered(ApplicationDbContext db, string ownerId, string? search, CollectionFilter filter)
     {
         var query = db.BankPokemon.AsNoTracking().Where(p => p.OwnerId == ownerId);
         if (filter.BankOnly)
@@ -98,6 +144,7 @@ public sealed class BankService(
             Species = pk.Species,
             Form = pk.Form,
             SpeciesName = view.SpeciesName,
+            SortName = BankPokemon.SortKey(view.SpeciesName),
             Nickname = view.Nickname,
             Level = pk.CurrentLevel,
             IsShiny = pk.IsShiny,

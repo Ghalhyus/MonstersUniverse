@@ -155,6 +155,8 @@ h1:focus {
 }
 .collection-toolbar > input { max-width: 20rem; }
 .collection-filter { max-width: 16rem; }
+.collection-sort { display: flex; align-items: center; gap: .25rem; }
+.collection-sort .form-select { width: auto; }
 .collection-columns { display: flex; align-items: center; gap: .5rem; margin: 0; }
 .collection-columns .form-range { width: 10rem; }
 .collection-columns span { min-width: 1.5rem; }
