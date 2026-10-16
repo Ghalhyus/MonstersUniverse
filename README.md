@@ -169,6 +169,9 @@ est incompatible (espèce, attaques ou objets inexistants dans le jeu, conversio
 | `PokeBank/Services/CollectionCapacity.cs` | Taille maximale de la collection : règles, occupation, messages |
 | `PokeBank/Components/Pages/Inventory.razor` | Page « Inventaire » (solde, stockage en onglets avec recherche, tri par onglet, liste/grille et choix de la source — interne, tout, une sauvegarde —, journal et détail d'un objet en panneau latéral, fenêtre de retrait d'argent) |
 | `PokeBank/Components/Shared/ItemTransferDialog.razor` | Fenêtre de retrait / dépôt d'objets (toutes catégories en une opération ; onglets Sac / PC pour les jeux de 1re à 3e génération) |
+| `PokeBank/Components/Shared/ItemSprite.razor` | Image d'un objet ; celle de l'objet inconnu quand le site n'en a pas |
+| `PokeBank/wwwroot/images/` | Images servies par le site : `pokemon/<numéro d'espèce>.png` (et `pokemon/chromatique/`), `objets/<numéro d'objet>.png`, `objets/ct-<type>.png` pour les CT/DT, un `inconnu.png` dans chaque dossier |
+| `outils/images.py` | Rassemble ces images (PokéAPI ; pour les objets, puis pokesprite et PKHeX par numéro d'objet) ; à relancer pour en ajouter |
 | `PokeBank/Data/BankPokemon.cs` | Table des Pokémon (octets bruts + métadonnées ; `StoredSaveId` si lecture seule) |
 | `PokeBank/Data/StoredSave.cs` | Table des sauvegardes stockées |
 | `PokeBank/Data/Wallet.cs` | Tables du porte-monnaie et du journal des opérations |
@@ -219,8 +222,31 @@ Réglages avancés (variables d'environnement, jamais de secret dans `appsetting
 
 ## Points de vigilance
 
-- Licence : PKHeX est sous GPL-3.0 ; si tu publies ce code, il doit l'être sous GPL aussi.
-- Les sprites viennent du dépôt GitHub de PokéAPI (chargés par le navigateur).
+- Licence : PKHeX est sous GPL-3.0 ; si tu publies ce code, il doit l'être sous GPL aussi (voir « Crédits »).
+- Les images des Pokémon et des objets sont copiées dans le site (`wwwroot/images`, par `outils/images.py`) : le navigateur
+  ne charge plus rien depuis GitHub. Une image par espèce (normale ou chromatique), sans les formes (Alola, Galar...). Pour
+  les objets, PokéAPI les nomme d'après le nom anglais, qui ne correspond pas toujours, et n'a pas ceux d'Épée/Bouclier. Aucune source n'a les bonbons de Let's Go, les objets de
+  Légendes Arceus et Z-A ni les ingrédients et matériaux d'Écarlate/Violet : ils affichent l'objet inconnu, en attendant
+  qu'on dépose leur image sous leur numéro d'objet.
 - Usage privé uniquement.
 - Sur Noir 2 / Blanc 2, PKHeX accepte les Pokémon de génération 5 ou antérieure ; un Pokémon de génération 6+
   déposé depuis un autre jeu restera dans le stockage interne.
+
+## Crédits
+
+PokeBank s'appuie sur le travail d'autres projets :
+
+| Projet | Utilisé pour | Licence |
+|---|---|---|
+| [PKHeX](https://github.com/kwsch/PKHeX) (Kaphotics et contributeurs), paquet `PKHeX.Core` | Lecture et écriture des sauvegardes, Pokémon, sacs, noms français, légalité ; images d'objets « Big Items » et « Artwork Items » (`outils/images.py`) | GPL-3.0 |
+| [PokéAPI sprites](https://github.com/PokeAPI/sprites) | Images des Pokémon (normales et chromatiques), de la plupart des objets et des CT (`wwwroot/images`) | CC0 1.0 pour le dépôt ; images © The Pokémon Company |
+| [PokéSprite](https://github.com/msikma/pokesprite) (msikma) | Images d'objets absentes de PokéAPI, retrouvées par numéro d'objet (`data/item-map.json`) | MIT ; images © Nintendo / Creatures Inc. / GAME FREAK Inc. |
+| [Bootstrap](https://getbootstrap.com) | Mise en page et composants de l'interface (`wwwroot/lib/bootstrap`) | MIT |
+| [ASP.NET Core, Blazor, Identity, Entity Framework Core](https://dotnet.microsoft.com) (Microsoft) | Site, comptes, accès à la base | MIT |
+| [SQLite](https://sqlite.org) | Base de données | Domaine public |
+| [xUnit](https://xunit.net), [coverlet](https://github.com/coverlet-coverage/coverlet) | Tests | Apache-2.0, MIT |
+| [Caddy](https://caddyserver.com), [Docker](https://www.docker.com) | Mise en ligne (HTTPS, conteneurs) | Apache-2.0 |
+| [Bulbapedia](https://bulbapedia.bulbagarden.net) | Référence consultée pour vérifier l'ordre des Noigrumes d'Or/Argent/Cristal | — |
+
+Pokémon et tous les noms et images associés sont des marques et créations de Nintendo, Creatures Inc., GAME FREAK Inc. et
+The Pokémon Company. PokeBank est un projet de fan privé, sans lien avec eux.

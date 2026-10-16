@@ -4,7 +4,8 @@
 <div class="card pokemon-card">
     <div class="card-body">
         <div class="d-flex align-items-center gap-3">
-            <img src="@Pokemon.SpriteUrl" alt="@Pokemon.SpeciesName" width="96" height="96" />
+            <img src="@Pokemon.SpriteUrl" alt="@Pokemon.SpeciesName" width="96" height="96"
+                 onerror="if (!this.src.endsWith('/inconnu.png')) this.src = 'images/pokemon/inconnu.png'" />
             <div>
                 <h5 class="mb-1">
                     @Pokemon.Nickname @Pokemon.Gender

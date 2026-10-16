@@ -215,7 +215,7 @@ h1:focus {
 }
 .item-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .item-count { font-weight: 600; white-space: nowrap; }
-.item-sprite { image-rendering: pixelated; vertical-align: middle; }
+.item-sprite { image-rendering: pixelated; vertical-align: middle; object-fit: scale-down; } /* les images plus petites que la case gardent leur taille */
 .item-quantity { width: 5.5rem; }
 
 

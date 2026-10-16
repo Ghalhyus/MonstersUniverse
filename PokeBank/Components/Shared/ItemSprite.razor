@@ -1,0 +1,10 @@
+@* Image d'un objet (wwwroot/images/objets, voir PokemonInfo.ItemSpriteUrl) ; un objet sans image prend celle de l'objet inconnu. *@
+<img src="@Url" alt="" width="@Size" height="@Size" class="item-sprite"
+     onerror="if (!this.src.endsWith('/inconnu.png')) this.src = 'images/objets/inconnu.png'" />
+
+@code {
+    [Parameter, EditorRequired] public string Url { get; set; } = "";
+
+    /// <summary>Taille d'affichage en pixels (carré) ; une image plus petite garde sa taille, centrée.</summary>
+    [Parameter] public int Size { get; set; } = 24;
+}

@@ -14,6 +14,8 @@ Ce fichier ne garde que ce que le README ne dit pas.
   (`innerWidth * devicePixelRatio`), pas en pixels CSS.
 - Vérifier dans un vrai navigateur (instance de test, voir plus bas) avant d'annoncer qu'une fonctionnalité marche.
 - Tenir le README à jour (règles métier, sauvegardes d'exemple, tableau « Organisation du code ») à chaque fonctionnalité.
+- **Toute ressource venant d'un autre projet** (bibliothèque, paquet, images, données, table reprise d'un site) est citée
+  dans la section « Crédits » du README, avec son usage et sa licence, dès qu'elle entre dans le projet.
 
 ## Conventions du code
 
@@ -84,6 +86,15 @@ toute seule au démarrage (`Database.Migrate()`). Le code doit compiler avant de
 - CT : un même numéro n'apprend pas la même capacité selon le jeu, d'où le stockage par capacité (`SaveBag.MachineKey`).
   Correspondances dans `SaveBag` ; Épée/Bouclier et Écarlate/Violet ont un ordre particulier (commentés), vérifiés par
   des valeurs connues dans les tests (Séisme : CT26, DT10, CT149). Les CS ne sont jamais touchées.
+
+## Images des Pokémon et des objets
+
+Servies par le site, plus rien n'est chargé depuis GitHub : `wwwroot/images/pokemon/<numéro d'espèce>.png` et
+`pokemon/chromatique/`, `wwwroot/images/objets/<numéro d'objet>.png` (numéros de PKHeX, ceux de `SaveBag`), `ct-<type>.png`,
+et dans chaque dossier un `inconnu.png` affiché en remplacement (`onerror` des balises, composant `ItemSprite` pour les
+objets). `outils/images.py` les rassemble (Python seul, garde les fichiers présents) : le relancer après une mise à jour
+de PKHeX.Core (nouvelles espèces), en changeant la version en tête du script. `RealSavesTests` vérifie que chaque espèce
+et chaque objet des vraies sauvegardes a son image.
 
 ## Ajouter une catégorie d'objets à l'inventaire
 

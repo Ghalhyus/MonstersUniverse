@@ -460,7 +460,7 @@ public sealed class InventoryServiceTests : IDisposable
         Assert.Equal([(PokeBall, "Poké Ball"), (FocusPunchTM, "Mitra-Poing"), (EarthquakeTM, "Séisme"), (ToxicTM, "Toxik")],
             items.Select(i => (i.ItemId, i.Name))); // Pokéballs, puis CT dans l'ordre alphabétique des capacités
         Assert.All(items.Skip(1), i => Assert.Equal(ItemCategory.Machines, i.Category));
-        Assert.EndsWith("/tm-ground.png", items.Single(i => i.ItemId == EarthquakeTM).SpriteUrl);
+        Assert.Equal("images/objets/ct-ground.png", items.Single(i => i.ItemId == EarthquakeTM).SpriteUrl);
         Assert.Equal("1 × Poké Ball, 2 × CT/DT Mitra-Poing, 1 × CT/DT Séisme, 3 × CT/DT Toxik",
             (await _inventory.ListOperationsAsync("sacha")).Single().Details);
 
@@ -949,6 +949,14 @@ public sealed class InventoryServiceTests : IDisposable
         Assert.Equal("Rouge / Bleu", info.GameName(Red()));
         Assert.Equal("Or / Argent", info.GameName(GameVersion.GS));
         Assert.Equal("Cristal", info.GameName(new SAV2(LanguageID.French, GameVersion.C)));
+    }
+
+    [Fact]
+    public void ItemNames_DropTheGenerationSuffixOfPkhex()
+    {
+        var info = new PokemonInfo();
+        Assert.Equal(("Nouilles", "Steak Haché"), (info.ItemName(1262), info.ItemName(1263))); // « Nouilles (G8) » chez PKHeX
+        Assert.Equal("Vokit (M)", info.ItemName(621)); // les autres précisions restent
     }
 
     [Fact]

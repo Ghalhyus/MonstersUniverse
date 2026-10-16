@@ -128,7 +128,7 @@
                                 var max = Max(r, place);
                                 <tr>
                                     <td>
-                                        <img src="@r.SpriteUrl" alt="" width="24" height="24" class="item-sprite" />
+                                        <ItemSprite Url="@r.SpriteUrl" Size="24" />
                                         @DisplayName(r)
                                         @if (Deposit && RowProblem(r, place) is { } problem)
                                         {

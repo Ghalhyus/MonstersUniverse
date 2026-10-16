@@ -81,6 +81,33 @@ public sealed class RealSavesTests : IDisposable
         Assert.Null(SaveBag.Unsupported(sav));
     }
 
+    [Theory]
+    [MemberData(nameof(Files))]
+    public void Items_AllHaveAnImage(string file)
+    {
+        if (Read(file) is not { } data)
+            return;
+        var missing = SaveBag.ReadItems(Open(data, file)).Keys
+            .Where(item => !File.Exists(Path.Combine(WebRoot(), PokemonInfo.ItemSpriteUrl(item))))
+            .ToList();
+        Assert.True(missing.Count == 0, $"{file} : objets sans image (outils/images.py) : {string.Join(", ", missing)}");
+    }
+
+    /// <summary>Images du site (outils/images.py) : chaque espèce connue de PKHeX a la sienne, normale et chromatique.</summary>
+    [Fact]
+    public void Pokemon_AllSpeciesHaveAnImage()
+    {
+        var missing = Enumerable.Range(1, (int)Species.MAX_COUNT - 1)
+            .SelectMany(s => new[] { PokemonInfo.SpriteUrl((ushort)s, false), PokemonInfo.SpriteUrl((ushort)s, true) })
+            .Where(url => !File.Exists(Path.Combine(WebRoot(), url)))
+            .ToList();
+        Assert.True(missing.Count == 0, $"images manquantes (outils/images.py) : {string.Join(", ", missing.Take(10))}");
+    }
+
+    /// <summary>Dossier wwwroot du site, retrouvé depuis ce fichier source (les tests peuvent être compilés ailleurs).</summary>
+    private static string WebRoot([System.Runtime.CompilerServices.CallerFilePath] string source = "") =>
+        Path.Combine(Path.GetDirectoryName(source)!, "..", "PokeBank", "wwwroot");
+
     /// <summary>Octets de chaque Pokémon de l'équipe et des boîtes, dans l'ordre.</summary>
     private static List<string> Contents(SaveFile sav) =>
         sav.PartyData.Concat(Enumerable.Range(0, sav.BoxCount).SelectMany(sav.GetBoxData))

@@ -24,10 +24,19 @@ public sealed record PokemonView(
     string SpriteUrl);
 
 /// <summary>Traduit un PKM de PKHeX en informations lisibles.</summary>
-public sealed class PokemonInfo
+public sealed partial class PokemonInfo
 {
     private const int French = (int)LanguageID.French;
     private readonly GameStrings _strings = GameInfo.GetStrings("fr");
+
+    /// <summary>
+    /// Noms français des objets, sans le suffixe de génération que PKHeX ajoute quand un nom existe dans plusieurs jeux
+    /// (« Nouilles (G8) » → « Nouilles »).
+    /// </summary>
+    private readonly string[] _items = GameInfo.GetStrings("fr").itemlist.Select(n => GenerationSuffix().Replace(n, "")).ToArray();
+
+    [System.Text.RegularExpressions.GeneratedRegex(@" \(G\d\)$")]
+    private static partial System.Text.RegularExpressions.Regex GenerationSuffix();
 
     public string GameName(GameVersion version) =>
         GroupNames.TryGetValue(version, out var name) ? name : Get(_strings.gamelist, (int)version, version.ToString());
@@ -48,12 +57,16 @@ public sealed class PokemonInfo
     public string GameName(SaveFile sav) =>
         sav.Version == GameVersion.Any ? $"Jeu de génération {sav.Generation}" : GameName(sav.Version);
 
+    /// <summary>
+    /// Image d'une espèce, servie par le site (wwwroot/images/pokemon, rassemblées par outils/images.py) ; une espèce sans
+    /// image affiche inconnu.png.
+    /// </summary>
     public static string SpriteUrl(ushort species, bool shiny) =>
-        $"https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/{(shiny ? "shiny/" : "")}{species}.png";
+        $"images/pokemon/{(shiny ? "chromatique/" : "")}{species}.png";
 
     /// <summary>Nom français d'un objet par sa clé (voir <see cref="SaveBag"/>) : « Super Ball », « CT/DT Séisme ».</summary>
     public string ItemName(int key) =>
-        SaveBag.MoveOf(key) is { } move ? $"CT/DT {MoveName(move)}" : Get(_strings.itemlist, key, $"Objet n°{key}");
+        SaveBag.MoveOf(key) is { } move ? $"CT/DT {MoveName(move)}" : Get(_items, key, $"Objet n°{key}");
 
     /// <summary>Nom court d'un objet, sous le titre de sa catégorie : celui de la capacité pour une CT ou une DT (« Séisme »).</summary>
     public string ShortItemName(int key) => SaveBag.MoveOf(key) is { } move ? MoveName(move) : ItemName(key);
@@ -61,15 +74,13 @@ public sealed class PokemonInfo
     public string MoveName(ushort move) => Get(_strings.movelist, move, $"Capacité n°{move}");
 
     /// <summary>
-    /// Image d'un objet chez PokéAPI, nommée d'après son nom anglais (« Poké Ball » → poke-ball.png) ; pour une CT ou une DT,
-    /// la CT du type de la capacité (tm-ground.png).
+    /// Image d'un objet, servie par le site (wwwroot/images/objets, rassemblées par outils/images.py) : par numéro
+    /// d'objet (1.png) ; pour une CT ou une DT, la CT du type de la capacité (ct-ground.png). Un objet sans image affiche
+    /// inconnu.png (composant ItemSprite).
     /// </summary>
-    public static string ItemSpriteUrl(int key)
-    {
-        var name = SaveBag.MoveOf(key) is { } move ? $"tm-{Get(EnglishTypes, MoveType(move), "normal")}" : Get(EnglishItems, key, "");
-        var slug = name.ToLowerInvariant().Replace("é", "e").Replace(' ', '-').Replace(".", "").Replace("'", "");
-        return $"https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/{slug}.png";
-    }
+    public static string ItemSpriteUrl(int key) =>
+        SaveBag.MoveOf(key) is { } move ? $"images/objets/ct-{Get(EnglishTypes, MoveType(move), "normal").ToLowerInvariant()}.png"
+        : $"images/objets/{key}.png";
 
     /// <summary>Type d'une capacité dans les jeux récents (Charme est de type Fée depuis la 6e génération).</summary>
     private static byte MoveType(ushort move) =>
@@ -77,7 +88,6 @@ public sealed class PokemonInfo
         : move < MoveInfo.GetTypeTable(EntityContext.Gen9a).Length ? MoveInfo.GetType(move, EntityContext.Gen9a)
         : (byte)0;
 
-    private static readonly IReadOnlyList<string> EnglishItems = GameInfo.GetStrings("en").itemlist;
     private static readonly IReadOnlyList<string> EnglishTypes = GameInfo.GetStrings("en").types;
 
     public static bool IsLegal(PKM pk) => new LegalityAnalysis(pk, StorageSlotType.Box).Valid;
@@ -96,7 +106,7 @@ public sealed class PokemonInfo
             pk.Gender switch { 0 => "♂", 1 => "♀", _ => "" },
             Get(_strings.natures, (int)pk.Nature),
             Get(_strings.abilitylist, pk.Ability),
-            pk.HeldItem == 0 ? "—" : Get(_strings.itemlist, pk.HeldItem),
+            pk.HeldItem == 0 ? "—" : Get(_items, pk.HeldItem),
             new[] { pk.Move1, pk.Move2, pk.Move3, pk.Move4 }.Where(m => m != 0).Select(m => Get(_strings.movelist, m)).ToList(),
             pk.OriginalTrainerName,
             pk.DisplayTID.ToString("00000"),

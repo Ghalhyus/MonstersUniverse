@@ -165,7 +165,7 @@
                 {
                     <button type="button" class="item-tile item-tile-button @(detail?.ItemId == i.ItemId ? "selected" : "")" title="@i.Name"
                             @onclick="() => ShowDetail(i)">
-                        <img src="@i.SpriteUrl" alt="" width="32" height="32" class="item-sprite" />
+                        <ItemSprite Url="@i.SpriteUrl" Size="32" />
                         <span class="item-name">@i.Name</span>
                         <span class="item-count">× @CollectionCapacity.FormatCount(i.Count)</span>
                     </button>
@@ -173,7 +173,7 @@
                 else
                 {
                     <div class="item-tile" title="@i.Name">
-                        <img src="@i.SpriteUrl" alt="" width="32" height="32" class="item-sprite" />
+                        <ItemSprite Url="@i.SpriteUrl" Size="32" />
                         <span class="item-name">@i.Name</span>
                         <span class="item-count">× @CollectionCapacity.FormatCount(i.Count)</span>
                     </div>
@@ -193,7 +193,7 @@
                     var i = item;
                     <tr class="@(detail?.ItemId == i.ItemId ? "table-active" : "")">
                         <td>
-                            <img src="@i.SpriteUrl" alt="" width="24" height="24" class="item-sprite" />
+                            <ItemSprite Url="@i.SpriteUrl" Size="24" />
                             @if (clickable)
                             {
                                 <button type="button" class="btn btn-link p-0 align-baseline text-start" @onclick="() => ShowDetail(i)">@i.Name</button>
@@ -258,7 +258,7 @@ else if (panel == SidePanel.Detail && detail is { } d)
     @* Détail d'un objet (source « Tout ») : où il se trouve, avec le numéro de la CT dans chaque jeu. *@
     <aside class="journal-panel card" aria-label="@($"Détail : {d.Name}")">
         <div class="card-header d-flex align-items-center gap-2">
-            <img src="@d.SpriteUrl" alt="" width="24" height="24" class="item-sprite" />
+            <ItemSprite Url="@d.SpriteUrl" Size="24" />
             <h2 class="h6 mb-0">@BaseName(d)</h2>
             <button type="button" class="btn-close ms-auto" aria-label="Fermer le détail" @onclick="ClosePanel"></button>
         </div>
