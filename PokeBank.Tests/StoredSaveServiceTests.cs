@@ -146,6 +146,24 @@ public sealed class StoredSaveServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task DeleteWithoutDownload_RemovesTheSave_AndKeepsABackup()
+    {
+        await _saves.AddAsync("sacha", "b2.sav", Save(box: [25, 133]));
+        var id = await StoredId("sacha");
+
+        Assert.Equal(StoreStatus.NotFound, (await _saves.DeleteWithoutDownloadAsync("ondine", id)).Status); // pas la sienne
+
+        var result = await _saves.DeleteWithoutDownloadAsync("sacha", id);
+        Assert.True(result.Ok, result.Message);
+        Assert.Equal("Sauvegarde « b2.sav » retirée du serveur (2 Pokémon).", result.Message);
+        Assert.Empty(await _saves.ListAsync("sacha"));
+        using (var db = _db.NewContext())
+            Assert.Equal(0, await db.BankPokemon.CountAsync());
+        Assert.Single(Directory.GetFiles(_db.BackupRoot, "*stockee-supprimee*", SearchOption.AllDirectories)); // copie gardée
+        Assert.Equal(StoreStatus.NotFound, (await _saves.DeleteWithoutDownloadAsync("sacha", id)).Status);
+    }
+
+    [Fact]
     public async Task BankCommit_IsRefused_OnceTheSaveIsStored()
     {
         var data = Save(box: 25);

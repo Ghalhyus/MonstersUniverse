@@ -66,7 +66,7 @@ else
                             Mettre à jour
                             <InputFile @key="fileInputVersion" class="d-none" OnChange="e => UpdateSave(s, e)" disabled="@(busy || s.MustDownloadBeforeUpdate)" />
                         </label>
-                        <button class="btn btn-sm btn-outline-danger" @onclick="() => { confirmDeleteId = s.Id; pendingUpdate = null; }" disabled="@busy">Supprimer</button>
+                        <button class="btn btn-sm btn-outline-danger" @onclick="() => { confirmDeleteId = s.Id; deleteWithoutDownload = false; pendingUpdate = null; }" disabled="@busy">Supprimer</button>
                     </div>
                 </div>
 
@@ -95,13 +95,29 @@ else
                         </div>
                     </div>
                 }
-                @if (confirmDeleteId == s.Id)
+                @if (confirmDeleteId == s.Id && !deleteWithoutDownload)
                 {
                     <div class="alert alert-danger small mt-2 mb-0">
                         La sauvegarde va être <strong>téléchargée sur ton appareil</strong>, puis retirée du serveur avec ses
                         @s.PokemonCount Pokémon. Tu pourras ensuite l'utiliser dans « Transfert ».
-                        <div class="d-flex gap-2 mt-2">
+                        <div class="d-flex flex-wrap gap-2 mt-2">
                             <button class="btn btn-sm btn-danger" @onclick="() => DeleteSave(s)" disabled="@busy">Télécharger et supprimer</button>
+                            @* Modifiée sur le serveur et pas encore téléchargée : ces changements seraient perdus (même règle que « Mettre à jour »). *@
+                            <span title="@(s.MustDownloadBeforeUpdate ? "Télécharge d'abord la version modifiée sur le serveur" : null)">
+                                <button class="btn btn-sm btn-outline-danger" @onclick="() => deleteWithoutDownload = true"
+                                        disabled="@(busy || s.MustDownloadBeforeUpdate)">Supprimer sans télécharger</button>
+                            </span>
+                            <button class="btn btn-sm btn-outline-secondary" @onclick="() => confirmDeleteId = null">Annuler</button>
+                        </div>
+                    </div>
+                }
+                @if (confirmDeleteId == s.Id && deleteWithoutDownload)
+                {
+                    <div class="alert alert-danger small mt-2 mb-0">
+                        <strong>Le fichier ne te sera pas rendu</strong> : la sauvegarde et ses @s.PokemonCount Pokémon seront retirés du
+                        serveur. Garde bien la sauvegarde de ton jeu.
+                        <div class="d-flex flex-wrap gap-2 mt-2">
+                            <button class="btn btn-sm btn-danger" @onclick="() => DeleteWithoutDownload(s)" disabled="@busy">Oui, supprimer sans télécharger</button>
                             <button class="btn btn-sm btn-outline-secondary" @onclick="() => confirmDeleteId = null">Annuler</button>
                         </div>
                     </div>
@@ -120,6 +136,7 @@ else
     private bool busy;
     private int fileInputVersion; // recrée les champs fichier : renvoyer le même fichier redéclenche l'envoi
     private int? confirmDeleteId;
+    private bool deleteWithoutDownload; // deuxième étape de « Supprimer » : confirmation de la suppression sans téléchargement
     private PendingUpdate? pendingUpdate;
     private string? message;
     private bool messageIsError;
@@ -176,6 +193,16 @@ else
                 Show($"Sauvegarde « {file.FileName} » téléchargée et retirée du serveur ({save.PokemonCount} Pokémon).");
             }
             else Show("Cette sauvegarde n'existe plus.", isError: true);
+            await RefreshAsync();
+        });
+
+    /// <summary>Supprime sans rendre le fichier, après confirmation (refusé par le serveur si une version modifiée attend d'être téléchargée).</summary>
+    private Task DeleteWithoutDownload(StoredSaveInfo save) =>
+        RunBusy(async () =>
+        {
+            confirmDeleteId = null;
+            var result = await StoredSaves.DeleteWithoutDownloadAsync(userId, save.Id);
+            Show(result.Message, !result.Ok);
             await RefreshAsync();
         });
 

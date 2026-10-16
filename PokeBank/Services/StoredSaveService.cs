@@ -265,6 +265,40 @@ public sealed class StoredSaveService(
         if (save is null)
             return null;
 
+        await RemoveAsync(db, ownerId, save);
+        return (save.FileName, save.Data);
+    }
+
+    /// <summary>
+    /// Retire une sauvegarde stockée et tous ses Pokémon sans rendre le fichier (une copie de sécurité est quand même
+    /// gardée). Refusé tant qu'une version modifiée par le serveur (argent ou objets) n'a pas été téléchargée : ces
+    /// changements, absents du jeu du joueur, seraient perdus (objets déposés compris).
+    /// </summary>
+    public async Task<StoreResult> DeleteWithoutDownloadAsync(string ownerId, int saveId)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+        var save = await db.StoredSaves.FirstOrDefaultAsync(s => s.Id == saveId && s.OwnerId == ownerId);
+        if (save is null)
+            return new(StoreStatus.NotFound, "Cette sauvegarde n'existe plus.");
+        if (!save.DownloadedSinceModification && await db.SaveModifications.FindAsync(save.IdentityKey) is { } modification)
+            return new(StoreStatus.ModifiedOnServer,
+                $"{Capitalize(DescribeServerChanges(modification))} a modifié cette sauvegarde sur le serveur : télécharge d'abord " +
+                "la version modifiée, sinon ces changements seraient perdus.");
+
+        try
+        {
+            await RemoveAsync(db, ownerId, save);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return ConflictResult(); // un retrait ou un transfert d'objets vient de la modifier
+        }
+        return new(StoreStatus.Ok, $"Sauvegarde « {save.FileName} » retirée du serveur ({save.PokemonCount} Pokémon).");
+    }
+
+    /// <summary>Copie de sécurité, puis retrait de la sauvegarde et de ses Pokémon (jeton de concurrence <c>Version</c>).</summary>
+    private async Task RemoveAsync(ApplicationDbContext db, string ownerId, StoredSave save)
+    {
         await WriteBackupAsync(ownerId, save, "supprimee");
 
         await using var tx = await db.Database.BeginTransactionAsync();
@@ -274,7 +308,6 @@ public sealed class StoredSaveService(
         await tx.CommitAsync();
 
         logger.LogInformation("Utilisateur {User} : sauvegarde {Id} supprimée.", ownerId, save.Id);
-        return (save.FileName, save.Data);
     }
 
     /// <summary>

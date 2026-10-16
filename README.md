@@ -54,7 +54,11 @@ liste sans trou, tassée à l'écriture comme le fait le jeu (un Pokémon dépos
 Dans « Mes sauvegardes », l'utilisateur peut aussi **stocker** une sauvegarde complète : le fichier reste sur le serveur
 et tous ses Pokémon (équipe, boîtes, pension, Boîte Combat…) apparaissent dans la collection **en lecture seule**
 (ni retrait vers un jeu, ni téléchargement `.pkX`). « Mettre à jour » remplace le fichier et tous ses Pokémon ;
-« Supprimer » renvoie d'abord le fichier à l'utilisateur. Une copie est gardée dans `Data/backups/` à chaque fois.
+« Supprimer » propose de **télécharger et supprimer** (le fichier est d'abord rendu à l'utilisateur) ou de **supprimer sans
+télécharger**, après une seconde confirmation. Ce second choix est grisé (et refusé par le serveur,
+`StoredSaveService.DeleteWithoutDownloadAsync`) tant qu'une version modifiée sur le serveur (retrait d'argent, transfert
+d'objets) n'a pas été téléchargée : ces changements, absents du jeu, seraient perdus. Une copie est gardée dans
+`Data/backups/` à chaque fois, même sans téléchargement (non mentionnée au joueur : elle ne lui est pas accessible).
 
 Partout où une sauvegarde stockée est nommée (« Jeu — Dresseur »), son **nom de fichier** l'accompagne, pour distinguer
 deux parties du même jeu : en petit gris en dessous dans les fenêtres de choix (argent, objets), le détail d'un objet, la

@@ -80,6 +80,13 @@ public sealed class InventoryServiceTests : IDisposable
         Assert.Equal(30_000, info.WithdrawnOnServer);
         Assert.Single(Directory.GetFiles(_db.BackupRoot, "*retrait-avant*", SearchOption.AllDirectories));
         Assert.Single(Directory.GetFiles(_db.BackupRoot, "*retrait-apres*", SearchOption.AllDirectories));
+
+        // Supprimer sans télécharger perdrait le retrait (absent du jeu) : refusé tant que la version modifiée n'est pas rendue.
+        var refused = await _saves.DeleteWithoutDownloadAsync("sacha", id);
+        Assert.Equal(StoreStatus.ModifiedOnServer, refused.Status);
+        Assert.StartsWith($"Un retrait de {InventoryService.FormatMoney(30_000)} a modifié cette sauvegarde sur le serveur", refused.Message);
+        Assert.NotNull(await _saves.DownloadAsync("sacha", id));
+        Assert.True((await _saves.DeleteWithoutDownloadAsync("sacha", id)).Ok);
     }
 
     [Fact]
