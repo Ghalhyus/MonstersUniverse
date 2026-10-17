@@ -13,6 +13,9 @@ services:
       - ASPNETCORE_FORWARDEDHEADERS_ENABLED=true
     volumes:
       - pokebank-data:/app/Data # base SQLite, copies de sécurité, clés de connexion
+      # Images (Pokémon, objets, sprites Donjon Mystère) : dossier du serveur, rempli par deploy\images-serveur.cmd,
+      # hors de la sauvegarde nocturne (elles se retéléchargent).
+      - ../pokebank-images:/app/wwwroot/images:ro
 
   caddy:
     image: caddy:2

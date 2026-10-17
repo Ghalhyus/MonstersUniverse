@@ -11,8 +11,10 @@ Set-Location (Join-Path $PSScriptRoot "..")
 
 $archive = Join-Path $env:TEMP "pokebank.tgz"
 Write-Host "== Préparation de l'archive"
+# Sans les images : elles sont dans ~/pokebank-images sur le serveur (deploy\images-serveur.cmd). Avec outils/, pour
+# que le script des images soit sur le serveur.
 tar -czf $archive --exclude=bin --exclude=obj --exclude=.vs --exclude="app.db*" --exclude=backups --exclude=keys `
-    Dockerfile .dockerignore docker-compose.yml Caddyfile .env.example PokeBank.sln PokeBank deploy
+    --exclude=PokeBank/wwwroot/images Dockerfile .dockerignore docker-compose.yml Caddyfile .env.example PokeBank.sln PokeBank deploy outils
 if ($LASTEXITCODE -ne 0) { throw "Impossible de créer l'archive." }
 
 Write-Host "== Envoi vers $Serveur"
@@ -20,7 +22,8 @@ scp $archive "${Serveur}:pokebank.tgz"
 if ($LASTEXITCODE -ne 0) { throw "Envoi impossible (adresse, utilisateur ou connexion SSH ?)." }
 
 Write-Host "== Mise à jour sur le serveur"
-$commande = "mkdir -p $Dossier && tar -xzf pokebank.tgz -C $Dossier && cd $Dossier && " +
+# Dossier des images créé avant Docker : sinon Docker le crée au nom de root et le script des images ne peut plus y écrire.
+$commande = "mkdir -p $Dossier ~/pokebank-images && rm -rf $Dossier/PokeBank/wwwroot/images && tar -xzf pokebank.tgz -C $Dossier && cd $Dossier && " +
     "if [ -f .env ]; then docker compose up -d --build && docker image prune -f > /dev/null && echo 'PokeBank est à jour.'; " +
     "else echo 'Première installation : connecte-toi au VPS et lance  bash ~/$Dossier/deploy/installer-serveur.sh'; fi"
 ssh $Serveur $commande

@@ -6,7 +6,12 @@ Rassemble les images servies par le site, dans PokeBank/wwwroot/images/ :
   dont la femelle est différente), les mêmes en chromatique sous pokemon/chromatique/, pokemon/inconnu.png en
   remplacement (images et liste des formes de PokéAPI) ;
 - objets/<numéro d'objet>.png (numéros de PKHeX, ceux du site), objets/ct-<type>.png pour les CT et DT (une par type de
-  capacité), objets/inconnu.png pour les objets sans image.
+  capacité), objets/inconnu.png pour les objets sans image ;
+- donjon/ : sprites animés façon Donjon Mystère de SpriteCollab (PMD Collab, https://sprites.pmdcollab.org), animations
+  Idle, Walk et Sleep seulement, dans les dossiers de SpriteCollab : donjon/<espèce sur 4 chiffres>[/<forme>[/<chromatique>
+  [/<femelle>]]]/ (donjon/0025/ Pikachu, donjon/0025/0000/0001/ chromatique, donjon/0025/0000/0000/0002/ femelle...).
+  Chaque dossier a ses planches <Animation>-Anim.png et un AnimData.xml réduit à ces animations (taille des images,
+  durées) ; donjon/credits.txt liste les auteurs de chaque dossier (licence CC BY-NC 4.0 : à citer).
 
 Sources des objets, dans l'ordre :
   1. PokéAPI, par nom anglais (l'apparence d'origine du site), sauf quand ce nom est porté par plusieurs objets ;
@@ -15,12 +20,16 @@ Sources des objets, dans l'ordre :
 Les objets qu'aucune source n'a (bonbons de Let's Go, ingrédients d'Écarlate/Violet, objets de Légendes Arceus...)
 gardent inconnu.png : il suffit de déposer leur image sous leur numéro pour la remplacer.
 
-Lancement (Python 3, rien à installer) : python outils/images.py
+Lancement (Python 3, rien à installer) : python outils/images.py [pokemon] [objets] [donjon] [--sortie <dossier>]
+(tout, sans argument ; dans PokeBank/wwwroot/images, sauf --sortie : le serveur l'utilise pour ~/pokebank-images, voir
+deploy/images-serveur.ps1). Les images ne sont pas dans le dépôt Git : en local, outils/recuperer-images.cmd les copie
+depuis le serveur, plus vite que les reconstruire.
 Les images déjà présentes sont gardées (supprimer un dossier pour le reprendre). À relancer quand PKHeX connaît de
 nouvelles espèces ou de nouveaux objets (après avoir mis à jour PKHEX ci-dessous).
 """
 import csv
 import io
+import xml.etree.ElementTree as ElementTree
 import json
 import os
 import pathlib
@@ -35,6 +44,8 @@ PKHEX = "https://raw.githubusercontent.com/kwsch/PKHeX/25.12.21"  # même versio
 POKEAPI = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites"
 POKEAPI_DATA = "https://raw.githubusercontent.com/PokeAPI/pokeapi/master/data/v2/csv"
 POKESPRITE = "https://raw.githubusercontent.com/msikma/pokesprite/master"
+SPRITECOLLAB = "https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master"
+DONJON_ANIMATIONS = ["Idle", "Walk", "Sleep"]  # animations gardées de SpriteCollab (il y en a une quarantaine)
 TYPES = ["normal", "fighting", "flying", "poison", "ground", "rock", "bug", "ghost", "steel", "fire", "water", "grass",
          "electric", "psychic", "ice", "dragon", "dark", "fairy"]
 
@@ -142,6 +153,73 @@ def item_jobs():
     return jobs, missing
 
 
+def donjon_jobs():
+    """
+    Sprites animés de SpriteCollab : pour chaque dossier qui a des sprites (espèce, forme, chromatique, femelle), les
+    planches des animations de DONJON_ANIMATIONS et celles qu'elles réutilisent (une animation peut être la copie d'une
+    autre, <CopyOf>, sans planche à elle), et un AnimData.xml réduit à ces animations, écrit tout de suite.
+    """
+    tracker = json.loads(get(f"{SPRITECOLLAB}/tracker.json"))
+    names = {}  # identifiant d'auteur (Discord) → nom affiché
+    for line in get(f"{SPRITECOLLAB}/credit_names.txt").decode("utf-8").splitlines()[1:]:
+        parts = line.split("\t")
+        if len(parts) >= 2:
+            names[parts[1]] = parts[0]
+    folders = []  # (dossier, nom, auteurs)
+    def walk(node, path, title):
+        if node.get("sprite_complete", 0) > 0 and any(a in node.get("sprite_files", {}) for a in DONJON_ANIMATIONS):
+            credit = node.get("sprite_credit", {})
+            authors = [credit.get("primary", "")] + credit.get("secondary", [])
+            folders.append((path, title, [names.get(a, a) for a in authors if a]))
+        for key, child in node.get("subgroups", {}).items():
+            walk(child, f"{path}/{key}", f"{title} {child.get('name', '')}".strip())
+    for number, node in tracker.items():
+        walk(node, number, node.get("name", ""))
+
+    def sheets(folder):
+        """Planches nécessaires d'un dossier, d'après son AnimData.xml (réduit et écrit s'il n'est pas déjà là)."""
+        local = OUT / "donjon" / folder / "AnimData.xml"
+        try:
+            data = local.read_bytes() if local.exists() else get(f"{SPRITECOLLAB}/sprite/{folder}/AnimData.xml")
+        except urllib.error.URLError as e:
+            return folder, None, f"{folder}/AnimData.xml : {e}"
+        root = ElementTree.fromstring(data)
+        anims = {a.findtext("Name"): a for a in root.iter("Anim")}
+        kept, todo = set(), [a for a in DONJON_ANIMATIONS if a in anims]
+        while todo:  # suit les <CopyOf> jusqu'aux animations qui ont une planche
+            name = todo.pop()
+            if name in kept:
+                continue
+            kept.add(name)
+            if (copy := anims[name].findtext("CopyOf")) and copy in anims:
+                todo.append(copy)
+        if not local.exists():
+            container = root.find("Anims")
+            for anim in list(container):
+                if anim.findtext("Name") not in kept:
+                    container.remove(anim)
+            local.parent.mkdir(parents=True, exist_ok=True)
+            local.write_bytes(ElementTree.tostring(root, encoding="utf-8", xml_declaration=True))
+        return folder, [n for n in kept if not anims[n].findtext("CopyOf")], None
+
+    jobs, missing = {}, []
+    with ThreadPoolExecutor(16) as pool:
+        for folder, needed, error in pool.map(sheets, [f for f, _, _ in folders]):
+            if error:
+                missing.append(error)
+                continue
+            for name in needed:
+                jobs[f"donjon/{folder}/{name}-Anim.png"] = [f"{SPRITECOLLAB}/sprite/{folder}/{name}-Anim.png"]
+
+    # Auteurs de chaque dossier : la licence CC BY-NC 4.0 demande de les citer.
+    lines = ["Sprites animés : SpriteCollab (PMD Collab, https://sprites.pmdcollab.org), licence CC BY-NC 4.0.",
+             "Auteurs de chaque dossier de sprites (animations Idle, Walk et Sleep) :", ""]
+    lines += [f"{folder}\t{title}\t{', '.join(authors)}" for folder, title, authors in folders]
+    (OUT / "donjon").mkdir(parents=True, exist_ok=True)
+    (OUT / "donjon" / "credits.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return jobs, missing
+
+
 def fetch(job):
     """
     Télécharge une image si elle n'est pas déjà là. Une liste d'adresses est une suite d'essais, et une image qui n'y est
@@ -167,8 +245,16 @@ def fetch(job):
 
 
 def main():
+    global OUT
+    args = sys.argv[1:]
+    if "--sortie" in args:
+        i = args.index("--sortie")
+        OUT = pathlib.Path(args[i + 1]).expanduser().resolve()
+        del args[i:i + 2]
     failed = False
-    for kind, make in (("Pokémon", pokemon_jobs), ("objets", item_jobs)):
+    parts = {"pokemon": ("Pokémon", pokemon_jobs), "objets": ("objets", item_jobs), "donjon": ("sprites Donjon Mystère", donjon_jobs)}
+    chosen = [parts[a] for a in args if a in parts] or list(parts.values())
+    for kind, make in chosen:
         jobs, missing = make()
         with ThreadPoolExecutor(16) as pool:
             results = list(pool.map(fetch, jobs.items()))

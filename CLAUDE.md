@@ -93,6 +93,12 @@ tests créent la base avec `EnsureCreated`, sans passer par les migrations.
 
 ## Images des Pokémon et des objets
 
+**Hors du dépôt Git et de la publication** : stockées sur le VPS (`~/pokebank-images`, monté sur `wwwroot/images`,
+rempli par `deploy\images-serveur.cmd`), copiées en local par `outils\recuperer-images.cmd` (SSH), servies depuis le disque
+par `UseStaticFiles` (`Program.cs` ; `MapStaticAssets` ne connaît que les fichiers de la compilation, d'où aussi
+`Content Remove` dans le `.csproj`). Ne jamais les remettre dans Git. Un nouveau type d'image : l'ajouter à
+`outils/images.py`, puis `images-serveur` sur le VPS ; les tests d'images exigent qu'elles soient là (`WebRootWithImages`).
+
 Servies par le site, plus rien n'est chargé depuis GitHub : `wwwroot/images/pokemon/<numéro d'espèce>.png`,
 `<numéro>-<forme>.png` (nom de forme de PokéAPI), `femelle/`, et les mêmes sous `pokemon/chromatique/` ;
 `wwwroot/images/objets/<numéro d'objet>.png` (numéros de PKHeX, ceux de `SaveBag`), `ct-<type>.png` ; dans chaque dossier
@@ -101,6 +107,10 @@ un `inconnu.png` affiché en remplacement (`onerror` des balises, composant `Ite
 PKHeX.Core (nouvelles espèces), en changeant la version en tête du script. L'API GitHub n'accepte que 60 appels par heure
 sans jeton (variable `GITHUB_TOKEN`) ; le script les limite.
 
+- Sprites animés Donjon Mystère (SpriteCollab, CC BY-NC 4.0) : `wwwroot/images/donjon/`, dans les dossiers de SpriteCollab
+  (`<espèce sur 4 chiffres>/<forme>/<chromatique 0001>/<femelle 0002>`), `python outils/images.py donjon` (3 min 30,
+  ~13 000 fichiers, 85 Mo). Seules Idle, Walk et Sleep sont gardées (`DONJON_ANIMATIONS`), avec les animations qu'elles
+  copient (`<CopyOf>` : pas de planche à elles) ; `AnimData.xml` est réduit à ces animations. `credits.txt` : auteurs.
 - `PokemonSprites` choisit l'image parmi les fichiers présents (liste lue au démarrage, `PokemonSprites.Load`) : nom de forme
   de PKHeX (selon le jeu du Pokémon : `EntityContext`) mis en forme, puis les noms de PokéAPI (`Aliases`, `Suffixes`) ; sinon
   l'image de l'espèce. Méga-Évolution : `ItemStorage9ZA.GetExpectedMegaStoneOrPrimalOrb` ; PKHeX ne marque comme méga qu'une

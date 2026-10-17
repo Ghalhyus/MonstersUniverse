@@ -7,6 +7,16 @@ Banque Pokémon privée pour un cercle d'amis, basée sur [PKHeX.Core](https://g
 
 ## Lancer en local
 
+Les images (Pokémon, objets, sprites Donjon Mystère, ~90 Mo) ne sont pas dans le dépôt Git : elles sont stockées sur le
+serveur. Après avoir cloné, les récupérer par SSH (une archive, quelques secondes) :
+
+```bash
+outils\recuperer-images.cmd debian@IP_DU_VPS
+```
+
+Sans accès au serveur, `python outils/images.py` les reconstruit depuis leurs projets d'origine (~10 minutes). Sans images,
+le site marche mais affiche des points d'interrogation, et les tests d'images échouent avec un message qui l'explique.
+
 ```bash
 dotnet run --project PokeBank
 ```
@@ -215,7 +225,10 @@ est incompatible (espèce, attaques ou objets inexistants dans le jeu, conversio
 | `PokeBank/Services/PokemonCriteria.cs` | Filtres de « Ma collection » : valeurs choisies, requête en base, lecture et écriture dans l'adresse |
 | `PokeBank/Services/PokemonTraits.cs` | Caractéristiques d'un Pokémon enregistrées pour ces filtres (types récents, nature, talent, IV, forme, Méga) |
 | `PokeBank/Services/PokemonSprites.cs` | Choix de l'image d'un Pokémon : forme (noms de PKHeX → noms de PokéAPI), Méga-Évolution selon l'objet tenu, femelle, chromatique |
-| `PokeBank/wwwroot/images/` | Images servies par le site : `pokemon/<numéro d'espèce>.png`, `pokemon/<numéro>-<forme>.png` (`19-alola.png`, `6-mega-x.png`, `6-gmax.png`), `pokemon/femelle/`, `pokemon/chromatique/` (mêmes sous-dossiers), `objets/<numéro d'objet>.png`, `objets/ct-<type>.png` pour les CT/DT, un `inconnu.png` dans chaque dossier |
+| `PokeBank/wwwroot/images/` | Hors du dépôt Git (voir « Lancer en local ») ; images servies par le site : `pokemon/<numéro d'espèce>.png`, `pokemon/<numéro>-<forme>.png` (`19-alola.png`, `6-mega-x.png`, `6-gmax.png`), `pokemon/femelle/`, `pokemon/chromatique/` (mêmes sous-dossiers), `objets/<numéro d'objet>.png`, `objets/ct-<type>.png` pour les CT/DT, un `inconnu.png` dans chaque dossier |
+| `PokeBank/wwwroot/images/donjon/` | Sprites animés de SpriteCollab (Idle, Walk, Sleep) dans les dossiers de SpriteCollab (`0025/`, `0025/0000/0001/` chromatique...) : planches `<Animation>-Anim.png` et `AnimData.xml` réduit à ces animations ; `credits.txt` (auteurs) |
+| `outils/recuperer-images.cmd` | Copie les images du serveur dans `wwwroot/images` par SSH (après un clonage) |
+| `deploy/images-serveur.cmd` (`images-serveur.ps1`) | Remplit ou met à jour les images du serveur (`~/pokebank-images`) et redémarre le site |
 | `outils/images.py` | Rassemble ces images (PokéAPI ; pour les objets, puis pokesprite et PKHeX par numéro d'objet) ; à relancer pour en ajouter |
 | `PokeBank/Data/BankPokemon.cs` | Table des Pokémon (octets bruts + métadonnées ; `StoredSaveId` si lecture seule) |
 | `PokeBank/Data/StoredSave.cs` | Table des sauvegardes stockées |
@@ -250,9 +263,18 @@ l'IP du VPS.
 1. Depuis Windows, dans le dossier du projet : `deploy\publier.cmd ubuntu@IP_DU_VPS`
 2. Sur le VPS (`ssh ubuntu@IP_DU_VPS`) : `bash ~/pokebank/deploy/installer-serveur.sh`
    (demande le nom de domaine, génère le code d'invitation et l'affiche à la fin).
+3. Depuis Windows : `deploy\images-serveur.cmd ubuntu@IP_DU_VPS` (images, voir plus bas).
 
 **Mises à jour** : `deploy\publier.cmd ubuntu@IP_DU_VPS` suffit. Les migrations de la base s'appliquent au démarrage ;
 les données restent dans le volume Docker.
+
+**Images** : ni dans le dépôt ni dans la publication. Elles sont stockées sur le VPS dans `~/pokebank-images` (hors de la
+sauvegarde nocturne : elles se retéléchargent), monté en lecture seule à la place de `wwwroot/images` (`docker-compose.yml`)
+et servi depuis le disque (`Program.cs` : `MapStaticAssets` ne connaît que les fichiers présents à la compilation).
+`deploy\images-serveur.cmd ubuntu@IP_DU_VPS` lance `outils/images.py --sortie ~/pokebank-images` sur le VPS (téléchargement
+depuis les projets d'origine, ~10 minutes la première fois, les images présentes sont gardées), puis redémarre le site,
+qui lit la liste des images au démarrage. À relancer pour mettre les images à jour. Les développeurs les copient depuis le
+VPS avec `outils\recuperer-images.cmd` (voir « Lancer en local »).
 
 **Sauvegardes** : la sauvegarde de l'hébergeur ne couvre souvent que 24 h, or la base est le seul endroit où sont les
 Pokémon déposés. `deploy/sauvegarder.sh` archive chaque nuit le volume dans `~/sauvegardes` sur le VPS ; en garder aussi
@@ -268,8 +290,8 @@ Réglages avancés (variables d'environnement, jamais de secret dans `appsetting
 ## Points de vigilance
 
 - Licence : PKHeX est sous GPL-3.0 ; si tu publies ce code, il doit l'être sous GPL aussi (voir « Crédits »).
-- Les images des Pokémon et des objets sont copiées dans le site (`wwwroot/images`, par `outils/images.py`) : le navigateur
-  ne charge plus rien depuis GitHub. Les formes, femelles et Méga-Évolutions sont décrites plus haut (« Images des Pokémon »). Pour
+- Les images des Pokémon et des objets sont servies par le site (`wwwroot/images`, stockées sur le serveur, voir « Images » de
+  la mise en ligne) : le navigateur ne charge plus rien depuis GitHub. Les formes, femelles et Méga-Évolutions sont décrites plus haut (« Images des Pokémon »). Pour
   les objets, PokéAPI les nomme d'après le nom anglais, qui ne correspond pas toujours, et n'a pas ceux d'Épée/Bouclier. Aucune source n'a les bonbons de Let's Go, les objets de
   Légendes Arceus et Z-A ni les ingrédients et matériaux d'Écarlate/Violet : ils affichent l'objet inconnu, en attendant
   qu'on dépose leur image sous leur numéro d'objet.
@@ -287,6 +309,7 @@ PokeBank s'appuie sur le travail d'autres projets :
 | [PokéAPI sprites](https://github.com/PokeAPI/sprites) | Images des Pokémon (normales et chromatiques, formes, femelles, Méga-Évolutions, Gigamax), de la plupart des objets et des CT (`wwwroot/images`) | CC0 1.0 pour le dépôt ; images © The Pokémon Company |
 | [PokéAPI](https://github.com/PokeAPI/pokeapi) (données) | Liste des formes de chaque espèce et des espèces dont la femelle est différente (tables `pokemon`, `pokemon_forms`, `pokemon_species`, lues par `outils/images.py`) | BSD-3-Clause |
 | [PokéSprite](https://github.com/msikma/pokesprite) (msikma) | Images d'objets absentes de PokéAPI, retrouvées par numéro d'objet (`data/item-map.json`) | MIT ; images © Nintendo / Creatures Inc. / GAME FREAK Inc. |
+| [SpriteCollab](https://github.com/PMDCollab/SpriteCollab) (PMD Collab, [sprites.pmdcollab.org](https://sprites.pmdcollab.org)) | Sprites animés façon Donjon Mystère, animations Idle, Walk et Sleep (`wwwroot/images/donjon`, par `outils/images.py donjon`) ; auteurs de chaque sprite dans `wwwroot/images/donjon/credits.txt` | CC BY-NC 4.0 (usage non commercial, auteurs à citer) |
 | [Bootstrap](https://getbootstrap.com) | Mise en page et composants de l'interface (`wwwroot/lib/bootstrap`) | MIT |
 | [ASP.NET Core, Blazor, Identity, Entity Framework Core](https://dotnet.microsoft.com) (Microsoft) | Site, comptes, accès à la base | MIT |
 | [SQLite](https://sqlite.org) | Base de données | Domaine public |

@@ -15,4 +15,11 @@
     <PackageReference Include="PKHeX.Core" Version="25.12.21" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Images (Pokémon, objets, sprites Donjon Mystère) : hors de la compilation et de la publication. Déposées en local
+         par outils\recuperer-images.cmd, montées depuis le serveur en production, servies depuis le disque (Program.cs). -->
+    <Content Remove="wwwroot\images\**" />
+    <None Remove="wwwroot\images\**" />
+  </ItemGroup>
+
 </Project>

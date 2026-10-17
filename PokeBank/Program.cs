@@ -86,6 +86,17 @@ else
 
 app.UseHttpsRedirection();
 
+// Images (Pokémon, objets, sprites Donjon Mystère) : ni dans le dépôt ni dans la publication. En local, déposées par
+// outils\recuperer-images.cmd ; en production, dossier du serveur (~/pokebank-images) monté à la place de wwwroot/images.
+// Servies depuis le disque : MapStaticAssets ne connaît que les fichiers présents à la compilation.
+var images = Path.Combine(app.Environment.WebRootPath, "images");
+Directory.CreateDirectory(images); // absentes (nouveau poste) : le site affiche les images de remplacement
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(images),
+    RequestPath = "/images",
+});
+
 
 app.UseAntiforgery();
 

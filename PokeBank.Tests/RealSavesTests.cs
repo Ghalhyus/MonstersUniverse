@@ -88,7 +88,7 @@ public sealed class RealSavesTests : IDisposable
         if (Read(file) is not { } data)
             return;
         var missing = SaveBag.ReadItems(Open(data, file)).Keys
-            .Where(item => !File.Exists(Path.Combine(WebRoot(), PokemonInfo.ItemSpriteUrl(item))))
+            .Where(item => !File.Exists(Path.Combine(WebRootWithImages(), PokemonInfo.ItemSpriteUrl(item))))
             .ToList();
         Assert.True(missing.Count == 0, $"{file} : objets sans image (outils/images.py) : {string.Join(", ", missing)}");
     }
@@ -99,7 +99,7 @@ public sealed class RealSavesTests : IDisposable
     {
         var missing = Enumerable.Range(1, (int)Species.MAX_COUNT - 1)
             .SelectMany(s => new[] { false, true }.Select(shiny => PokemonSprites.Url((ushort)s, 0, EntityContext.Gen9, false, 0, shiny)))
-            .Where(url => !File.Exists(Path.Combine(WebRoot(), url)))
+            .Where(url => !File.Exists(Path.Combine(WebRootWithImages(), url)))
             .ToList();
         Assert.True(missing.Count == 0, $"images manquantes (outils/images.py) : {string.Join(", ", missing.Take(10))}");
     }
@@ -107,6 +107,18 @@ public sealed class RealSavesTests : IDisposable
     /// <summary>Dossier wwwroot du site, retrouvé depuis ce fichier source (les tests peuvent être compilés ailleurs).</summary>
     internal static string WebRoot([System.Runtime.CompilerServices.CallerFilePath] string source = "") =>
         Path.Combine(Path.GetDirectoryName(source)!, "..", "PokeBank", "wwwroot");
+
+    /// <summary>
+    /// <see cref="WebRoot"/>, en échouant avec un message clair si les images n'y sont pas : elles ne sont pas dans le dépôt
+    /// Git (stockées sur le serveur), il faut les récupérer après avoir cloné.
+    /// </summary>
+    internal static string WebRootWithImages([System.Runtime.CompilerServices.CallerFilePath] string source = "")
+    {
+        var root = WebRoot(source);
+        Assert.True(Directory.Exists(Path.Combine(root, "images", "pokemon")) && Directory.Exists(Path.Combine(root, "images", "objets")),
+            @"Images absentes de PokeBank\wwwroot\images : lance outils\recuperer-images.cmd debian@IP_DU_VPS (ou python outils/images.py).");
+        return root;
+    }
 
     /// <summary>Octets de chaque Pokémon de l'équipe et des boîtes, dans l'ordre.</summary>
     private static List<string> Contents(SaveFile sav) =>

@@ -6,7 +6,7 @@ namespace PokeBank.Tests;
 /// <summary>Choix de l'image d'un Pokémon (forme, Méga-Évolution, femelle) parmi celles du site.</summary>
 public sealed class PokemonSpritesTests
 {
-    public PokemonSpritesTests() => PokemonSprites.Load(RealSavesTests.WebRoot());
+    public PokemonSpritesTests() => PokemonSprites.Load(RealSavesTests.WebRootWithImages());
 
     private static string Url(ushort species, byte form = 0, EntityContext context = EntityContext.Gen9, bool female = false,
         int heldItem = 0, bool shiny = false, bool egg = false) =>

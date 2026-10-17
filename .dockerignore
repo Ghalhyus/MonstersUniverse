@@ -7,6 +7,7 @@
 PokeBank/Data/app.db*
 PokeBank/Data/backups/
 PokeBank/Data/keys/
+PokeBank/wwwroot/images/
 PokeBank.Tests/
 deploy/
 *.sav
