@@ -124,8 +124,8 @@ recherche porte sur toute la source affichée : chaque onglet affiche alors le n
 **tri**, retenu par le navigateur et valable pour toutes les sources : « Par défaut » (numéro d'objet commun à tous les jeux,
 qui garde ensemble les Balls, les pierres, les potions... ; les CT par nom de capacité), « Nom » (accents ignorés ; pour une
 CT, le nom de la capacité, pas son numéro) ou « Quantité » (à égalité, par nom), croissant au départ et inversable. Un sélecteur choisit
-la source (gardée dans l'adresse, `?source=tout`) : l'inventaire « Interne » (par défaut), « Tout » (l'interne et toutes les
-sauvegardes additionnés) ou le sac d'une sauvegarde (sac et PC additionnés pour les jeux de 1re à 3e génération), en **lecture seule** (les transferts passent par les fenêtres de
+la source (gardée dans l'adresse, `?source=interne`) : « Tout » (par défaut, en premier : l'interne et toutes les
+sauvegardes additionnés), l'inventaire « Interne » ou le sac d'une sauvegarde (sac et PC additionnés pour les jeux de 1re à 3e génération), en **lecture seule** (les transferts passent par les fenêtres de
 retrait et de dépôt). Pour une sauvegarde, une CT porte son numéro dans le jeu (« CT26 Séisme ») ; pour « Tout », le numéro
 de chaque jeu (« Séisme — CT26 (Platine), DT10 (Épée) »), et un clic sur un objet ouvre à droite le détail de l'endroit où il
 se trouve (avec le sac ou le PC : « Rouge / Bleu — Red (CT26, PC) »). Les sauvegardes illisibles ou non prises en charge sont signalées au-dessus de la liste. Le bouton « Journal » ouvre

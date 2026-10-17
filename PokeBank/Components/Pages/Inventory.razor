@@ -88,8 +88,8 @@
     <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
         @* Source affichée : l'inventaire interne (par défaut), tout, ou le sac d'une sauvegarde (lecture seule). *@
         <select class="form-select form-select-sm inventory-source" aria-label="Objets affichés" value="@source" @onchange="ChangeSource">
-            <option value="@InternalSource">Interne</option>
             <option value="@AllSource">Tout (interne et sauvegardes)</option>
+            <option value="@InternalSource">Interne</option>
             @if (saves is not null)
             {
                 @foreach (var save in saves)
@@ -408,6 +408,8 @@ else if (panel == SidePanel.Detail && detail is { } d)
     private enum SidePanel { None, Journal, Detail }
 
     private const string InternalSource = "interne", AllSource = "tout";
+    /// <summary>Source affichée sans « ?source= » dans l'adresse : « Tout », la plus utilisée.</summary>
+    private const string DefaultSource = AllSource;
     private static string SaveSource(int saveId) => $"sauvegarde-{saveId}";
 
     /// <summary>Nom de chaque onglet dans l'adresse ; « Objets » par défaut.</summary>
@@ -461,7 +463,7 @@ else if (panel == SidePanel.Detail && detail is { } d)
     private ItemCategory tab = ItemCategory.Items;
     private string search = "";
     private bool grid; // liste par défaut
-    private string source = InternalSource;
+    private string source = DefaultSource;
     private List<ItemSource>? saves; // sacs des sauvegardes stockées, lus après le premier affichage
     private SidePanel panel; // fermé à chaque arrivée sur la page
     private ItemStack? detail; // objet dont le détail est affiché (source « Tout »)
@@ -497,7 +499,7 @@ else if (panel == SidePanel.Detail && detail is { } d)
     protected override void OnParametersSet()
     {
         tab = TabSlugs.FirstOrDefault(t => t.Value == TabSlug, new(ItemCategory.Items, "objets")).Key;
-        var wanted = string.IsNullOrEmpty(SourceParam) ? InternalSource : SourceParam;
+        var wanted = string.IsNullOrEmpty(SourceParam) ? DefaultSource : SourceParam;
         if (wanted != source)
         {
             source = wanted;
@@ -628,9 +630,9 @@ else if (panel == SidePanel.Detail && detail is { } d)
 
     private void ChangeSource(ChangeEventArgs e)
     {
-        source = e.Value?.ToString() ?? InternalSource;
+        source = e.Value?.ToString() ?? DefaultSource;
         CloseDetail();
-        Navigation.NavigateTo(Navigation.GetUriWithQueryParameter("source", source == InternalSource ? null : source), replace: true);
+        Navigation.NavigateTo(Navigation.GetUriWithQueryParameter("source", source == DefaultSource ? null : source), replace: true);
     }
 
     /// <summary>Sauvegardes de la source affichée : toutes pour « Tout », une seule pour le sac d'une sauvegarde.</summary>
