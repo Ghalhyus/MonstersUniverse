@@ -350,6 +350,25 @@ namespace PokeBank.Migrations
                     b.ToTable("OwnedItems");
                 });
 
+            modelBuilder.Entity("PokeBank.Data.ParkMember", b =>
+                {
+                    b.Property<int>("BankPokemonId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("AddedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OwnerId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("BankPokemonId");
+
+                    b.HasIndex("OwnerId");
+
+                    b.ToTable("ParkMembers");
+                });
+
             modelBuilder.Entity("PokeBank.Data.SaveModification", b =>
                 {
                     b.Property<string>("IdentityKey")
@@ -577,6 +596,17 @@ namespace PokeBank.Migrations
                         .IsRequired();
 
                     b.Navigation("Owner");
+                });
+
+            modelBuilder.Entity("PokeBank.Data.ParkMember", b =>
+                {
+                    b.HasOne("PokeBank.Data.BankPokemon", "BankPokemon")
+                        .WithOne()
+                        .HasForeignKey("PokeBank.Data.ParkMember", "BankPokemonId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("BankPokemon");
                 });
 
             modelBuilder.Entity("PokeBank.Data.StoredSave", b =>

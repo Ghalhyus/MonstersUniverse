@@ -11,10 +11,18 @@ if "%~1"=="" (
 set "IMAGES=%~dp0..\PokeBank\wwwroot\images"
 if not exist "%IMAGES%" mkdir "%IMAGES%"
 echo == Recuperation des images depuis %~1
-rem Pipe de cmd (pas de PowerShell 5, qui abime les donnees binaires) ; tar de Windows pour decompresser.
-ssh %1 "tar -czf - -C pokebank-images ." | tar -xzf - -C "%IMAGES%"
-if errorlevel 1 (
-    echo Echec de la recuperation (adresse, acces SSH, ou images absentes du serveur : deploy\images-serveur.cmd).
-    exit /b 1
-)
+rem Archive dans un fichier temporaire (pas de pipe : seul le code de sortie de la derniere commande compterait,
+rem un echec de SSH passerait inapercu). La redirection de cmd garde les donnees binaires intactes.
+set "ARCHIVE=%TEMP%\pokebank-images.tgz"
+ssh %1 "tar -czf - -C pokebank-images ." > "%ARCHIVE%"
+if errorlevel 1 goto echec
+tar -xzf "%ARCHIVE%" -C "%IMAGES%"
+if errorlevel 1 goto echec
+del "%ARCHIVE%"
 echo Images recuperees dans PokeBank\wwwroot\images.
+exit /b 0
+
+:echec
+if exist "%ARCHIVE%" del "%ARCHIVE%"
+echo Echec de la recuperation : adresse, acces SSH, ou images absentes du serveur (deploy\images-serveur.cmd).
+exit /b 1

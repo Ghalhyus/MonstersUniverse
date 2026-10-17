@@ -11,6 +11,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<Wallet> Wallets => Set<Wallet>();
     public DbSet<WalletOperation> WalletOperations => Set<WalletOperation>();
     public DbSet<OwnedItem> OwnedItems => Set<OwnedItem>();
+    public DbSet<ParkMember> ParkMembers => Set<ParkMember>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -52,6 +53,14 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         {
             e.HasKey(i => new { i.OwnerId, i.ItemId });
             e.HasOne(i => i.Owner).WithMany().HasForeignKey(i => i.OwnerId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<ParkMember>(e =>
+        {
+            e.HasKey(m => m.BankPokemonId); // un Pokémon est au parc ou n'y est pas
+            e.HasIndex(m => m.OwnerId);
+            // Le Pokémon disparaît (retiré, sauvegarde mise à jour ou supprimée) : il quitte le parc.
+            e.HasOne(m => m.BankPokemon).WithOne().HasForeignKey<ParkMember>(m => m.BankPokemonId).OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

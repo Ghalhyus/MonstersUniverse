@@ -190,6 +190,27 @@ Après un retrait (argent ou objets) ou un dépôt, le jeu du joueur n'a pas ces
 exact rendu par le serveur passe (empreinte SHA-256 dans `SaveModification`), l'ancienne sauvegarde du jeu est refusée.
 Dissuasif, pas infaillible : rien n'oblige le joueur à remplacer réellement sa sauvegarde.
 
+### Parc
+
+Le menu « Parc » (`/parc`) est une boîte PC (fond « Forêt » de Diamant Étincelant, répété en largeur) qui prend toute la
+largeur de la page et la hauteur visible (sur un téléphone : les proportions de la boîte), où vivent jusqu'à **30 Pokémon** de la
+collection, stockage interne ou sauvegardes stockées, de la **1re génération** pour l'instant (Bulbizarre à Mew, hors œufs ;
+`ParkService.Capacity`, `MaxSpecies`). « Choisir les Pokémon » ouvre la collection filtrée (recherche, cases à cocher,
+compteur). Un clic sur un Pokémon du parc le fait se tourner vers toi et ouvre sa fiche, avec « Retirer du parc ». Un Pokémon
+qui quitte la collection (retiré, sauvegarde mise à jour ou supprimée) quitte le parc (table `ParkMembers`, suppression
+en cascade).
+
+Animation dans le navigateur (`wwwroot/js/parc.js`), avec les sprites Donjon Mystère Idle, Walk et Sleep (8 directions ;
+chromatique et femelle quand SpriteCollab les a, `PokemonSprites.DonjonFolder`). Pour qu'ils aient l'air de vivre :
+- une **énergie** qui baisse en marchant et remonte en dormant (3 à 5 minutes d'activité, puis une sieste d'une minute) ;
+- des **intentions** : explorer un endroit du parc, rendre visite à un Pokémon de sa famille d'évolution (`ParkService.Family`)
+  et rester un moment avec lui, observer autour de soi, aller dormir près d'un congénère ;
+- un **caractère** tiré de la nature (Vitesse augmentée : plus actif ; diminuée : plus dormeur ; Déf. Spé. : plus sociable) ;
+- la **nuit** (heure de l'appareil, 22 h – 6 h, progressive le soir et à l'aube) : le parc s'assombrit, ils s'endorment plus
+  tôt et dorment longtemps ;
+- la **curiosité** : un Pokémon éveillé se tourne vers le pointeur de la souris, et vient souvent voir de près ;
+- le nom au survol, des « z » au-dessus des dormeurs, les plus bas dessinés devant. Les positions ne sont pas gardées.
+
 ### Taille de la collection
 
 Chaque compte a une limite de Pokémon dans sa collection (stockage interne + sauvegardes stockées, œufs compris) : 1 000 au
@@ -212,6 +233,10 @@ est incompatible (espèce, attaques ou objets inexistants dans le jeu, conversio
 | `PokeBank/Services/BankService.cs` | Accès base, validation transactionnelle, copies de sécurité |
 | `PokeBank/Services/PokemonInfo.cs` | Noms français (dont « Rouge / Bleu », « Or / Argent » pour les groupes de jeux), sprites, légalité |
 | `PokeBank/Components/Pages/Bank.razor` | Page « Transfert et stockage interne » (`/transfert`) : boîtes, glisser-déposer, sélection multiple |
+| `PokeBank/Components/Pages/Park.razor` | Page « Parc » : boîte où vivent jusqu'à 30 Pokémon, fenêtre de choix, fiche au clic |
+| `PokeBank/wwwroot/js/parc.js` | Animation et comportement des Pokémon du parc (énergie, intentions, famille, nuit, curiosité) ; `simulate` pour les essais |
+| `PokeBank/Services/ParkService.cs` | Pokémon du parc : liste, choix (30 au plus, 1re génération), retrait, famille d'évolution |
+| `PokeBank/Data/ParkMember.cs` | Table des Pokémon au parc (supprimée avec le Pokémon) |
 | `PokeBank/Components/Pages/Collection.razor` | Toute la collection sur une page (chargée au fil du défilement), filtres en pastilles (`Shared/CollectionFilterChips.razor`), filtre par origine, tri par arrivée (les plus récents d'abord, par défaut), par nom d'espèce ou par numéro de Pokédex (croissants), inversable, gardé dans l'adresse (`?tri=nom&ordre=desc`) ; les œufs toujours à la fin (leur espèce reste cachée), à égalité les plus récents d'abord ; le tri par nom ignore les accents (colonne `SortName`, remplie au démarrage pour les Pokémon plus anciens) ; 5 / 10 / 15 / 20 colonnes par défaut selon la largeur de la fenêtre en pixels physiques (téléphone, jusqu'à 1920, jusqu'à 2560, au-delà ; mise à l'échelle de Windows comprise), recalculées au redimensionnement, modifiables au curseur |
 | `PokeBank/Components/Pages/Saves.razor` | Gestion des sauvegardes stockées (ajout, mise à jour, suppression) |
 | `PokeBank/Services/StoredSaveService.cs` | Stockage, mise à jour et suppression des sauvegardes stockées |
@@ -226,6 +251,7 @@ est incompatible (espèce, attaques ou objets inexistants dans le jeu, conversio
 | `PokeBank/Services/PokemonTraits.cs` | Caractéristiques d'un Pokémon enregistrées pour ces filtres (types récents, nature, talent, IV, forme, Méga) |
 | `PokeBank/Services/PokemonSprites.cs` | Choix de l'image d'un Pokémon : forme (noms de PKHeX → noms de PokéAPI), Méga-Évolution selon l'objet tenu, femelle, chromatique |
 | `PokeBank/wwwroot/images/` | Hors du dépôt Git (voir « Lancer en local ») ; images servies par le site : `pokemon/<numéro d'espèce>.png`, `pokemon/<numéro>-<forme>.png` (`19-alola.png`, `6-mega-x.png`, `6-gmax.png`), `pokemon/femelle/`, `pokemon/chromatique/` (mêmes sous-dossiers), `objets/<numéro d'objet>.png`, `objets/ct-<type>.png` pour les CT/DT, un `inconnu.png` dans chaque dossier |
+| `PokeBank/wwwroot/images/parc/foret.png` | Fond du parc (boîte « Forêt » de Diamant Étincelant, PKHeX) |
 | `PokeBank/wwwroot/images/donjon/` | Sprites animés de SpriteCollab (Idle, Walk, Sleep) dans les dossiers de SpriteCollab (`0025/`, `0025/0000/0001/` chromatique...) : planches `<Animation>-Anim.png` et `AnimData.xml` réduit à ces animations ; `credits.txt` (auteurs) |
 | `outils/recuperer-images.cmd` | Copie les images du serveur dans `wwwroot/images` par SSH (après un clonage) |
 | `deploy/images-serveur.cmd` (`images-serveur.ps1`) | Remplit ou met à jour les images du serveur (`~/pokebank-images`) et redémarre le site |
@@ -292,9 +318,10 @@ Réglages avancés (variables d'environnement, jamais de secret dans `appsetting
 - Licence : PKHeX est sous GPL-3.0 ; si tu publies ce code, il doit l'être sous GPL aussi (voir « Crédits »).
 - Les images des Pokémon et des objets sont servies par le site (`wwwroot/images`, stockées sur le serveur, voir « Images » de
   la mise en ligne) : le navigateur ne charge plus rien depuis GitHub. Les formes, femelles et Méga-Évolutions sont décrites plus haut (« Images des Pokémon »). Pour
-  les objets, PokéAPI les nomme d'après le nom anglais, qui ne correspond pas toujours, et n'a pas ceux d'Épée/Bouclier. Aucune source n'a les bonbons de Let's Go, les objets de
-  Légendes Arceus et Z-A ni les ingrédients et matériaux d'Écarlate/Violet : ils affichent l'objet inconnu, en attendant
-  qu'on dépose leur image sous leur numéro d'objet.
+  les objets, PokéAPI les nomme d'après le nom anglais, qui ne correspond pas toujours (pokesprite et PKHeX complètent, par numéro).
+  Depuis le 17/10/2026, PokéAPI a aussi les objets d'Épée/Bouclier et suivants (bonbons de Let's Go, ingrédients...) : il
+  ne reste sans image (~330) que des objets rares, Cristaux Z en double, objets de Légendes Arceus et accessoires de
+  pique-nique, qui affichent l'objet inconnu en attendant qu'on dépose leur image sous leur numéro d'objet.
 - Usage privé uniquement.
 - Sur Noir 2 / Blanc 2, PKHeX accepte les Pokémon de génération 5 ou antérieure ; un Pokémon de génération 6+
   déposé depuis un autre jeu restera dans le stockage interne.
@@ -305,11 +332,11 @@ PokeBank s'appuie sur le travail d'autres projets :
 
 | Projet | Utilisé pour | Licence |
 |---|---|---|
-| [PKHeX](https://github.com/kwsch/PKHeX) (Kaphotics et contributeurs), paquet `PKHeX.Core` | Lecture et écriture des sauvegardes, Pokémon, sacs, noms français, légalité ; images d'objets « Big Items » et « Artwork Items » (`outils/images.py`) | GPL-3.0 |
+| [PKHeX](https://github.com/kwsch/PKHeX) (Kaphotics et contributeurs), paquet `PKHeX.Core` | Lecture et écriture des sauvegardes, Pokémon, sacs, noms français, légalité ; images d'objets « Big Items » et « Artwork Items », fond de boîte « Forêt » de Diamant Étincelant du parc (`outils/images.py`) | GPL-3.0 |
 | [PokéAPI sprites](https://github.com/PokeAPI/sprites) | Images des Pokémon (normales et chromatiques, formes, femelles, Méga-Évolutions, Gigamax), de la plupart des objets et des CT (`wwwroot/images`) | CC0 1.0 pour le dépôt ; images © The Pokémon Company |
 | [PokéAPI](https://github.com/PokeAPI/pokeapi) (données) | Liste des formes de chaque espèce et des espèces dont la femelle est différente (tables `pokemon`, `pokemon_forms`, `pokemon_species`, lues par `outils/images.py`) | BSD-3-Clause |
 | [PokéSprite](https://github.com/msikma/pokesprite) (msikma) | Images d'objets absentes de PokéAPI, retrouvées par numéro d'objet (`data/item-map.json`) | MIT ; images © Nintendo / Creatures Inc. / GAME FREAK Inc. |
-| [SpriteCollab](https://github.com/PMDCollab/SpriteCollab) (PMD Collab, [sprites.pmdcollab.org](https://sprites.pmdcollab.org)) | Sprites animés façon Donjon Mystère, animations Idle, Walk et Sleep (`wwwroot/images/donjon`, par `outils/images.py donjon`) ; auteurs de chaque sprite dans `wwwroot/images/donjon/credits.txt` | CC BY-NC 4.0 (usage non commercial, auteurs à citer) |
+| [SpriteCollab](https://github.com/PMDCollab/SpriteCollab) (PMD Collab, [sprites.pmdcollab.org](https://sprites.pmdcollab.org)) | Sprites animés façon Donjon Mystère du « Parc », animations Idle, Walk et Sleep (`wwwroot/images/donjon`, par `outils/images.py donjon`) ; auteurs de chaque sprite dans `wwwroot/images/donjon/credits.txt` | CC BY-NC 4.0 (usage non commercial, auteurs à citer) |
 | [Bootstrap](https://getbootstrap.com) | Mise en page et composants de l'interface (`wwwroot/lib/bootstrap`) | MIT |
 | [ASP.NET Core, Blazor, Identity, Entity Framework Core](https://dotnet.microsoft.com) (Microsoft) | Site, comptes, accès à la base | MIT |
 | [SQLite](https://sqlite.org) | Base de données | Domaine public |

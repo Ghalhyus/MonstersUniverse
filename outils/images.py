@@ -11,16 +11,17 @@ Rassemble les images servies par le site, dans PokeBank/wwwroot/images/ :
   Idle, Walk et Sleep seulement, dans les dossiers de SpriteCollab : donjon/<espèce sur 4 chiffres>[/<forme>[/<chromatique>
   [/<femelle>]]]/ (donjon/0025/ Pikachu, donjon/0025/0000/0001/ chromatique, donjon/0025/0000/0000/0002/ femelle...).
   Chaque dossier a ses planches <Animation>-Anim.png et un AnimData.xml réduit à ces animations (taille des images,
-  durées) ; donjon/credits.txt liste les auteurs de chaque dossier (licence CC BY-NC 4.0 : à citer).
+  durées) ; donjon/credits.txt liste les auteurs de chaque dossier (licence CC BY-NC 4.0 : à citer) ;
+- parc/foret.png : fond du « Parc », le fond de boîte PC « Forêt » de Diamant Étincelant / Perle Scintillante (PKHeX).
 
 Sources des objets, dans l'ordre :
   1. PokéAPI, par nom anglais (l'apparence d'origine du site), sauf quand ce nom est porté par plusieurs objets ;
   2. pokesprite, par numéro d'objet (table data/item-map.json) ;
   3. PKHeX, par numéro d'objet (images « Big Items », puis « Artwork Items »).
-Les objets qu'aucune source n'a (bonbons de Let's Go, ingrédients d'Écarlate/Violet, objets de Légendes Arceus...)
+Les objets qu'aucune source n'a (objets rares, objets de Légendes Arceus, accessoires de pique-nique...)
 gardent inconnu.png : il suffit de déposer leur image sous leur numéro pour la remplacer.
 
-Lancement (Python 3, rien à installer) : python outils/images.py [pokemon] [objets] [donjon] [--sortie <dossier>]
+Lancement (Python 3, rien à installer) : python outils/images.py [pokemon] [objets] [donjon] [fonds] [--sortie <dossier>]
 (tout, sans argument ; dans PokeBank/wwwroot/images, sauf --sortie : le serveur l'utilise pour ~/pokebank-images, voir
 deploy/images-serveur.ps1). Les images ne sont pas dans le dépôt Git : en local, outils/recuperer-images.cmd les copie
 depuis le serveur, plus vite que les reconstruire.
@@ -220,6 +221,11 @@ def donjon_jobs():
     return jobs, missing
 
 
+def fonds_jobs():
+    """Fonds de boîte PC (PKHeX) : celui du « Parc »."""
+    return {"parc/foret.png": f"{PKHEX}/PKHeX.Drawing.Misc/Resources/img/box/bdsp/box_wp01bdsp.png"}, []
+
+
 def fetch(job):
     """
     Télécharge une image si elle n'est pas déjà là. Une liste d'adresses est une suite d'essais, et une image qui n'y est
@@ -252,7 +258,8 @@ def main():
         OUT = pathlib.Path(args[i + 1]).expanduser().resolve()
         del args[i:i + 2]
     failed = False
-    parts = {"pokemon": ("Pokémon", pokemon_jobs), "objets": ("objets", item_jobs), "donjon": ("sprites Donjon Mystère", donjon_jobs)}
+    parts = {"pokemon": ("Pokémon", pokemon_jobs), "objets": ("objets", item_jobs), "donjon": ("sprites Donjon Mystère", donjon_jobs),
+             "fonds": ("fonds", fonds_jobs)}
     chosen = [parts[a] for a in args if a in parts] or list(parts.values())
     for kind, make in chosen:
         jobs, missing = make()

@@ -18,11 +18,29 @@ public static partial class PokemonSprites
     /// <summary>Lit la liste des images du site (dossier wwwroot) ; sans elle, chaque Pokémon a l'image de son espèce.</summary>
     public static void Load(string webRoot)
     {
+        _webRoot = webRoot;
         var folder = Path.Combine(webRoot, "images", "pokemon");
         _files = Directory.Exists(folder)
             ? Directory.EnumerateFiles(folder, "*.png", SearchOption.AllDirectories)
                 .Select(f => Path.GetRelativePath(folder, f).Replace('\\', '/')).ToHashSet()
             : new HashSet<string>();
+    }
+
+    private static string? _webRoot;
+
+    /// <summary>
+    /// Dossier des sprites Donjon Mystère d'un Pokémon (SpriteCollab : « images/donjon/0025/0000/0001/ » chromatique,
+    /// « .../0000/0000/0002/ » femelle), le plus proche qui existe : sans version chromatique ou femelle, celui de l'espèce.
+    /// </summary>
+    public static string DonjonFolder(ushort species, bool shiny, bool female)
+    {
+        var dex = $"{species:0000}";
+        string?[] candidates = [shiny && female ? $"{dex}/0000/0001/0002" : null, shiny ? $"{dex}/0000/0001" : null,
+            female ? $"{dex}/0000/0000/0002" : null, dex];
+        foreach (var folder in candidates.OfType<string>())
+            if (_webRoot is not null && File.Exists(Path.Combine(_webRoot, "images", "donjon", folder, "AnimData.xml")))
+                return $"images/donjon/{folder}/";
+        return $"images/donjon/{dex}/";
     }
 
     public static string Url(PKM pk) =>

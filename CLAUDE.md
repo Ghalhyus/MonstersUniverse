@@ -123,6 +123,20 @@ sans jeton (variable `GITHUB_TOKEN`) ; le script les limite.
 - Tests : `PokemonSpritesTests` (formes, femelles, Méga, et la liste des formes de PKHeX sans image), `RealSavesTests`
   (chaque espèce, chaque objet des vraies sauvegardes).
 
+## Parc
+
+- Animation et comportement : `wwwroot/js/parc.js` (module importé par `Park.razor`). Réglages en tête du fichier
+  (`ENERGY`, `SPRITE_SCALE`, marges) et dans `decide` / `update`.
+- Le panneau du navigateur de test est souvent **masqué** : la page ne s'anime alors que pendant les captures d'écran. Pour
+  juger le comportement, importer le module dans la page, créer un moteur dans un `div` et appeler `simulate(secondes, heure)`
+  (rend l'état de chaque Pokémon) : temps passé à dormir ou marcher, distance entre membres d'une famille, effet de la
+  souris (`PointerEvent` sur le canvas). Pour voir la nuit, remplacer `window.Date` le temps de la capture.
+- Images des sprites : SpriteCollab centre chaque image sur le même point, les pieds 4 à 10 px sous le centre (le dessin
+  remonte l'image de 6 px × l'échelle pour poser les pieds sur l'ombre).
+- Fluidité : les sprites se dessinent en pixels d'écran, position arrondie au pixel d'écran et échelle entière (`k`) ;
+  la vitesse rejoint progressivement celle voulue (`vx`, `vy`), freine à l'arrivée, et l'animation de marche suit la
+  vitesse (`WALK_ANIMATION_SPEED`). Une image coûte ~0,1 ms pour 30 Pokémon : une saccade vient du dessin, pas du calcul.
+
 ## Ajouter une catégorie d'objets à l'inventaire
 
 Même modèle que les Pokéballs, médicaments, baies et CT : `ItemCategory` et la liste d'objets dans `SaveBag`
