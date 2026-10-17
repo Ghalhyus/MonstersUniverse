@@ -125,6 +125,11 @@ sans jeton (variable `GITHUB_TOKEN`) ; le script les limite.
 
 ## Parc
 
+- Sprites d'un Pokémon : `PokemonSprites.DonjonFolder` (forme, Méga, chromatique, femelle). Les formes de SpriteCollab
+  (`images/donjon/formes.json`, écrit par `outils/images.py donjon` depuis son `tracker.json`) sont rapprochées des noms
+  de PKHeX : nom compacté (« Mega X » ↔ « Mega_X »), noms de PokéAPI, mots retirés à la fin (« Paldea Combat » ↔
+  « Paldea »), puis seul nom qui commence ainsi (« Dusk » ↔ « Dusk_Mane »). Sur toutes les formes de PKHeX, ~240 trouvent
+  leur sprite ; les autres n'en ont pas encore chez SpriteCollab (casquettes de Pikachu, coupes de Couafarel...).
 - Animation et comportement : `wwwroot/js/parc.js` (module importé par `Park.razor`). Réglages en tête du fichier
   (`ENERGY`, `SPRITE_SCALE`, marges) et dans `decide` / `update`.
 - Le panneau du navigateur de test est souvent **masqué** : la page ne s'anime alors que pendant les captures d'écran. Pour

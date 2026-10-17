@@ -86,14 +86,15 @@ reçu le nom actuel du fichier (migration `JournalFileNames`), sauf celles dont 
 ### Filtres de « Ma collection »
 
 Sous la recherche, des **pastilles** à la façon d'iTop (« Type : Feu, Eau ▾ × ») : un clic ouvre les valeurs à cocher, la
-croix retire le filtre, « + Filtre » en ajoute un, « Tout effacer » les retire tous. Filtres : **type** (types des jeux
+croix retire le filtre, « + Filtre » en ajoute un, « Tout effacer » les retire tous. Filtres : **génération** (d'après le
+numéro de Pokédex : 1re = Bulbizarre à Mew...), **type** (types des jeux
 récents de l'espèce et de sa forme : Mélofée est Fée même venu de Rouge/Bleu), **sexe** (mâle, femelle, asexué), **nature**,
 **talent** (seuls ceux présents dans la collection sont proposés, avec une recherche), **IV** (minimum de 0 à 31 pour
 chaque statistique, « IV : PV ≥ 31, Vit ≥ 25 »), **forme** (standard, Alola, Galar, Hisui, Paldea, autre forme),
 **Méga-Évolution** (tient sa Méga-Gemme ou son orbe, comme pour l'image), **chromatique** et **œuf** (oui / non). Les
 valeurs d'un même filtre s'additionnent (Feu ou Eau), les filtres se cumulent (Feu et femelle) ; un filtre sans valeur
 (« Tous ») ne filtre rien. Les œufs sont exclus dès qu'un autre filtre qu'« Œuf » est actif, pour ne pas révéler leur espèce.
-Les filtres sont gardés dans l'adresse (`?type=feu,eau&sexe=f&iv=pv31,vit25&mega=oui`), avec la recherche, l'origine et le tri.
+Les filtres sont gardés dans l'adresse (`?generation=1,2&type=feu,eau&sexe=f&iv=pv31,vit25&mega=oui`), avec la recherche, l'origine et le tri.
 
 En 1re et 2e génération, les IV (0 à 15) sont ramenés à l'échelle actuelle (× 2 + 1 : 15 → 31 ; Atq. Spé. et Déf. Spé.
 valent le « Spécial »), la nature est celle que donne leur transfert vers les jeux suivants (expérience modulo 25, aussi
@@ -194,14 +195,18 @@ Dissuasif, pas infaillible : rien n'oblige le joueur à remplacer réellement sa
 
 Le menu « Parc » (`/parc`) est une boîte PC (fond « Forêt » de Diamant Étincelant, répété en largeur) qui prend toute la
 largeur de la page et la hauteur visible (sur un téléphone : les proportions de la boîte), où vivent jusqu'à **30 Pokémon** de la
-collection, stockage interne ou sauvegardes stockées, de la **1re génération** pour l'instant (Bulbizarre à Mew, hors œufs ;
-`ParkService.Capacity`, `MaxSpecies`). « Choisir les Pokémon » ouvre la collection filtrée (recherche, cases à cocher,
-compteur). Un clic sur un Pokémon du parc le fait se tourner vers toi et ouvre sa fiche, avec « Retirer du parc ». Un Pokémon
-qui quitte la collection (retiré, sauvegarde mise à jour ou supprimée) quitte le parc (table `ParkMembers`, suppression
-en cascade).
+collection, stockage interne ou sauvegardes stockées, de **toutes les générations** (hors œufs ; `ParkService.Capacity`).
+« Choisir les Pokémon » ouvre la collection avec la recherche, les pastilles de filtres de « Ma collection » (génération,
+type, forme...) et le compteur. Les espèces dont SpriteCollab n'a pas encore les sprites (64, surtout de 9e génération)
+y sont grisées (🔒) et refusées ; elles viendront quand il les aura (relancer `outils/images.py donjon`, puis
+`images-serveur`). Un clic sur un Pokémon du parc le fait se tourner vers toi et ouvre sa fiche, avec « Retirer du parc ».
+Un Pokémon qui quitte la collection (retiré, sauvegarde mise à jour ou supprimée) quitte le parc (table `ParkMembers`,
+suppression en cascade).
 
-Animation dans le navigateur (`wwwroot/js/parc.js`), avec les sprites Donjon Mystère Idle, Walk et Sleep (8 directions ;
-chromatique et femelle quand SpriteCollab les a, `PokemonSprites.DonjonFolder`). Pour qu'ils aient l'air de vivre :
+Animation dans le navigateur (`wwwroot/js/parc.js`), avec les sprites Donjon Mystère Idle, Walk et Sleep (8 directions)
+de la **forme** du Pokémon (Raichu d'Alola, Ponyta de Galar, Zarbi B...) ou de sa **Méga-Évolution** s'il tient sa gemme,
+chromatique et femelle quand SpriteCollab les a, sinon ceux de l'espèce (`PokemonSprites.DonjonFolder` : noms de formes de
+PKHeX rapprochés de ceux de SpriteCollab, `images/donjon/formes.json`). Pour qu'ils aient l'air de vivre :
 - une **énergie** qui baisse en marchant et remonte en dormant (3 à 5 minutes d'activité, puis une sieste d'une minute) ;
 - des **intentions** : explorer un endroit du parc, rendre visite à un Pokémon de sa famille d'évolution (`ParkService.Family`)
   et rester un moment avec lui, observer autour de soi, aller dormir près d'un congénère ;
@@ -235,7 +240,7 @@ est incompatible (espèce, attaques ou objets inexistants dans le jeu, conversio
 | `PokeBank/Components/Pages/Bank.razor` | Page « Transfert et stockage interne » (`/transfert`) : boîtes, glisser-déposer, sélection multiple |
 | `PokeBank/Components/Pages/Park.razor` | Page « Parc » : boîte où vivent jusqu'à 30 Pokémon, fenêtre de choix, fiche au clic |
 | `PokeBank/wwwroot/js/parc.js` | Animation et comportement des Pokémon du parc (énergie, intentions, famille, nuit, curiosité) ; `simulate` pour les essais |
-| `PokeBank/Services/ParkService.cs` | Pokémon du parc : liste, choix (30 au plus, 1re génération), retrait, famille d'évolution |
+| `PokeBank/Services/ParkService.cs` | Pokémon du parc : liste, choix (30 au plus, avec des sprites Donjon Mystère), retrait, famille d'évolution |
 | `PokeBank/Data/ParkMember.cs` | Table des Pokémon au parc (supprimée avec le Pokémon) |
 | `PokeBank/Components/Pages/Collection.razor` | Toute la collection sur une page (chargée au fil du défilement), filtres en pastilles (`Shared/CollectionFilterChips.razor`), filtre par origine, tri par arrivée (les plus récents d'abord, par défaut), par nom d'espèce ou par numéro de Pokédex (croissants), inversable, gardé dans l'adresse (`?tri=nom&ordre=desc`) ; les œufs toujours à la fin (leur espèce reste cachée), à égalité les plus récents d'abord ; le tri par nom ignore les accents (colonne `SortName`, remplie au démarrage pour les Pokémon plus anciens) ; 5 / 10 / 15 / 20 colonnes par défaut selon la largeur de la fenêtre en pixels physiques (téléphone, jusqu'à 1920, jusqu'à 2560, au-delà ; mise à l'échelle de Windows comprise), recalculées au redimensionnement, modifiables au curseur |
 | `PokeBank/Components/Pages/Saves.razor` | Gestion des sauvegardes stockées (ajout, mise à jour, suppression) |

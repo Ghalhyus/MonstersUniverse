@@ -1,3 +1,4 @@
+@using PKHeX.Core
 @using PokeBank.Services
 @inject PokemonInfo Info
 
@@ -17,6 +18,14 @@
                 <div class="filter-popover" role="dialog" aria-label="@Label(c)">
                     @switch (c)
                     {
+                        case Criterion.Generation:
+                            @for (byte generation = 1; generation <= 9; generation++)
+                            {
+                                var g = generation;
+                                <label class="form-check"><input type="checkbox" class="form-check-input" checked="@Value.Generations.Contains(g)"
+                                       @onchange="e => Set(Value with { Generations = Toggled(Value.Generations, g, e) })" /> @GenerationName(g)</label>
+                            }
+                            break;
                         case Criterion.Type:
                             @foreach (var (id, _) in PokemonCriteria.TypeSlugs)
                             {
@@ -124,7 +133,7 @@
     [Parameter] public IReadOnlyCollection<int> Abilities { get; set; } = [];
 
     /// <summary>Filtres, dans l'ordre des pastilles.</summary>
-    private enum Criterion { Type, Gender, Nature, Ability, Iv, Form, Mega, Shiny, Egg }
+    private enum Criterion { Generation, Type, Gender, Nature, Ability, Iv, Form, Mega, Shiny, Egg }
 
     private readonly HashSet<Criterion> added = []; // pastilles ajoutées, même sans valeur choisie (« Tous »)
     private Criterion? open;
@@ -139,6 +148,7 @@
 
     private bool IsActive(Criterion c) => c switch
     {
+        Criterion.Generation => Value.Generations.Count > 0,
         Criterion.Type => Value.Types.Count > 0,
         Criterion.Gender => Value.Genders.Count > 0,
         Criterion.Nature => Value.Natures.Count > 0,
@@ -150,6 +160,7 @@
 
     private static string Label(Criterion c) => c switch
     {
+        Criterion.Generation => "Génération",
         Criterion.Type => "Type",
         Criterion.Gender => "Sexe",
         Criterion.Nature => "Nature",
@@ -166,6 +177,7 @@
     {
         IEnumerable<string> names = c switch
         {
+            Criterion.Generation => Value.Generations.Order().Select(g => g.ToString()),
             Criterion.Type => PokemonCriteria.TypeSlugs.Where(t => Value.Types.Contains(t.Id)).Select(t => Info.TypeName(t.Id)),
             Criterion.Gender => PokemonCriteria.GenderSlugs.Where(g => Value.Genders.Contains(g.Id)).Select(g => GenderName(g.Id)),
             Criterion.Nature => Value.Natures.Select(Info.NatureName).Order(FrenchOrder),
@@ -181,6 +193,14 @@
             <= 3 => string.Join(", ", list),
             _ => $"{string.Join(", ", list.Take(2))} +{list.Count - 2}",
         };
+    }
+
+    /// <summary>« 1re (Bulbizarre à Mew) », « 2e (Germignon à Celebi) »...</summary>
+    private static string GenerationName(byte generation)
+    {
+        var (first, last) = PokemonCriteria.GenerationRanges[generation - 1];
+        var french = GameInfo.GetStrings("fr").specieslist;
+        return $"{generation}{(generation == 1 ? "re" : "e")} ({french[first]} à {french[last]})";
     }
 
     private static string GenderName(byte gender) => gender switch { 0 => "Mâle", 1 => "Femelle", _ => "Asexué" };
@@ -260,6 +280,7 @@
             open = null;
         await Set(c switch
         {
+            Criterion.Generation => Value with { Generations = new HashSet<byte>() },
             Criterion.Type => Value with { Types = new HashSet<byte>() },
             Criterion.Gender => Value with { Genders = new HashSet<byte>() },
             Criterion.Nature => Value with { Natures = new HashSet<byte>() },

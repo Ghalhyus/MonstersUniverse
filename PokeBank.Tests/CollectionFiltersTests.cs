@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using PKHeX.Core;
 using PokeBank.Data;
 using PokeBank.Services;
@@ -106,6 +107,22 @@ public sealed class CollectionFiltersTests : IDisposable
 
         Assert.Equal([perfect, trickRoom], await Find(new() { MinIvs = [31, 0, 0, 0, 0, 0] }));
         Assert.Equal([perfect], await Find(new() { MinIvs = [31, 0, 0, 0, 0, 25] }));
+    }
+
+    [Fact]
+    public async Task Generations_FollowThePokedexNumber()
+    {
+        int AddSpecies(ushort species) { var e = Add(Fire); using var db = _db.NewContext(); db.BankPokemon.Where(p => p.Id == e.Id)
+            .ExecuteUpdate(p => p.SetProperty(x => x.Species, species)); return e.Id; }
+        var mew = AddSpecies(151);
+        var chikorita = AddSpecies(152);
+        var koraidon = AddSpecies(1007);
+        Assert.Equal([chikorita], await Find(new() { Generations = new HashSet<byte> { 2 } }));
+        Assert.Equal([mew, koraidon], await Find(new() { Generations = new HashSet<byte> { 1, 9 } }));
+        Assert.Equal((byte)4, PokemonCriteria.GenerationOf(493)); // Arceus
+        Assert.Equal((byte)5, PokemonCriteria.GenerationOf(494)); // Victini
+        var query = new PokemonCriteria { Generations = new HashSet<byte> { 9, 1 } }.ToQuery();
+        Assert.Equal("1,9", query["generation"]);
     }
 
     [Fact]

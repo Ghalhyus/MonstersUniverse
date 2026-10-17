@@ -12,6 +12,9 @@ public sealed record PokemonCriteria
 {
     public static readonly PokemonCriteria None = new();
 
+    /// <summary>Générations (1 à 9) : celle où l'espèce est apparue (numéro de Pokédex, voir <see cref="GenerationRanges"/>).</summary>
+    public IReadOnlySet<byte> Generations { get; init; } = new HashSet<byte>();
+
     /// <summary>Types (index PKHeX) : l'un des deux types du Pokémon en fait partie.</summary>
     public IReadOnlySet<byte> Types { get; init; } = new HashSet<byte>();
     /// <summary>Sexes : 0 mâle, 1 femelle, 2 asexué.</summary>
@@ -28,7 +31,7 @@ public sealed record PokemonCriteria
 
     /// <summary>Un filtre autre qu'« Œuf » est actif : les œufs sont exclus.</summary>
     public bool ExcludesEggs =>
-        Types.Count > 0 || Genders.Count > 0 || Natures.Count > 0 || Abilities.Count > 0 || MinIvs.Any(iv => iv > 0)
+        Generations.Count > 0 || Types.Count > 0 || Genders.Count > 0 || Natures.Count > 0 || Abilities.Count > 0 || MinIvs.Any(iv => iv > 0)
         || Forms.Count > 0 || Mega is not null || Shiny is not null;
 
     public bool IsEmpty => !ExcludesEggs && Egg is null;
@@ -40,6 +43,11 @@ public sealed record PokemonCriteria
             query = query.Where(p => !p.IsEgg);
         if (Egg is { } egg)
             query = query.Where(p => p.IsEgg == egg);
+        if (Generations.Count > 0)
+        {
+            var species = Generations.SelectMany(SpeciesOf).ToList();
+            query = query.Where(p => species.Contains(p.Species));
+        }
         if (Types.Count > 0)
         {
             var types = Types.ToList();
@@ -79,10 +87,23 @@ public sealed record PokemonCriteria
         return query;
     }
 
+    /// <summary>Premier et dernier numéro de Pokédex de chaque génération (index 0 : 1re génération, Bulbizarre à Mew).</summary>
+    public static readonly (ushort First, ushort Last)[] GenerationRanges =
+        [(1, 151), (152, 251), (252, 386), (387, 493), (494, 649), (650, 721), (722, 809), (810, 905), (906, 1025)];
+
+    /// <summary>Génération où une espèce est apparue (1 à 9) ; 0 hors de ces numéros.</summary>
+    public static byte GenerationOf(ushort species) =>
+        (byte)(Array.FindIndex(GenerationRanges, r => species >= r.First && species <= r.Last) + 1);
+
+    private static IEnumerable<ushort> SpeciesOf(byte generation) =>
+        generation is >= 1 and <= 9
+            ? Enumerable.Range(GenerationRanges[generation - 1].First, GenerationRanges[generation - 1].Last - GenerationRanges[generation - 1].First + 1).Select(s => (ushort)s)
+            : [];
+
     // ---------- Adresse de la page (?type=feu,eau&sexe=f&iv=pv31,vit25...) ----------
 
     /// <summary>Paramètres d'adresse des filtres, dans l'ordre des pastilles.</summary>
-    public static readonly string[] QueryNames = ["type", "sexe", "nature", "talent", "iv", "forme", "mega", "chromatique", "oeuf"];
+    public static readonly string[] QueryNames = ["generation", "type", "sexe", "nature", "talent", "iv", "forme", "mega", "chromatique", "oeuf"];
 
     private static readonly GameStrings French = GameInfo.GetStrings("fr");
 
@@ -107,6 +128,7 @@ public sealed record PokemonCriteria
     /// <summary>Valeurs à mettre dans l'adresse (null : paramètre retiré).</summary>
     public IReadOnlyDictionary<string, object?> ToQuery() => new Dictionary<string, object?>
     {
+        ["generation"] = Join(Generations.Order().Select(g => g.ToString())),
         ["type"] = Join(TypeSlugs.Where(t => Types.Contains(t.Id)).Select(t => t.Slug)),
         ["sexe"] = Join(GenderSlugs.Where(g => Genders.Contains(g.Id)).Select(g => g.Slug)),
         ["nature"] = Join(NatureSlugs.Where(n => Natures.Contains(n.Id)).Select(n => n.Slug)),
@@ -135,6 +157,7 @@ public sealed record PokemonCriteria
                 }
         return new PokemonCriteria
         {
+            Generations = Split(get("generation")).Select(g => byte.TryParse(g, out var n) ? n : (byte)0).Where(n => n is >= 1 and <= 9).ToHashSet(),
             Types = Ids(get("type"), TypeSlugs),
             Genders = Ids(get("sexe"), GenderSlugs),
             Natures = Ids(get("nature"), NatureSlugs),

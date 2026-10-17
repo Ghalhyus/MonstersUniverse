@@ -11,22 +11,21 @@ namespace PokeBank.Services;
 public sealed record ParkPokemon(int Id, ushort Species, string SpeciesName, string Nickname, byte Level, bool IsShiny,
     string SpriteFolder, int Family, byte Nature);
 
-/// <summary>Pokémon proposé dans la fenêtre « Ajouter des Pokémon » (1re génération, sans les œufs).</summary>
+/// <summary>Pokémon proposé dans la fenêtre « Choisir les Pokémon » (sans les œufs).</summary>
+/// <param name="HasSprites">SpriteCollab a ses sprites Donjon Mystère : sinon, grisé (64 espèces récentes n'en ont pas encore).</param>
 public sealed record ParkCandidate(int Id, ushort Species, string SpeciesName, string Nickname, byte Level, bool IsShiny,
-    string SpriteUrl, int? StoredSaveId, bool InPark);
+    string SpriteUrl, int? StoredSaveId, bool InPark, bool HasSprites);
 
 public sealed record ParkResult(bool Ok, string Message);
 
 /// <summary>
-/// « Parc » : jusqu'à <see cref="Capacity"/> Pokémon de la collection (stockage interne ou sauvegardes stockées), de la
-/// 1re génération pour l'instant (<see cref="MaxSpecies"/>), qui s'y promènent (animation dans le navigateur : wwwroot/js/parc.js).
+/// « Parc » : jusqu'à <see cref="Capacity"/> Pokémon de la collection (stockage interne ou sauvegardes stockées), de toutes
+/// les générations, qui s'y promènent avec les sprites Donjon Mystère de leur forme (animation dans le navigateur :
+/// wwwroot/js/parc.js). Les espèces dont SpriteCollab n'a pas encore les sprites ne peuvent pas y aller.
 /// </summary>
 public sealed class ParkService(IDbContextFactory<ApplicationDbContext> dbFactory, ILogger<ParkService> logger)
 {
     public const int Capacity = 30;
-
-    /// <summary>Espèces admises : Bulbizarre (1) à Mew (151).</summary>
-    public const ushort MaxSpecies = 151;
 
     /// <summary>Pokémon du parc, dans l'ordre de leur arrivée.</summary>
     public async Task<List<ParkPokemon>> ListAsync(string ownerId)
@@ -36,25 +35,32 @@ public sealed class ParkService(IDbContextFactory<ApplicationDbContext> dbFactor
             .Where(m => m.OwnerId == ownerId)
             .OrderBy(m => m.AddedAt).ThenBy(m => m.BankPokemonId)
             .Select(m => m.BankPokemon!)
-            .Select(p => new { p.Id, p.Species, p.SpeciesName, p.Nickname, p.Level, p.IsShiny, p.Gender, p.Nature })
+            .Select(p => new { p.Id, p.Species, p.Form, p.Context, p.SpeciesName, p.Nickname, p.Level, p.IsShiny, p.Gender, p.HeldItem, p.Nature })
             .ToListAsync();
         return members.Select(p => new ParkPokemon(p.Id, p.Species, p.SpeciesName, p.Nickname, p.Level, p.IsShiny,
-            PokemonSprites.DonjonFolder(p.Species, p.IsShiny, p.Gender == 1), Family(p.Species), p.Nature ?? 0)).ToList();
+            PokemonSprites.DonjonFolder(p.Species, p.Form, (EntityContext)p.Context, p.IsShiny, p.Gender == 1, p.HeldItem ?? 0),
+            Family(p.Species), p.Nature ?? 0)).ToList();
     }
 
-    /// <summary>Pokémon qui peuvent aller au parc (1re génération, sans les œufs), par numéro de Pokédex.</summary>
-    public async Task<List<ParkCandidate>> ListCandidatesAsync(string ownerId)
+    /// <summary>
+    /// Pokémon qui peuvent aller au parc (sans les œufs), filtrés comme dans « Ma collection » (pastilles), par numéro de
+    /// Pokédex.
+    /// </summary>
+    public async Task<List<ParkCandidate>> ListCandidatesAsync(string ownerId, PokemonCriteria? criteria = null)
     {
         await using var db = await dbFactory.CreateDbContextAsync();
         var inPark = db.ParkMembers.Where(m => m.OwnerId == ownerId).Select(m => m.BankPokemonId);
-        var candidates = await Eligible(db, ownerId)
+        var query = Eligible(db, ownerId);
+        if (criteria is not null)
+            query = criteria.Apply(query);
+        var candidates = await query
             .OrderBy(p => p.Species).ThenByDescending(p => p.Level).ThenBy(p => p.Id)
             .Select(p => new { p.Id, p.Species, p.Form, p.Context, p.SpeciesName, p.Nickname, p.Level, p.IsShiny, p.Gender, p.HeldItem,
                 p.StoredSaveId, InPark = inPark.Contains(p.Id) })
             .ToListAsync();
         return candidates.Select(p => new ParkCandidate(p.Id, p.Species, p.SpeciesName, p.Nickname, p.Level, p.IsShiny,
             PokemonSprites.Url(p.Species, p.Form, (EntityContext)p.Context, p.Gender == 1, p.HeldItem ?? 0, p.IsShiny),
-            p.StoredSaveId, p.InPark)).ToList();
+            p.StoredSaveId, p.InPark, PokemonSprites.HasDonjonSprites(p.Species))).ToList();
     }
 
     /// <summary>
@@ -68,9 +74,11 @@ public sealed class ParkService(IDbContextFactory<ApplicationDbContext> dbFactor
             return new(false, $"Le parc accueille {Capacity} Pokémon au plus : retires-en {wanted.Count - Capacity}.");
 
         await using var db = await dbFactory.CreateDbContextAsync();
-        var eligible = await Eligible(db, ownerId).Where(p => wanted.Contains(p.Id)).Select(p => p.Id).ToListAsync();
+        var eligible = await Eligible(db, ownerId).Where(p => wanted.Contains(p.Id)).Select(p => new { p.Id, p.Species, p.SpeciesName }).ToListAsync();
         if (eligible.Count != wanted.Count)
-            return new(false, "Seuls tes Pokémon de 1re génération (Bulbizarre à Mew), hors œufs, peuvent aller au parc.");
+            return new(false, "Seuls tes Pokémon (pas les œufs) peuvent aller au parc.");
+        if (eligible.FirstOrDefault(p => !PokemonSprites.HasDonjonSprites(p.Species)) is { } withoutSprites)
+            return new(false, $"{withoutSprites.SpeciesName} n'a pas encore de sprites Donjon Mystère : il ne peut pas aller au parc.");
 
         await using var tx = await db.Database.BeginTransactionAsync();
         await db.ParkMembers.Where(m => m.OwnerId == ownerId && !wanted.Contains(m.BankPokemonId)).ExecuteDeleteAsync();
@@ -92,7 +100,7 @@ public sealed class ParkService(IDbContextFactory<ApplicationDbContext> dbFactor
     }
 
     private static IQueryable<BankPokemon> Eligible(ApplicationDbContext db, string ownerId) =>
-        db.BankPokemon.AsNoTracking().Where(p => p.OwnerId == ownerId && !p.IsEgg && p.Species >= 1 && p.Species <= MaxSpecies);
+        db.BankPokemon.AsNoTracking().Where(p => p.OwnerId == ownerId && !p.IsEgg && p.Species >= 1);
 
     /// <summary>Espèce de base de la famille d'évolution (celle qui sort de l'œuf) : Pikachu, Raichu → Pichu.</summary>
     public static int Family(ushort species) => PersonalTable.SV.GetFormEntry(species, 0).HatchSpecies;

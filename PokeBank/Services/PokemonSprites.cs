@@ -24,24 +24,69 @@ public static partial class PokemonSprites
             ? Directory.EnumerateFiles(folder, "*.png", SearchOption.AllDirectories)
                 .Select(f => Path.GetRelativePath(folder, f).Replace('\\', '/')).ToHashSet()
             : new HashSet<string>();
+        var forms = Path.Combine(webRoot, "images", "donjon", "formes.json");
+        _donjonForms = File.Exists(forms)
+            ? System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, Dictionary<string, string>>>(File.ReadAllText(forms))!
+                .ToDictionary(e => e.Key, e => e.Value.GroupBy(f => Compact(f.Key)).ToDictionary(g => g.Key, g => g.First().Value))
+            : [];
     }
 
     private static string? _webRoot;
 
     /// <summary>
-    /// Dossier des sprites Donjon Mystère d'un Pokémon (SpriteCollab : « images/donjon/0025/0000/0001/ » chromatique,
-    /// « .../0000/0000/0002/ » femelle), le plus proche qui existe : sans version chromatique ou femelle, celui de l'espèce.
+    /// Formes de SpriteCollab par espèce (« 0026 » → nom compacté « alola » → dossier « 0001 »), lues dans
+    /// images/donjon/formes.json (écrit par outils/images.py).
     /// </summary>
-    public static string DonjonFolder(ushort species, bool shiny, bool female)
+    private static Dictionary<string, Dictionary<string, string>> _donjonForms = [];
+
+    /// <summary>L'espèce a des sprites Donjon Mystère (64 espèces récentes n'en ont pas encore chez SpriteCollab).</summary>
+    public static bool HasDonjonSprites(ushort species) => DonjonExists($"{species:0000}");
+
+    /// <summary>
+    /// Dossier des sprites Donjon Mystère d'un Pokémon (SpriteCollab : « images/donjon/0026/0001/ » Raichu d'Alola,
+    /// « .../0001/0001/ » sa version chromatique, « 0025/0000/0000/0002/ » Pikachu femelle) : celui de sa forme, ou de sa
+    /// Méga-Évolution s'il tient sa gemme (comme son image dans la collection), sinon celui de l'espèce ; chromatique et
+    /// femelle quand ils existent.
+    /// </summary>
+    public static string DonjonFolder(ushort species, byte form, EntityContext context, bool shiny, bool female, int heldItem)
     {
         var dex = $"{species:0000}";
-        string?[] candidates = [shiny && female ? $"{dex}/0000/0001/0002" : null, shiny ? $"{dex}/0000/0001" : null,
-            female ? $"{dex}/0000/0000/0002" : null, dex];
-        foreach (var folder in candidates.OfType<string>())
-            if (_webRoot is not null && File.Exists(Path.Combine(_webRoot, "images", "donjon", folder, "AnimData.xml")))
-                return $"images/donjon/{folder}/";
-        return $"images/donjon/{dex}/";
+        var (shown, names) = MegaForm(species, form, heldItem) is { } mega ? (mega, MegaContext) : (form, context);
+        var key = shown != 0 && FormName(species, shown, names) is { } name ? DonjonForm(dex, name) : null;
+        string?[] candidates =
+        [
+            .. key is null ? [] : new[] { shiny && female ? $"{dex}/{key}/0001/0002" : null, shiny ? $"{dex}/{key}/0001" : null,
+                female ? $"{dex}/{key}/0000/0002" : null, $"{dex}/{key}" },
+            shiny && female ? $"{dex}/0000/0001/0002" : null, shiny ? $"{dex}/0000/0001" : null,
+            female ? $"{dex}/0000/0000/0002" : null, dex,
+        ];
+        return $"images/donjon/{candidates.OfType<string>().FirstOrDefault(DonjonExists) ?? dex}/";
     }
+
+    private static bool DonjonExists(string folder) =>
+        _webRoot is not null && File.Exists(Path.Combine(_webRoot, "images", "donjon", folder, "AnimData.xml"));
+
+    /// <summary>
+    /// Dossier SpriteCollab d'une forme d'après son nom anglais chez PKHeX : le nom lui-même (« Mega X » ↔ « Mega_X »),
+    /// ceux de PokéAPI (« ! » ↔ « Exclamation »), en retirant des mots à la fin (« Paldea Combat » ↔ « Paldea »), puis le
+    /// seul nom de SpriteCollab qui commence ainsi (« Dusk » ↔ « Dusk_Mane », « Crowned » ↔ « Crowned_Sword »).
+    /// </summary>
+    private static string? DonjonForm(string dex, string formName)
+    {
+        if (!_donjonForms.TryGetValue(dex, out var forms))
+            return null;
+        var words = formName.TrimStart('*').Split([' ', '-'], StringSplitOptions.RemoveEmptyEntries);
+        IEnumerable<string> names = [formName, .. Candidates(formName),
+            .. Enumerable.Range(1, Math.Max(0, words.Length - 1)).Select(n => string.Join(' ', words[..^n]))];
+        var compact = names.Select(Compact).Where(n => n.Length > 0).ToList();
+        return compact.Select(n => forms.GetValueOrDefault(n)).FirstOrDefault(f => f is not null)
+            ?? compact.Where(n => n.Length >= 3)
+                .Select(n => forms.Where(f => f.Key.StartsWith(n, StringComparison.Ordinal)).ToList())
+                .FirstOrDefault(m => m.Count == 1)?[0].Value;
+    }
+
+    /// <summary>Nom réduit à ses lettres et chiffres, en minuscules : « Mega_X » et « Mega X » → megax.</summary>
+    private static string Compact(string name) => new(Slug(name).Where(char.IsLetterOrDigit).ToArray());
 
     public static string Url(PKM pk) =>
         Url(pk.Species, pk.Form, pk.Context, pk.Gender == 1, pk.HeldItem, pk.IsShiny, pk.IsEgg);

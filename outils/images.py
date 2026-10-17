@@ -11,7 +11,8 @@ Rassemble les images servies par le site, dans PokeBank/wwwroot/images/ :
   Idle, Walk et Sleep seulement, dans les dossiers de SpriteCollab : donjon/<espèce sur 4 chiffres>[/<forme>[/<chromatique>
   [/<femelle>]]]/ (donjon/0025/ Pikachu, donjon/0025/0000/0001/ chromatique, donjon/0025/0000/0000/0002/ femelle...).
   Chaque dossier a ses planches <Animation>-Anim.png et un AnimData.xml réduit à ces animations (taille des images,
-  durées) ; donjon/credits.txt liste les auteurs de chaque dossier (licence CC BY-NC 4.0 : à citer) ;
+  durées) ; donjon/credits.txt liste les auteurs de chaque dossier (licence CC BY-NC 4.0 : à citer), donjon/formes.json
+  le dossier de chaque forme par espèce (« 0026 » : {« Alola » : « 0001 », « Mega_X » : « 0002 »...}) ;
 - parc/foret.png : fond du « Parc », le fond de boîte PC « Forêt » de Diamant Étincelant / Perle Scintillante (PKHeX).
 
 Sources des objets, dans l'ordre :
@@ -211,6 +212,12 @@ def donjon_jobs():
                 continue
             for name in needed:
                 jobs[f"donjon/{folder}/{name}-Anim.png"] = [f"{SPRITECOLLAB}/sprite/{folder}/{name}-Anim.png"]
+
+    # Formes de chaque espèce (nom SpriteCollab → dossier), pour que le site retrouve le sprite d'une forme (PokemonSprites).
+    forms = {number: {child.get("name", ""): key for key, child in node.get("subgroups", {}).items() if child.get("name")}
+             for number, node in tracker.items()}
+    (OUT / "donjon").mkdir(parents=True, exist_ok=True)
+    (OUT / "donjon" / "formes.json").write_text(json.dumps({k: v for k, v in forms.items() if v}, ensure_ascii=False), encoding="utf-8")
 
     # Auteurs de chaque dossier : la licence CC BY-NC 4.0 demande de les citer.
     lines = ["Sprites animés : SpriteCollab (PMD Collab, https://sprites.pmdcollab.org), licence CC BY-NC 4.0.",

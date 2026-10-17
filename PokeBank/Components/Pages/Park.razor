@@ -13,7 +13,7 @@
 
 <PageTitle>Parc</PageTitle>
 
-@* Jusqu'à 30 Pokémon de la collection (1re génération pour l'instant) se promènent dans une boîte PC au fond « Forêt » :
+@* Jusqu'à 30 Pokémon de la collection se promènent dans une boîte PC au fond « Forêt » :
    l'animation et leur comportement sont dans wwwroot/js/parc.js, la page ne gère que la liste et les fenêtres. *@
 
 <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
@@ -21,8 +21,8 @@
     <button type="button" class="btn btn-primary ms-auto" @onclick="OpenChooser">Choisir les Pokémon</button>
 </div>
 <p class="small text-muted">
-    Tes Pokémon de 1re génération vivent ici : ils se promènent, se reposent, rendent visite à leur famille et dorment quand
-    ils sont fatigués (plus tôt le soir). Clique sur l'un d'eux pour voir sa fiche.
+    Tes Pokémon vivent ici : ils se promènent, se reposent, rendent visite à leur famille et dorment quand ils sont fatigués
+    (plus tôt le soir). Clique sur l'un d'eux pour voir sa fiche.
 </p>
 
 @if (message is not null)
@@ -53,14 +53,17 @@
         <div class="card-body">
             <h5>Pokémon du parc <small class="text-muted">· @chosen.Count / @ParkService.Capacity</small></h5>
             <p class="small text-muted">
-                Tes Pokémon de 1re génération (Bulbizarre à Mew), du stockage interne et de tes sauvegardes stockées (💾) :
-                clique pour en ajouter ou en retirer.
+                Tes Pokémon du stockage interne et de tes sauvegardes stockées (💾) : clique pour en ajouter ou en retirer.
+                Ceux dont les sprites n'existent pas encore (🔒) ne peuvent pas venir.
             </p>
             <input type="search" class="form-control form-control-sm mb-2" placeholder="Rechercher (espèce ou surnom)…"
                    aria-label="Rechercher un Pokémon" @bind="search" @bind:event="oninput" />
+            <div class="mb-2">
+                <CollectionFilterChips Value="criteria" ValueChanged="CriteriaChanged" Abilities="abilities" />
+            </div>
             @if (candidates.Count == 0)
             {
-                <p class="text-muted small">Tu n'as pas encore de Pokémon de 1re génération dans ta collection.</p>
+                <p class="text-muted small">@(criteria.IsEmpty ? "Ta collection n'a pas encore de Pokémon." : "Aucun Pokémon ne correspond aux filtres.")</p>
             }
             else if (shown.Count == 0)
             {
@@ -73,10 +76,11 @@
                     {
                         var c = candidate;
                         <PokemonSlot Sprite="@c.SpriteUrl"
-                                     Title="@($"{c.Nickname} ({c.SpeciesName}) N.{c.Level}{(c.StoredSaveId is null ? "" : " — sauvegarde stockée")}")"
+                                     Title="@($"{c.Nickname} ({c.SpeciesName}) N.{c.Level}{(c.StoredSaveId is null ? "" : " — sauvegarde stockée")}{(c.HasSprites ? "" : " — pas encore de sprite")}")"
                                      Level="c.Level"
                                      Shiny="c.IsShiny"
                                      Marker="@(c.StoredSaveId is null ? null : "💾")"
+                                     Locked="@(!c.HasSprites)"
                                      Selected="@chosen.Contains(c.Id)"
                                      OnClick="() => Toggle(c)" />
                     }
@@ -126,6 +130,8 @@
     private List<ParkCandidate>? candidates; // fenêtre de choix ouverte
     private HashSet<int> chosen = [];
     private string search = "";
+    private PokemonCriteria criteria = PokemonCriteria.None; // pastilles de la fenêtre de choix
+    private List<int> abilities = []; // talents de la collection, pour la pastille « Talent »
     private string? chooserMessage;
 
     private BankPokemon? selected;
@@ -185,8 +191,17 @@
     {
         search = "";
         chooserMessage = null;
+        criteria = PokemonCriteria.None;
+        abilities = await BankStore.ListAbilitiesAsync(userId);
         candidates = await Parks.ListCandidatesAsync(userId);
         chosen = candidates.Where(c => c.InPark).Select(c => c.Id).ToHashSet();
+    }
+
+    /// <summary>Pastilles modifiées : nouvelle liste ; les Pokémon déjà choisis le restent, même cachés par les filtres.</summary>
+    private async Task CriteriaChanged(PokemonCriteria value)
+    {
+        criteria = value;
+        candidates = await Parks.ListCandidatesAsync(userId, value);
     }
 
     private void CloseChooser() => candidates = null;
@@ -196,7 +211,9 @@
         chooserMessage = null;
         if (chosen.Remove(c.Id))
             return;
-        if (chosen.Count >= ParkService.Capacity)
+        if (!c.HasSprites)
+            chooserMessage = $"{c.SpeciesName} n'a pas encore de sprites Donjon Mystère : il ne peut pas venir au parc pour l'instant.";
+        else if (chosen.Count >= ParkService.Capacity)
             chooserMessage = $"Le parc est plein ({ParkService.Capacity} Pokémon) : retires-en un avant d'en ajouter un autre.";
         else
             chosen.Add(c.Id);
