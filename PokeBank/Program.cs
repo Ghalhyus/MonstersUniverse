@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using PokeBank.Api;
 using PokeBank.Components;
 using PokeBank.Components.Account;
 using PokeBank.Data;
@@ -59,6 +60,8 @@ builder.Services.AddScoped<InventoryService>();
 builder.Services.AddScoped<ParkService>();
 builder.Services.AddScoped<WalletState>();
 builder.Services.AddScoped<SaveSession>();
+builder.Services.AddScoped<SyncService>();
+builder.Services.AddSyncRateLimits(); // essais de codes de liaison 3DS
 
 var app = builder.Build();
 
@@ -99,6 +102,7 @@ app.UseStaticFiles(new StaticFileOptions
 });
 
 
+app.UseRateLimiter();
 app.UseAntiforgery();
 
 app.MapStaticAssets();
@@ -107,5 +111,8 @@ app.MapRazorComponents<App>()
 
 // Add additional endpoints required by the Identity /Account Razor components.
 app.MapAdditionalIdentityEndpoints();
+
+// API du homebrew 3DS PokeBank Sync (envoi des sauvegardes depuis la console, jeton au lieu du cookie de connexion).
+app.MapSyncEndpoints();
 
 app.Run();

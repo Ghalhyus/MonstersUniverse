@@ -83,6 +83,33 @@ reçu le nom actuel du fichier (migration `JournalFileNames`), sauf celles dont 
 - Tant qu'elle est stockée, la sauvegarde est **refusée dans « Transfert »** (au chargement et à la validation).
 - Une mise à jour avec moins de temps de jeu que la version stockée demande confirmation (ancienne copie ?).
 
+### Synchronisation depuis une 3DS
+
+Le homebrew **PokeBank Sync** (dépôt à part, `3DS_Saves_Synchronization`) envoie les sauvegardes Pokémon d'une 3DS
+vers les sauvegardes stockées. Section « Synchronisation 3DS » de « Mes sauvegardes » :
+
+- **Relier une 3DS** affiche un code de 8 caractères (`ABCD-EFGH`, sans 0/O ni 1/I/L), valable 10 minutes et une seule
+  fois ; en demander un autre ou « Annuler » le remplace. Tapé sur la console (majuscules, tiret et espaces facultatifs), il
+  est échangé contre un **jeton longue durée** gardé sur sa carte SD ; le site n'en garde que l'empreinte SHA-256. La page
+  guette la liaison (relecture toutes les 3 secondes tant que le code est affiché) et l'annonce d'elle-même.
+- La liste des consoles reliées montre leur nom (envoyé par la console), la date de liaison et la dernière connexion.
+  **Retirer** une console rend son jeton inutilisable ; les sauvegardes déjà envoyées restent.
+- Un **envoi** ajoute une partie nouvelle, ou met à jour la partie déjà stockée **par ce compte**, avec toutes les règles
+  ci-dessus. Un fichier identique à la version stockée est ignoré (« déjà à jour »). Rien n'est jamais forcé : moins de
+  temps de jeu, partie modifiée sur le serveur et pas encore téléchargée, partie d'un autre compte, collection pleine sont
+  refusés avec le message du site, que la console affiche. Le nom de fichier envoyé est nettoyé (sans dossier, 100
+  caractères au plus).
+
+API (JSON, messages en français prêts à afficher ; `PokeBank/Api/SyncEndpoints.cs`) :
+
+| Requête | Réponse |
+|---|---|
+| `POST /api/sync/liaison` `{"code", "nom"}` | `{"jeton", "compte", "message"}` ; 400 si le code est faux ou expiré, 429 au-delà de 10 essais par minute (tous comptes confondus) |
+| `GET /api/sync/compte` | `{"compte", "console"}` : vérifie le jeton |
+| `POST /api/sync/sauvegardes?fichier=nom.sav`, corps = fichier brut (4 Mo au plus) | `{"statut", "raison", "message"}` ; `statut` : `ajoutee`, `mise-a-jour`, `inchangee` ou `refusee` (`raison` : `StoreStatus`) |
+
+Les deux dernières demandent `Authorization: Bearer <jeton>` (401 sinon, jeton inconnu ou console retirée).
+
 ### Filtres de « Ma collection »
 
 Sous la recherche, des **pastilles** à la façon d'iTop (« Type : Feu, Eau ▾ × ») : un clic ouvre les valeurs à cocher, la
@@ -243,7 +270,9 @@ est incompatible (espèce, attaques ou objets inexistants dans le jeu, conversio
 | `PokeBank/Services/ParkService.cs` | Pokémon du parc : liste, choix (30 au plus, avec des sprites Donjon Mystère), retrait, famille d'évolution |
 | `PokeBank/Data/ParkMember.cs` | Table des Pokémon au parc (supprimée avec le Pokémon) |
 | `PokeBank/Components/Pages/Collection.razor` | Toute la collection sur une page (chargée au fil du défilement), filtres en pastilles (`Shared/CollectionFilterChips.razor`), filtre par origine, tri par arrivée (les plus récents d'abord, par défaut), par nom d'espèce ou par numéro de Pokédex (croissants), inversable, gardé dans l'adresse (`?tri=nom&ordre=desc`) ; les œufs toujours à la fin (leur espèce reste cachée), à égalité les plus récents d'abord ; le tri par nom ignore les accents (colonne `SortName`, remplie au démarrage pour les Pokémon plus anciens) ; 5 / 10 / 15 / 20 colonnes par défaut selon la largeur de la fenêtre en pixels physiques (téléphone, jusqu'à 1920, jusqu'à 2560, au-delà ; mise à l'échelle de Windows comprise), recalculées au redimensionnement, modifiables au curseur |
-| `PokeBank/Components/Pages/Saves.razor` | Gestion des sauvegardes stockées (ajout, mise à jour, suppression) |
+| `PokeBank/Components/Pages/Saves.razor` | Gestion des sauvegardes stockées (ajout, mise à jour, suppression) ; consoles 3DS reliées (code de liaison, retrait) |
+| `PokeBank/Services/SyncService.cs` | Synchronisation 3DS : codes de liaison, jetons, envoi d'une sauvegarde (ajout, mise à jour ou « déjà à jour ») |
+| `PokeBank/Api/SyncEndpoints.cs` | API du homebrew PokeBank Sync (`/api/sync/...`) et limite d'essais de codes |
 | `PokeBank/Services/StoredSaveService.cs` | Stockage, mise à jour et suppression des sauvegardes stockées |
 | `PokeBank/Services/SaveIdentity.cs` | Empreinte d'une sauvegarde (unicité sur le serveur) |
 | `PokeBank/Services/InventoryService.cs` | Inventaire : retrait de Pokédollars, retrait et dépôt d'objets (sauvegardes stockées), achat d'emplacements, journal |
@@ -263,6 +292,7 @@ est incompatible (espèce, attaques ou objets inexistants dans le jeu, conversio
 | `outils/images.py` | Rassemble ces images (PokéAPI ; pour les objets, puis pokesprite et PKHeX par numéro d'objet) ; à relancer pour en ajouter |
 | `PokeBank/Data/BankPokemon.cs` | Table des Pokémon (octets bruts + métadonnées ; `StoredSaveId` si lecture seule) |
 | `PokeBank/Data/StoredSave.cs` | Table des sauvegardes stockées |
+| `PokeBank/Data/SyncDevice.cs` | Tables des consoles 3DS reliées (empreinte du jeton) et des codes de liaison |
 | `PokeBank/Data/Wallet.cs` | Tables du porte-monnaie et du journal des opérations |
 | `PokeBank/Data/OwnedItem.cs` | Table des objets de l'inventaire (objets, Pokéballs, médicaments, baies ; CT/DT sous une clé de capacité, `SaveBag.MachineKey`) |
 

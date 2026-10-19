@@ -12,6 +12,8 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<WalletOperation> WalletOperations => Set<WalletOperation>();
     public DbSet<OwnedItem> OwnedItems => Set<OwnedItem>();
     public DbSet<ParkMember> ParkMembers => Set<ParkMember>();
+    public DbSet<SyncDevice> SyncDevices => Set<SyncDevice>();
+    public DbSet<SyncPairingCode> SyncPairingCodes => Set<SyncPairingCode>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -61,6 +63,20 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             e.HasIndex(m => m.OwnerId);
             // Le Pokémon disparaît (retiré, sauvegarde mise à jour ou supprimée) : il quitte le parc.
             e.HasOne(m => m.BankPokemon).WithOne().HasForeignKey<ParkMember>(m => m.BankPokemonId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<SyncDevice>(e =>
+        {
+            e.HasIndex(d => d.TokenHash).IsUnique(); // la console est retrouvée par son jeton
+            e.HasIndex(d => d.OwnerId);
+            e.HasOne(d => d.Owner).WithMany().HasForeignKey(d => d.OwnerId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<SyncPairingCode>(e =>
+        {
+            e.HasKey(c => c.Code);
+            e.HasIndex(c => c.OwnerId);
+            e.HasOne(c => c.Owner).WithMany().HasForeignKey(c => c.OwnerId).OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

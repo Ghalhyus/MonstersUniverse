@@ -463,6 +463,59 @@ namespace PokeBank.Migrations
                     b.ToTable("StoredSaves");
                 });
 
+            modelBuilder.Entity("PokeBank.Data.SyncDevice", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("LastUsedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("LinkedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OwnerId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OwnerId");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.ToTable("SyncDevices");
+                });
+
+            modelBuilder.Entity("PokeBank.Data.SyncPairingCode", b =>
+                {
+                    b.Property<string>("Code")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OwnerId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Code");
+
+                    b.HasIndex("OwnerId");
+
+                    b.ToTable("SyncPairingCodes");
+                });
+
             modelBuilder.Entity("PokeBank.Data.Wallet", b =>
                 {
                     b.Property<string>("OwnerId")
@@ -610,6 +663,28 @@ namespace PokeBank.Migrations
                 });
 
             modelBuilder.Entity("PokeBank.Data.StoredSave", b =>
+                {
+                    b.HasOne("PokeBank.Data.ApplicationUser", "Owner")
+                        .WithMany()
+                        .HasForeignKey("OwnerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Owner");
+                });
+
+            modelBuilder.Entity("PokeBank.Data.SyncDevice", b =>
+                {
+                    b.HasOne("PokeBank.Data.ApplicationUser", "Owner")
+                        .WithMany()
+                        .HasForeignKey("OwnerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Owner");
+                });
+
+            modelBuilder.Entity("PokeBank.Data.SyncPairingCode", b =>
                 {
                     b.HasOne("PokeBank.Data.ApplicationUser", "Owner")
                         .WithMany()

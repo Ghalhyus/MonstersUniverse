@@ -43,6 +43,9 @@ public sealed class TestDatabase : IDisposable
     public InventoryService Inventory() =>
         new(Factory, StoredSaves(), new PokemonInfo(), NullLogger<InventoryService>.Instance);
 
+    public SyncService Sync() =>
+        new(Factory, StoredSaves(), NullLogger<SyncService>.Instance);
+
     public void Dispose()
     {
         _connection.Dispose();
