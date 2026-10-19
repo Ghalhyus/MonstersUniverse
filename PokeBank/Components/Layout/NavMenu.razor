@@ -13,7 +13,8 @@
 
 <input type="checkbox" title="Navigation menu" class="navbar-toggler" />
 
-<div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
+@* Sur téléphone, un clic dans le menu le referme, sauf sur un menu parent (il déplie ses sous-menus). *@
+<div class="nav-scrollable" onclick="if (!event.target.closest('summary')) document.querySelector('.navbar-toggler').click()">
     <nav class="nav flex-column">
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
@@ -44,10 +45,22 @@
                 }
             </NavLink>
         </div>
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="sauvegardes">
-                <span class="bi bi-save-nav-menu" aria-hidden="true"></span> Mes sauvegardes
-            </NavLink>
+        @* Menu repliable (élément HTML details : marche aussi sur les pages de compte, sans interactivité), ouvert de
+           lui-même sur l'une de ses pages. *@
+        <div class="nav-item nav-group px-3">
+            <details open="@savesOpen">
+                <summary class="nav-link">
+                    <span class="bi bi-save-nav-menu" aria-hidden="true"></span> Sauvegardes
+                </summary>
+                <div class="nav-subitems">
+                    <NavLink class="nav-link" href="sauvegardes" Match="NavLinkMatch.All">
+                        <span class="bi bi-folder-nav-menu" aria-hidden="true"></span> Mes sauvegardes
+                    </NavLink>
+                    <NavLink class="nav-link" href="sauvegardes/3ds">
+                        <span class="bi bi-controller-nav-menu" aria-hidden="true"></span> Synchronisation 3DS
+                    </NavLink>
+                </div>
+            </details>
         </div>
 
         <AuthorizeView>
@@ -87,6 +100,9 @@
     [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
 
     private string? currentUrl;
+
+    /// <summary>Menu « Sauvegardes » ouvert : sur « Mes sauvegardes » ou « Synchronisation 3DS ».</summary>
+    private bool savesOpen => currentUrl is { } url && (url == "sauvegardes" || url.StartsWith("sauvegardes/") || url.StartsWith("sauvegardes?"));
 
     protected override async Task OnInitializedAsync()
     {

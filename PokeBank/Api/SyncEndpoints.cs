@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Mvc;
 using PokeBank.Services;
@@ -9,7 +10,7 @@ namespace PokeBank.Api;
 /// API du homebrew 3DS PokeBank Sync (JSON, messages en français prêts à afficher sur la console) :
 /// <list type="bullet">
 /// <item><c>POST /api/sync/liaison</c> <c>{"code", "nom"}</c> → <c>{"jeton", "compte", "message"}</c> : échange le code de
-/// « Mes sauvegardes » contre un jeton longue durée.</item>
+/// « Synchronisation 3DS » contre un jeton longue durée.</item>
 /// <item><c>GET /api/sync/compte</c> → <c>{"compte", "console"}</c> : vérifie le jeton.</item>
 /// <item><c>POST /api/sync/sauvegardes?fichier=nom.sav</c>, corps = fichier brut → <c>{"statut", "raison", "message"}</c>.</item>
 /// </list>
@@ -18,8 +19,14 @@ namespace PokeBank.Api;
 /// </summary>
 public static class SyncEndpoints
 {
-    /// <summary>Limite d'essais de codes de liaison, tous comptes confondus (contre les essais au hasard).</summary>
+    /// <summary>
+    /// Limite d'essais de codes de liaison (contre les essais au hasard), par adresse IP : avant la liaison, la console
+    /// n'est reliée à aucun compte. Une personne qui se trompe ne bloque donc pas les autres.
+    /// </summary>
     public const string PairingRateLimit = "liaison-3ds";
+
+    /// <summary>Essais de code permis par adresse IP et par minute.</summary>
+    public const int PairingAttemptsPerMinute = 10;
 
     /// <summary>Plus grosse sauvegarde acceptée (celles des jeux lus par une 3DS font au plus 1 Mo).</summary>
     public const int MaxSaveBytes = 4 * 1024 * 1024;
@@ -47,12 +54,16 @@ public static class SyncEndpoints
     public static IServiceCollection AddSyncRateLimits(this IServiceCollection services) =>
         services.AddRateLimiter(options =>
         {
-            options.AddFixedWindowLimiter(PairingRateLimit, limit =>
-            {
-                limit.PermitLimit = 10;
-                limit.Window = TimeSpan.FromMinutes(1);
-                limit.QueueLimit = 0;
-            });
+            // Adresse de la console : en production, celle transmise par Caddy (X-Forwarded-For, lu grâce à
+            // ASPNETCORE_FORWARDEDHEADERS_ENABLED dans docker-compose.yml ; Caddy remplace celle qu'enverrait le client).
+            options.AddPolicy(PairingRateLimit, http => RateLimitPartition.GetFixedWindowLimiter(
+                http.Connection.RemoteIpAddress?.ToString() ?? "inconnue",
+                _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = PairingAttemptsPerMinute,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueLimit = 0,
+                }));
             options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
             options.OnRejected = (context, token) => new ValueTask(context.HttpContext.Response.WriteAsJsonAsync(
                 new ErrorResponse("Trop d'essais de code : attends une minute et réessaie."), token));

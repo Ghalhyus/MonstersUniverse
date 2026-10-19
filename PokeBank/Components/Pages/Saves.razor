@@ -6,9 +6,7 @@
 @using PokeBank.Components.Shared
 @inject StoredSaveService StoredSaves
 @inject BankService BankStore
-@inject SyncService Sync
 @inject IJSRuntime JS
-@implements IDisposable
 
 <PageTitle>Mes sauvegardes</PageTitle>
 
@@ -129,62 +127,6 @@ else
     </div>
 }
 
-@* Consoles 3DS reliées (homebrew PokeBank Sync) : elles envoient leurs sauvegardes Pokémon ici. Liaison par un code
-   à usage unique ; tant qu'il est affiché, la liste est relue régulièrement pour voir arriver la console. *@
-<h2 class="h4 mt-4 mb-2">Synchronisation 3DS</h2>
-<p class="small text-muted">
-    Le homebrew PokeBank Sync envoie les sauvegardes Pokémon de ta 3DS : une nouvelle partie est ajoutée ici, une partie
-    déjà stockée est mise à jour, avec les mêmes règles que « Mettre à jour » (rien n'est forcé : une version plus ancienne
-    ou modifiée sur le serveur est refusée, et la 3DS te dit pourquoi).
-</p>
-
-@if (pairing is { } shownCode)
-{
-    <div class="alert alert-info">
-        Sur ta 3DS, choisis « Relier au site » dans PokeBank Sync et tape ce code :
-        <div class="font-monospace fw-bold fs-3 my-2">@shownCode.Code</div>
-        <div class="small">Valable jusqu'à @shownCode.ExpiresAt.ToLocalTime().ToString("HH:mm"), une seule fois. Cette page se met à jour dès que la 3DS est reliée.</div>
-        <button class="btn btn-sm btn-outline-secondary mt-2" @onclick="CancelPairing" disabled="@busy">Annuler</button>
-    </div>
-}
-else
-{
-    <button class="btn btn-outline-primary mb-3" @onclick="StartPairing" disabled="@busy">Relier une 3DS</button>
-}
-
-@if (devices.Count > 0)
-{
-    <div class="list-group">
-        @foreach (var device in devices)
-        {
-            var d = device;
-            <div class="list-group-item">
-                <div class="d-flex flex-wrap align-items-center gap-2">
-                    <div>
-                        <strong>🎮 @d.Name</strong>
-                        <div class="small text-muted">
-                            reliée le @d.LinkedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ·
-                            @(d.LastUsedAt is { } used ? $"dernière connexion le {used.ToLocalTime():dd/MM/yyyy HH:mm}" : "pas encore connectée")
-                        </div>
-                    </div>
-                    <button class="btn btn-sm btn-outline-danger ms-auto" @onclick="() => confirmUnlinkId = d.Id" disabled="@busy">Retirer</button>
-                </div>
-                @if (confirmUnlinkId == d.Id)
-                {
-                    <div class="alert alert-danger small mt-2 mb-0">
-                        Cette 3DS ne pourra plus envoyer de sauvegardes, jusqu'à ce que tu la relies de nouveau. Les sauvegardes
-                        déjà envoyées restent stockées.
-                        <div class="d-flex flex-wrap gap-2 mt-2">
-                            <button class="btn btn-sm btn-danger" @onclick="() => Unlink(d)" disabled="@busy">Retirer cette 3DS</button>
-                            <button class="btn btn-sm btn-outline-secondary" @onclick="() => confirmUnlinkId = null">Annuler</button>
-                        </div>
-                    </div>
-                }
-            </div>
-        }
-    </div>
-}
-
 @code {
     [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = default!;
 
@@ -198,10 +140,6 @@ else
     private PendingUpdate? pendingUpdate;
     private string? message;
     private bool messageIsError;
-    private List<SyncDeviceInfo> devices = [];
-    private SyncPairingInfo? pairing; // code de liaison affiché, en attente de la 3DS
-    private CancellationTokenSource? pairingWatch; // relecture de la liste tant que le code est affiché
-    private int? confirmUnlinkId;
 
     /// <summary>Mise à jour en attente de confirmation (le fichier a moins de temps de jeu que la version stockée).</summary>
     private sealed record PendingUpdate(StoredSaveInfo Save, string FileName, byte[] Data, string Warning);
@@ -295,75 +233,7 @@ else
     {
         saves = await StoredSaves.ListAsync(userId);
         usage = await BankStore.GetUsageAsync(userId);
-        devices = await Sync.ListDevicesAsync(userId);
     }
-
-    /// <summary>Affiche un code de liaison, puis guette l'arrivée de la console (la liaison se fait depuis la 3DS).</summary>
-    private Task StartPairing() =>
-        RunBusy(async () =>
-        {
-            pairing = await Sync.CreatePairingCodeAsync(userId);
-            WatchPairing(pairing, devices.Select(d => d.Id).ToHashSet());
-        });
-
-    private void WatchPairing(SyncPairingInfo code, HashSet<int> known)
-    {
-        StopWatching();
-        pairingWatch = new CancellationTokenSource();
-        var token = pairingWatch.Token;
-        _ = Task.Run(async () =>
-        {
-            using var timer = new PeriodicTimer(TimeSpan.FromSeconds(3));
-            try
-            {
-                while (await timer.WaitForNextTickAsync(token))
-                {
-                    var list = await Sync.ListDevicesAsync(userId);
-                    var linked = list.FirstOrDefault(d => !known.Contains(d.Id));
-                    var expired = DateTime.UtcNow >= code.ExpiresAt;
-                    if (linked is null && !expired)
-                        continue;
-                    await InvokeAsync(() =>
-                    {
-                        if (pairing != code) return; // annulé ou remplacé entre-temps
-                        pairing = null;
-                        devices = list;
-                        if (linked is not null) Show($"3DS « {linked.Name} » reliée à ton compte : elle peut envoyer ses sauvegardes.");
-                        else Show("Le code a expiré sans que la 3DS soit reliée : demandes-en un nouveau.", isError: true);
-                        StateHasChanged();
-                    });
-                    return;
-                }
-            }
-            catch (OperationCanceledException) { } // page quittée ou code annulé
-        });
-    }
-
-    private Task CancelPairing() =>
-        RunBusy(async () =>
-        {
-            StopWatching();
-            pairing = null;
-            await Sync.CancelPairingCodeAsync(userId);
-        });
-
-    private Task Unlink(SyncDeviceInfo device) =>
-        RunBusy(async () =>
-        {
-            confirmUnlinkId = null;
-            if (await Sync.UnlinkAsync(userId, device.Id))
-                Show($"3DS « {device.Name} » retirée : elle ne peut plus envoyer de sauvegardes.");
-            await RefreshAsync();
-        });
-
-    private void StopWatching()
-    {
-        pairingWatch?.Cancel();
-        pairingWatch?.Dispose();
-        pairingWatch = null;
-    }
-
-    public void Dispose() => StopWatching();
 
     private async Task RunBusy(Func<Task> action)
     {

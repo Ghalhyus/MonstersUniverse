@@ -5,7 +5,7 @@ using PokeBank.Data;
 
 namespace PokeBank.Services;
 
-/// <summary>Console reliée, telle qu'affichée dans « Mes sauvegardes ».</summary>
+/// <summary>Console reliée, telle qu'affichée dans « Synchronisation 3DS ».</summary>
 public sealed record SyncDeviceInfo(int Id, string Name, DateTime LinkedAt, DateTime? LastUsedAt);
 
 /// <summary>Code de liaison à taper sur la 3DS (« ABCD-EFGH ») et sa fin de validité (UTC).</summary>
@@ -45,7 +45,7 @@ public sealed class SyncService(
     public const int MaxFileNameLength = 100;
 
     public const string UnknownTokenMessage =
-        "Cette 3DS n'est plus reliée à ton compte : relie-la de nouveau depuis « Mes sauvegardes » sur le site.";
+        "Cette 3DS n'est plus reliée à ton compte : relie-la de nouveau depuis « Synchronisation 3DS » (menu « Sauvegardes ») sur le site.";
 
     /// <summary>
     /// Nouveau code de liaison pour ce compte. Remplace le précédent s'il y en avait un ; les codes expirés de tout le
@@ -74,7 +74,7 @@ public sealed class SyncService(
         }
     }
 
-    /// <summary>Annule le code de liaison en cours de ce compte (« Annuler » dans « Mes sauvegardes »).</summary>
+    /// <summary>Annule le code de liaison en cours de ce compte (« Annuler » dans « Synchronisation 3DS »).</summary>
     public async Task CancelPairingCodeAsync(string ownerId)
     {
         await using var db = await dbFactory.CreateDbContextAsync();
@@ -96,19 +96,19 @@ public sealed class SyncService(
     {
         var code = NormalizeCode(typedCode);
         if (code.Length != PairingCodeLength)
-            return new(false, $"Le code fait {PairingCodeLength} caractères (lettres et chiffres), comme affiché dans « Mes sauvegardes ».");
+            return new(false, $"Le code fait {PairingCodeLength} caractères (lettres et chiffres), comme affiché dans « Synchronisation 3DS » sur le site.");
 
         await using var db = await dbFactory.CreateDbContextAsync();
         await using var tx = await db.Database.BeginTransactionAsync();
         var pairing = await db.SyncPairingCodes.FindAsync(code);
         if (pairing is null)
-            return new(false, "Code inconnu : vérifie-le, ou demandes-en un nouveau dans « Mes sauvegardes ».");
+            return new(false, "Code inconnu : vérifie-le, ou demandes-en un nouveau dans « Synchronisation 3DS » sur le site.");
         db.SyncPairingCodes.Remove(pairing); // à usage unique, même expiré
         if (pairing.ExpiresAt <= DateTime.UtcNow)
         {
             await db.SaveChangesAsync();
             await tx.CommitAsync();
-            return new(false, "Ce code a expiré : demandes-en un nouveau dans « Mes sauvegardes ».");
+            return new(false, "Ce code a expiré : demandes-en un nouveau dans « Synchronisation 3DS » sur le site.");
         }
 
         var token = Base64Url.EncodeToString(RandomNumberGenerator.GetBytes(32));

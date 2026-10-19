@@ -24,7 +24,7 @@ public class SyncDevice
 }
 
 /// <summary>
-/// Code de liaison affiché dans « Mes sauvegardes » et tapé sur la 3DS : valable quelques minutes, une seule fois,
+/// Code de liaison affiché dans « Synchronisation 3DS » et tapé sur la 3DS : valable quelques minutes, une seule fois,
 /// un seul à la fois par compte (en demander un autre remplace le précédent).
 /// </summary>
 public class SyncPairingCode
