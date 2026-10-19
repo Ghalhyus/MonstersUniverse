@@ -96,7 +96,8 @@ avec « Mes sauvegardes » (ouvert de lui-même sur l'une des deux pages) :
 - La liste des consoles reliées montre leur nom (envoyé par la console), la date de liaison et la dernière connexion.
   **Retirer** une console rend son jeton inutilisable ; les sauvegardes déjà envoyées restent.
 - Un **envoi** ajoute une partie nouvelle, ou met à jour la partie déjà stockée **par ce compte**, avec toutes les règles
-  ci-dessus. Un fichier identique à la version stockée est ignoré (« déjà à jour »). Rien n'est jamais forcé : moins de
+  ci-dessus. Un fichier identique à la version stockée est ignoré (« déjà à jour ») ; sous un autre nom (la console a reconnu la
+  version exacte du jeu), seul le nom de la sauvegarde stockée change. Rien n'est jamais forcé : moins de
   temps de jeu, partie modifiée sur le serveur et pas encore téléchargée, partie d'un autre compte, collection pleine sont
   refusés avec le message du site, que la console affiche. Le nom de fichier envoyé est nettoyé (sans dossier, 100
   caractères au plus).

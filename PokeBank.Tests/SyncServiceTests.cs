@@ -115,6 +115,12 @@ public sealed class SyncServiceTests : IDisposable
         var same = await _sync.UploadAsync(caller, "Pokemon Blanc 2.sav", Save(box: [25]));
         Assert.Equal(SyncUploadStatus.Unchanged, same.Status);
 
+        // Même fichier sous un autre nom (version exacte reconnue par la console) : seul le nom change.
+        var renamed = await _sync.UploadAsync(caller, "Pokémon Blanc 2 (FR).sav", Save(box: [25]));
+        Assert.Equal(SyncUploadStatus.Unchanged, renamed.Status);
+        Assert.Contains("renommée", renamed.Message);
+        Assert.Equal("Pokémon Blanc 2 (FR).sav", Assert.Single(await _saves.ListAsync("sacha")).FileName);
+
         var updated = await _sync.UploadAsync(caller, "Pokemon Blanc 2.sav", Save(hours: 11, box: [25, 133]));
         Assert.Equal(SyncUploadStatus.Updated, updated.Status);
         Assert.Equal(2, Assert.Single(await _saves.ListAsync("sacha")).PokemonCount);

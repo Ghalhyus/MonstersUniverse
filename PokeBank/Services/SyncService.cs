@@ -189,14 +189,21 @@ public sealed class SyncService(
         {
             var stored = await db.StoredSaves.AsNoTracking()
                 .Where(s => s.IdentityKey == identity.Key)
-                .Select(s => new { s.Id, s.OwnerId, s.Data })
+                .Select(s => new { s.Id, s.OwnerId, s.Data, s.FileName })
                 .FirstOrDefaultAsync();
             if (stored is null)
                 return Log(caller, name, FromStore(await storedSaves.AddAsync(caller.OwnerId, name, data), SyncUploadStatus.Added));
             if (stored.OwnerId != caller.OwnerId)
                 return new(SyncUploadStatus.Refused, StoredSaveService.OtherAccountMessage, StoreStatus.AlreadyStored);
             if (SaveModification.Hash(stored.Data) == SaveModification.Hash(data))
-                return new(SyncUploadStatus.Unchanged, "Déjà à jour sur le site : rien à envoyer.");
+            {
+                if (stored.FileName == name)
+                    return new(SyncUploadStatus.Unchanged, "Déjà à jour sur le site : rien à envoyer.");
+                // Même fichier sous un nom plus précis (la console a reconnu la version exacte du jeu) : seul le nom change.
+                await db.StoredSaves.Where(s => s.Id == stored.Id)
+                    .ExecuteUpdateAsync(u => u.SetProperty(s => s.FileName, name).SetProperty(s => s.Version, s => s.Version + 1));
+                return Log(caller, name, new(SyncUploadStatus.Unchanged, $"Déjà à jour sur le site, renommée « {name} »."));
+            }
             saveId = stored.Id;
         }
 
