@@ -2,6 +2,7 @@
 # - Tests : à chaque push, sur une machine Ubuntu propre. Les images (hors du dépôt) sont copiées depuis le VPS.
 # - Déploiement : bouton « Run workflow » de l'onglet Actions, sur main seulement, si les tests passent. Sauvegarde des
 #   données, envoi du code (même archive que deploy\publier.ps1), reconstruction Docker, puis vérification que le site répond.
+# Dépôt public : les journaux des Actions sont visibles de tous, n'y afficher ni secret ni donnée du site.
 # Secrets du dépôt : VPS_HOST (adresse IP), VPS_USER (debian), VPS_SSH_KEY (clé privée réservée à GitHub),
 # VPS_KNOWN_HOSTS (empreinte du serveur, ssh-keyscan).
 name: CI/CD
@@ -118,7 +119,8 @@ jobs:
             fi
             sleep 2
           done
-          echo "Le site ne répond pas après une minute : dernières lignes du journal."
-          docker compose logs --tail 50 pokebank
+          # Pas de journal ici : ceux des Actions sont publics (dépôt public), celui du site contient des identifiants.
+          echo "Le site ne répond pas après une minute. Journal (depuis ton PC) :"
+          echo "  ssh UTILISATEUR@IP_DU_VPS \"cd $DOSSIER && docker compose logs --tail 50 pokebank\""
           exit 1
           SCRIPT

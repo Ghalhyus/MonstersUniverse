@@ -341,8 +341,8 @@ migrations de la base s'appliquent au démarrage ; les données restent dans le 
   noms de fichiers, Windows non.
 - **Déploiement** : onglet « Actions » → « CI/CD » → « Run workflow » sur `main`. Il ne part que si les tests passent, puis :
   sauvegarde des données (`sauvegarder.sh`, quelques secondes de coupure), envoi de la même archive que `publier.ps1`,
-  `docker compose up -d --build`, et vérification que le site répond (une minute au plus, sinon échec avec la fin du
-  journal). Jamais deux déploiements à la fois. La première installation se fait toujours avec `publier.cmd`.
+  `docker compose up -d --build`, et vérification que le site répond (une minute au plus, sinon échec). Le dépôt est
+  public, ses journaux d'Actions aussi : ils n'affichent ni secret ni journal du site (à lire par SSH). Jamais deux déploiements à la fois. La première installation se fait toujours avec `publier.cmd`.
 
 Mise en place (une fois), avec une clé SSH réservée à GitHub (révocable sans toucher à la tienne), dans PowerShell :
 
