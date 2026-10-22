@@ -19,6 +19,8 @@ Sources des objets, dans l'ordre :
   1. PokéAPI, par nom anglais (l'apparence d'origine du site), sauf quand ce nom est porté par plusieurs objets ;
   2. pokesprite, par numéro d'objet (table data/item-map.json) ;
   3. PKHeX, par numéro d'objet (images « Big Items », puis « Artwork Items »).
+Chaque source est essayée tour à tour (404 : la suivante), sans lister les dossiers des dépôts : pas d'API GitHub ni de
+jeton, seulement des fichiers bruts.
 Les objets qu'aucune source n'a (objets rares, objets de Légendes Arceus, accessoires de pique-nique...)
 gardent inconnu.png : il suffit de déposer leur image sous leur numéro pour la remplacer.
 
@@ -33,7 +35,6 @@ import csv
 import io
 import xml.etree.ElementTree as ElementTree
 import json
-import os
 import pathlib
 import re
 import sys
@@ -55,29 +56,13 @@ OUT = pathlib.Path(__file__).resolve().parent.parent / "PokeBank" / "wwwroot" / 
 
 
 def get(url):
-    headers = {"Authorization": f"Bearer {os.environ['GITHUB_TOKEN']}"} if "GITHUB_TOKEN" in os.environ and "api.github" in url else {}
-    with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=60) as r:
+    with urllib.request.urlopen(url, timeout=60) as r:
         return r.read()
 
 
 def lines(path):
     """Fichier texte de PKHeX : une ligne par numéro (espèce, objet...)."""
     return get(f"{PKHEX}/PKHeX.Core/Resources/text/{path}").decode("utf-8-sig").splitlines()
-
-
-TREES = {}  # arbres GitHub déjà lus : l'API n'accepte que 60 appels par heure sans jeton (variable GITHUB_TOKEN)
-
-
-def files_of(repo, branch, folder):
-    """Fichiers d'un dossier d'un dépôt GitHub (API des arbres, sans limite de 1 000 fichiers)."""
-    def tree(sha):
-        if (repo, sha) not in TREES:
-            TREES[repo, sha] = json.loads(get(f"https://api.github.com/repos/{repo}/git/trees/{sha}"))["tree"]
-        return TREES[repo, sha]
-    sha = branch
-    for part in folder.split("/"):
-        sha = next(t["sha"] for t in tree(sha) if t["path"] == part)
-    return {t["path"] for t in tree(sha) if t["type"] == "blob"}
 
 
 def slug(name):
@@ -124,35 +109,32 @@ def pokemon_jobs():
 
 
 def item_jobs():
+    """
+    Images des objets connus de PKHeX : pour chacun, les sources dans l'ordre (voir en tête du fichier). Sans liste des
+    fichiers des dépôts : la première image qui existe est gardée, un objet qu'aucune source n'a est sauté (voir fetch).
+    """
     names = lines("items/text_Items_en.txt")
-    pokeapi = files_of("PokeAPI/sprites", "master", "sprites/items")
     pokesprite = json.loads(get(f"{POKESPRITE}/data/item-map.json"))
-    big = files_of("kwsch/PKHeX", "25.12.21", "PKHeX.Drawing.PokeSprite/Resources/img/Big Items")
-    artwork = files_of("kwsch/PKHeX", "25.12.21", "PKHeX.Drawing.PokeSprite/Resources/img/Artwork Items")
     shared = {n for n in names if names.count(n) > 1}
 
-    jobs = {}  # fichier de sortie → adresse
-    missing = []
+    jobs = {}  # fichier de sortie → adresses à essayer dans l'ordre
     for item, name in enumerate(names):
         # Les CT, DT et CS ont l'image de leur type ; les « ★… » ne sont pas des objets.
         if item == 0 or not name.strip() or name.startswith(("???", "★")) or re.match(r"^(TM|TR|HM)\d", name):
             continue
-        file = f"objets/{item}.png"
         exact = pokesprite.get(f"item_{item:04d}")
-        if f"{slug(name)}.png" in pokeapi and not (name in shared and exact):
-            jobs[file] = f"{POKEAPI}/items/{slug(name)}.png"
-        elif exact:
-            jobs[file] = f"{POKESPRITE}/items/{exact}.png"
-        elif f"bitem_{item}.png" in big:
-            jobs[file] = f"{PKHEX}/PKHeX.Drawing.PokeSprite/Resources/img/Big%20Items/bitem_{item}.png"
-        elif f"aitem_{item}.png" in artwork:
-            jobs[file] = f"{PKHEX}/PKHeX.Drawing.PokeSprite/Resources/img/Artwork%20Items/aitem_{item}.png"
-        else:
-            missing.append(f"{item} {name}")
+        sources = []
+        if not (name in shared and exact):  # nom anglais porté par plusieurs objets : pokesprite, qui a le bon numéro
+            sources.append(f"{POKEAPI}/items/{slug(name)}.png")
+        if exact:
+            sources.append(f"{POKESPRITE}/items/{exact}.png")
+        sources.append(f"{PKHEX}/PKHeX.Drawing.PokeSprite/Resources/img/Big%20Items/bitem_{item}.png")
+        sources.append(f"{PKHEX}/PKHeX.Drawing.PokeSprite/Resources/img/Artwork%20Items/aitem_{item}.png")
+        jobs[f"objets/{item}.png"] = sources
     for t in TYPES:
         jobs[f"objets/ct-{t}.png"] = f"{POKEAPI}/items/tm-{t}.png"
     jobs["objets/inconnu.png"] = f"{PKHEX}/PKHeX.Drawing.PokeSprite/Resources/img/Big%20Items/bitem_unk.png"
-    return jobs, missing
+    return jobs, []
 
 
 def donjon_jobs():

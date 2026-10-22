@@ -112,8 +112,9 @@ Servies par le site, plus rien n'est chargé depuis GitHub : `wwwroot/images/pok
 `wwwroot/images/objets/<numéro d'objet>.png` (numéros de PKHeX, ceux de `SaveBag`), `ct-<type>.png` ; dans chaque dossier
 un `inconnu.png` affiché en remplacement (`onerror` des balises, composant `ItemSprite` pour les objets).
 `outils/images.py` les rassemble (Python seul, garde les fichiers présents) : le relancer après une mise à jour de
-PKHeX.Core (nouvelles espèces), en changeant la version en tête du script. L'API GitHub n'accepte que 60 appels par heure
-sans jeton (variable `GITHUB_TOKEN`) ; le script les limite.
+PKHeX.Core (nouvelles espèces), en changeant la version en tête du script. Il n'utilise pas l'API GitHub (limitée sans
+jeton) : seulement des fichiers bruts, en essayant les sources dans l'ordre (une image absente répond 404, on passe à la
+suivante), sans lister les dossiers des dépôts.
 
 - Sprites animés Donjon Mystère (SpriteCollab, CC BY-NC 4.0) : `wwwroot/images/donjon/`, dans les dossiers de SpriteCollab
   (`<espèce sur 4 chiffres>/<forme>/<chromatique 0001>/<femelle 0002>`), `python outils/images.py donjon` (3 min 30,
