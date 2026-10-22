@@ -83,19 +83,20 @@ else if (view is not null)
         @foreach (var entry in view.Entries.Where(e => !missingOnly || !e.Owned))
         {
             var e = entry;
-            var title = $"#{e.Species:000} {e.Name} — {(e.Owned ? e.Location ?? "dans la sauvegarde" : "manquant")}";
+            var number = view.Mode == LivingDexMode.Regional ? $"{view.Game.Region} #{e.Number:000} {e.Name} (national #{e.Species:000})" : $"#{e.Number:000} {e.Name}";
+            var title = $"{number} — {(e.Owned ? e.Location ?? "dans la sauvegarde" : "manquant")}";
             @if (e.Owned)
             {
                 <button type="button" class="livingdex-slot" title="@title" aria-label="@title" @onclick="() => OpenDetail(e)">
                     <img src="@e.Sprite" alt="" loading="lazy" onerror="@FallbackSprite(e)" />
-                    <span>#@e.Species.ToString("000")</span>
+                    <span>#@e.Number.ToString("000")</span>
                 </button>
             }
             else
             {
                 <div class="livingdex-slot missing" title="@title" aria-label="@title">
                     <img src="@e.Sprite" alt="" loading="lazy" onerror="@FallbackSprite(e)" />
-                    <span>#@e.Species.ToString("000")</span>
+                    <span>#@e.Number.ToString("000")</span>
                 </div>
             }
         }

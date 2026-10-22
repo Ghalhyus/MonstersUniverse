@@ -16,7 +16,7 @@
 <p class="small text-muted">
     Un exemplaire de chaque Pokémon du Pokédex d'un jeu, dans l'équipe et les boîtes d'une de tes sauvegardes stockées : il
     se met à jour avec elle (« Mettre à jour » dans « Mes sauvegardes », ou depuis ta 3DS). Un living dex par jeu ; pour
-    l'instant Rouge, Bleu et Jaune.
+    l'instant les jeux de 1re et 2e génération (Rouge, Bleu, Jaune, Or, Argent, Cristal).
 </p>
 
 @if (message is not null)
@@ -35,8 +35,11 @@
             @* D'abord le jeu (un living dex par jeu), puis les sauvegardes stockées qui peuvent être une partie de ce jeu
                (Rouge / Bleu : PKHeX ne distingue pas les deux, une sauvegarde Rouge / Bleu va avec l'un comme l'autre). *@
             <div class="form-label">Jeu</div>
+            @foreach (var generation in LivingDexGames.All.GroupBy(g => g.Generation))
+            {
+            <div class="small text-muted mb-1">@(generation.Key == 1 ? "1re" : $"{generation.Key}e") génération</div>
             <div class="livingdex-games mb-3">
-                @foreach (var info in LivingDexGames.All)
+                @foreach (var info in generation)
                 {
                     var value = info.Game;
                     var taken = dexes?.Any(d => d.Game.Game == value) == true;
@@ -47,6 +50,7 @@
                     </label>
                 }
             </div>
+            }
             @if (game is { } chosenGame)
             {
                 @if (Saves.Count == 0)

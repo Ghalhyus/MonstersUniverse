@@ -6,6 +6,9 @@ public enum LivingDexGame
     Red = 1,
     Blue = 2,
     Yellow = 3,
+    Gold = 4,
+    Silver = 5,
+    Crystal = 6,
 }
 
 /// <summary>

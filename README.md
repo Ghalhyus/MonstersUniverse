@@ -279,11 +279,13 @@ PKHeX rapprochés de ceux de SpriteCollab, `images/donjon/formes.json`). Pour qu
 ### Living dex
 
 Le menu « Living dex » (`/livingdex`, entre « Inventaire » et « Sauvegardes ») suit un **living dex** : un exemplaire de
-chaque Pokémon du Pokédex d'un jeu. Pour l'instant les jeux de 1re génération : **Pokémon Rouge, Bleu et Jaune**.
+chaque Pokémon du Pokédex d'un jeu. Pour l'instant les jeux de 1re génération (**Pokémon Rouge, Bleu et Jaune**) et de 2e
+(**Pokémon Or, Argent et Cristal**).
 
-- **Création** : « + Créer un living dex », d'abord le **jeu** (jaquettes ; un jeu qui a déjà son living dex est grisé),
-  puis une de ses **sauvegardes** stockées pas encore liées. PKHeX reconnaît Jaune, mais pas Rouge de Bleu (même format) :
-  une sauvegarde Rouge / Bleu est proposée pour Rouge comme pour Bleu. **Un living dex par jeu** et par compte, une
+- **Création** : « + Créer un living dex », d'abord le **jeu** (jaquettes groupées par génération ; un jeu qui a déjà son
+  living dex est grisé), puis une de ses **sauvegardes** stockées pas encore liées. PKHeX reconnaît Jaune et Cristal, mais
+  pas Rouge de Bleu ni Or d'Argent (même format) : une sauvegarde Rouge / Bleu est proposée pour Rouge comme pour Bleu, une
+  Or / Argent pour Or comme pour Argent. **Un living dex par jeu** et par compte, une
   sauvegarde pour un seul living dex (index uniques).
 - **Comptage** : un Pokémon est enregistré s'il est dans l'**équipe ou les boîtes** de la sauvegarde liée (pas les œufs) ;
   le living dex suit donc chaque mise à jour de la sauvegarde (site ou 3DS). Le premier exemplaire (équipe, puis boîtes)
@@ -292,11 +294,14 @@ chaque Pokémon du Pokédex d'un jeu. Pour l'instant les jeux de 1re génératio
   forme de chaque Pokémon du national : formes régionales, Méga-Évolutions, Gigamax, formes qui changent l'aspect comme
   Sancoki / Tritosor ; ni le sexe, ni les formes des espèces qui en ont plus de 10 ; seulement celles que le jeu peut
   contenir). En Régional et National, n'importe quelle forme d'une espèce compte ; en Complet, la forme exacte. **Un mode
-  identique à un autre est caché** : en 1re génération (une région, aucune forme), il ne reste que le National, 151 Pokémon,
-  sans onglets. Les onglets (`?mode=regional`, `?mode=complet`) apparaîtront avec les générations où les modes diffèrent.
+  identique à un autre, ordre compris, est caché** :
+  - 1re génération (une région, aucune forme) : le National seul, 151 Pokémon, sans onglets ;
+  - 2e génération : onglets **Régional** (Pokédex de Johto, `?mode=regional` : les mêmes 251 Pokémon que le national, dans
+    l'ordre et avec les numéros du jeu, Germignon n° 1, Celebi n° 251 ; infobulle « Johto #001 Germignon (national #152) »)
+    et **National** (251). Complet caché : Zarbi (28 formes) est exclu, et ces jeux n'ont aucune autre forme.
 - **Page d'un living dex** (`/livingdex/{id}`) : jaquette officielle, compteur et barre de progression, « Manquants
   seulement », grille dans l'ordre du Pokédex avec les **sprites du jeu** (Rouge / Bleu : couleurs du Super Game Boy, Jaune :
-  Game Boy Color), en couleur si le Pokémon est dans la sauvegarde, en **silhouette noire** sinon. Infobulle : numéro, nom
+  Game Boy Color ; Or, Argent et Cristal ont chacun les leurs), en couleur si le Pokémon est dans la sauvegarde, en **silhouette noire** sinon. Infobulle : numéro, nom
   et place (« Boîte 2, case 8 ») ou « manquant » ; un clic sur un Pokémon possédé ouvre sa fiche. Nombre de colonnes au
   curseur, comme dans « Ma collection » (3 à 20, selon la largeur de la fenêtre par défaut, `?colonnes=12` ;
   `Shared/GridColumns.cs`, commun aux deux pages).
@@ -305,7 +310,8 @@ chaque Pokémon du Pokédex d'un jeu. Pour l'instant les jeux de 1re génératio
 
 Données : table `LivingDexes` (`Data/LivingDex.cs`), jeux et modes dans `LivingDexGames` (`Services/LivingDexService.cs`).
 Images : `outils/images.py livingdex` (sprites de PokéAPI, jaquettes de Bulbagarden Archives, en anglais faute de
-françaises), à lancer sur le VPS avec `deploy\images-serveur.cmd`. Sans elles, la grille affiche l'image de l'espèce du site.
+françaises), téléchargées sur le VPS à chaque déploiement (ou `deploy\images-serveur.cmd`). Sans elles, la grille affiche
+l'image de l'espèce du site.
 
 ### Taille de la collection
 
@@ -466,8 +472,8 @@ PokeBank s'appuie sur le travail d'autres projets :
 | Projet | Utilisé pour | Licence |
 |---|---|---|
 | [PKHeX](https://github.com/kwsch/PKHeX) (Kaphotics et contributeurs), paquet `PKHeX.Core` | Lecture et écriture des sauvegardes, Pokémon, sacs, noms français, légalité ; images d'objets « Big Items » et « Artwork Items », fond de boîte « Forêt » de Diamant Étincelant du parc (`outils/images.py`) | GPL-3.0 |
-| [PokéAPI sprites](https://github.com/PokeAPI/sprites) | Images des Pokémon (normales et chromatiques, formes, femelles, Méga-Évolutions, Gigamax), de la plupart des objets et des CT (`wwwroot/images`) ; sprites de Rouge / Bleu et de Jaune des living dex (`versions/generation-i`, `wwwroot/images/livingdex`) | CC0 1.0 pour le dépôt ; images © The Pokémon Company |
-| [PokéAPI](https://github.com/PokeAPI/pokeapi) (données) | Liste des formes de chaque espèce et des espèces dont la femelle est différente (tables `pokemon`, `pokemon_forms`, `pokemon_species`, lues par `outils/images.py`) | BSD-3-Clause |
+| [PokéAPI sprites](https://github.com/PokeAPI/sprites) | Images des Pokémon (normales et chromatiques, formes, femelles, Méga-Évolutions, Gigamax), de la plupart des objets et des CT (`wwwroot/images`) ; sprites de Rouge / Bleu, Jaune, Or, Argent et Cristal des living dex (`versions/generation-i` et `generation-ii`, `wwwroot/images/livingdex`) | CC0 1.0 pour le dépôt ; images © The Pokémon Company |
+| [PokéAPI](https://github.com/PokeAPI/pokeapi) (données) | Liste des formes de chaque espèce et des espèces dont la femelle est différente (tables `pokemon`, `pokemon_forms`, `pokemon_species`, lues par `outils/images.py`) ; ordre du Pokédex de Johto des living dex (`pokemon_dex_numbers`, Pokédex « original-johto », repris dans `LivingDexGames`) | BSD-3-Clause |
 | [PokéSprite](https://github.com/msikma/pokesprite) (msikma) | Images d'objets absentes de PokéAPI, retrouvées par numéro d'objet (`data/item-map.json`) | MIT ; images © Nintendo / Creatures Inc. / GAME FREAK Inc. |
 | [SpriteCollab](https://github.com/PMDCollab/SpriteCollab) (PMD Collab, [sprites.pmdcollab.org](https://sprites.pmdcollab.org)) | Sprites animés façon Donjon Mystère du « Parc », animations Idle, Walk et Sleep (`wwwroot/images/donjon`, par `outils/images.py donjon`) ; auteurs de chaque sprite dans `wwwroot/images/donjon/credits.txt` | CC BY-NC 4.0 (usage non commercial, auteurs à citer) |
 | [Bootstrap](https://getbootstrap.com) | Mise en page et composants de l'interface (`wwwroot/lib/bootstrap`) | MIT |
@@ -477,7 +483,7 @@ PokeBank s'appuie sur le travail d'autres projets :
 | [Caddy](https://caddyserver.com), [Docker](https://www.docker.com) | Mise en ligne (HTTPS, conteneurs) | Apache-2.0 |
 | [GitHub Actions](https://github.com/features/actions) : [actions/checkout](https://github.com/actions/checkout), [actions/setup-dotnet](https://github.com/actions/setup-dotnet) | Tests et déploiement (`.github/workflows/ci-cd.yml`) | MIT |
 | [Bulbapedia](https://bulbapedia.bulbagarden.net) | Référence consultée pour vérifier l'ordre des Noigrumes d'Or/Argent/Cristal | — |
-| [Bulbagarden Archives](https://archives.bulbagarden.net) | Jaquettes officielles de Pokémon Rouge, Bleu et Jaune (versions anglaises réduites, « Red/Blue/Yellow EN boxart »), images des living dex (`wwwroot/images/livingdex/jaquettes`, par `outils/images.py livingdex`) | Images © Nintendo / Creatures Inc. / GAME FREAK Inc. ; usage de fan, non commercial |
+| [Bulbagarden Archives](https://archives.bulbagarden.net) | Jaquettes officielles de Pokémon Rouge, Bleu, Jaune, Or, Argent et Cristal (versions anglaises réduites, « Red/Blue/Yellow/Gold/Silver/Crystal EN boxart »), images des living dex (`wwwroot/images/livingdex/jaquettes`, par `outils/images.py livingdex`) | Images © Nintendo / Creatures Inc. / GAME FREAK Inc. ; usage de fan, non commercial |
 
 Pokémon et tous les noms et images associés sont des marques et créations de Nintendo, Creatures Inc., GAME FREAK Inc. et
 The Pokémon Company. PokeBank est un projet de fan privé, sans lien avec eux.

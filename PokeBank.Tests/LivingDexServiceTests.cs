@@ -8,7 +8,7 @@ namespace PokeBank.Tests;
 
 /// <summary>
 /// Living dex : un exemplaire de chaque Pokémon du Pokédex d'un jeu, compté dans une sauvegarde stockée (1re génération :
-/// Rouge, Bleu, Jaune). Vraies sauvegardes de Rouge et de Bleu (PokeBank.Tests/Sauvegardes).
+/// Rouge, Bleu, Jaune ; 2e : Or, Argent, Cristal). Vraies sauvegardes de Rouge, Bleu et Argent (PokeBank.Tests/Sauvegardes).
 /// </summary>
 public sealed class LivingDexServiceTests : IDisposable
 {
@@ -36,7 +36,7 @@ public sealed class LivingDexServiceTests : IDisposable
     [Fact]
     public void FirstGeneration_OnlyHasTheNationalMode_Of151()
     {
-        foreach (var game in LivingDexGames.All)
+        foreach (var game in LivingDexGames.All.Where(g => g.Generation == 1))
         {
             Assert.Equal([LivingDexMode.National], LivingDexGames.Modes(game)); // une région, aucune forme : Régional et Complet cachés
             Assert.Equal(151, LivingDexGames.Slots(game, LivingDexMode.National).Count);
@@ -48,6 +48,26 @@ public sealed class LivingDexServiceTests : IDisposable
     }
 
     [Fact]
+    public void SecondGeneration_HasJohtoAndNational_Of251()
+    {
+        foreach (var game in LivingDexGames.All.Where(g => g.Generation == 2))
+        {
+            // Johto : les mêmes 251 Pokémon que le national, dans un autre ordre (Germignon d'abord) ; Complet = National
+            // (Zarbi et ses 28 formes exclus).
+            Assert.Equal([LivingDexMode.Regional, LivingDexMode.National], LivingDexGames.Modes(game));
+            var johto = LivingDexGames.Slots(game, LivingDexMode.Regional);
+            Assert.Equal(251, johto.Count);
+            Assert.Equal(Enumerable.Range(1, 251), johto.Select(s => (int)s.Species).Order());
+            Assert.Equal([152, 153, 154], johto.Take(3).Select(s => (int)s.Species)); // Germignon, Macronium, Méganium
+            Assert.Equal([150, 151, 251], johto.TakeLast(3).Select(s => (int)s.Species)); // Mewtwo, Mew, Celebi
+            Assert.Equal(LivingDexGames.Slots(game, LivingDexMode.National), LivingDexGames.Slots(game, LivingDexMode.Complete));
+            Assert.Equal("Johto", game.Region);
+        }
+        Assert.Equal("images/livingdex/argent/", LivingDexGames.Get(LivingDexGame.Silver).SpriteFolder);
+        Assert.Equal("images/livingdex/jaquettes/cristal.png", LivingDexGames.Get(LivingDexGame.Crystal).Cover);
+    }
+
+    [Fact]
     public void Games_OfASave_RedAndBlueCannotBeTold()
     {
         foreach (var file in new[] { "rouge.sav", "bleu.sav" })
@@ -56,14 +76,19 @@ public sealed class LivingDexServiceTests : IDisposable
             Assert.Equal([LivingDexGame.Red, LivingDexGame.Blue], LivingDexGames.For(sav!)); // même format : au joueur de choisir
         }
         Assert.Equal([LivingDexGame.Yellow], LivingDexGames.For(new SAV1(LanguageID.French, GameVersion.YW)));
-        Assert.Empty(LivingDexGames.For(new SAV2(LanguageID.French, GameVersion.GS)));
+
+        // Or et Argent non plus ; Cristal oui.
+        Assert.True(SaveUtil.TryGetSaveFile(RealSave("argent.sav"), out var silver, "argent.sav"));
+        Assert.Equal([LivingDexGame.Gold, LivingDexGame.Silver], LivingDexGames.For(silver!));
+        Assert.Equal([LivingDexGame.Crystal], LivingDexGames.For(new SAV2(LanguageID.French, GameVersion.C)));
+        Assert.Empty(LivingDexGames.For(new SAV3E()));
     }
 
     [Fact]
     public async Task Create_OnePerGame_OneSaveForOne()
     {
         var red = await Store("sacha", "rouge.sav");
-        await Store("sacha", "argent.sav"); // 2e génération : pas de living dex
+        await Store("sacha", "rubis-omega.sav"); // 6e génération : pas de living dex
 
         var candidate = Assert.Single(await _dex.ListCandidatesAsync("sacha"));
         Assert.Equal(red, candidate.SaveId);
@@ -120,6 +145,25 @@ public sealed class LivingDexServiceTests : IDisposable
         Assert.Equal("Pikachu", view.Entries[24].Name);
 
         Assert.Null(await _dex.GetAsync("ondine", id));
+    }
+
+    [Fact]
+    public async Task Johto_ShowsTheRegionalNumbers()
+    {
+        var silver = await Store("sacha", "argent.sav");
+        var candidate = Assert.Single(await _dex.ListCandidatesAsync("sacha"));
+        Assert.Equal([LivingDexGame.Gold, LivingDexGame.Silver], candidate.Games);
+        var id = (await _dex.CreateAsync("sacha", silver, LivingDexGame.Silver)).Id!.Value;
+
+        var johto = (await _dex.GetAsync("sacha", id, LivingDexMode.Regional))!;
+        var national = (await _dex.GetAsync("sacha", id))!;
+        Assert.Equal([LivingDexMode.Regional, LivingDexMode.National], johto.Modes);
+        Assert.Equal(LivingDexMode.Regional, johto.Mode);
+        Assert.Equal((1, (ushort)152, "Germignon"), (johto.Entries[0].Number, johto.Entries[0].Species, johto.Entries[0].Name));
+        Assert.Equal((152, (ushort)152), (national.Entries[151].Number, national.Entries[151].Species));
+        Assert.Equal("images/livingdex/argent/152.png", johto.Entries[0].Sprite);
+        Assert.Equal(national.Owned, johto.Owned); // mêmes Pokémon, autre ordre
+        Assert.True(johto.Owned > 0);
     }
 
     [Fact]

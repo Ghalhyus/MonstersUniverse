@@ -15,8 +15,9 @@ Rassemble les images servies par le site, dans PokeBank/wwwroot/images/ :
   le dossier de chaque forme par espèce (« 0026 » : {« Alola » : « 0001 », « Mega_X » : « 0002 »...}) ;
 - parc/foret.png : fond du « Parc », le fond de boîte PC « Forêt » de Diamant Étincelant / Perle Scintillante (PKHeX) ;
 - livingdex/ : sprites des jeux de chaque living dex (livingdex/rouge-bleu/<numéro>.png : Super Game Boy, livingdex/jaune/ :
-  Game Boy Color ; PokéAPI, versions/generation-i/<jeu>/transparent) et jaquettes officielles (livingdex/jaquettes/rouge.png,
-  bleu.png, jaune.png : Bulbagarden Archives, versions anglaises, faute de françaises).
+  Game Boy Color, livingdex/or/, argent/, cristal/ ; PokéAPI, versions/generation-i et ii/<jeu>/transparent) et jaquettes
+  officielles (livingdex/jaquettes/rouge.png, bleu.png, jaune.png, or.png, argent.png, cristal.png : Bulbagarden Archives,
+  versions anglaises, faute de françaises).
 
 Sources des objets, dans l'ordre :
   1. PokéAPI, par nom anglais (l'apparence d'origine du site), sauf quand ce nom est porté par plusieurs objets ;
@@ -224,8 +225,10 @@ def fonds_jobs():
 
 # Living dex : dossier des sprites de chaque groupe de jeux (dossier PokéAPI, nombre d'espèces) et jaquettes (fichier
 # Bulbagarden Archives). À garder en accord avec LivingDexGames (PokeBank/Services/LivingDexService.cs).
-LIVINGDEX_SPRITES = {"rouge-bleu": ("generation-i/red-blue", 151), "jaune": ("generation-i/yellow", 151)}
-LIVINGDEX_COVERS = {"rouge": "File:Red EN boxart.png", "bleu": "File:Blue EN boxart.png", "jaune": "File:Yellow EN boxart.png"}
+LIVINGDEX_SPRITES = {"rouge-bleu": ("generation-i/red-blue", 151), "jaune": ("generation-i/yellow", 151),
+                     "or": ("generation-ii/gold", 251), "argent": ("generation-ii/silver", 251), "cristal": ("generation-ii/crystal", 251)}
+LIVINGDEX_COVERS = {"rouge": "File:Red EN boxart.png", "bleu": "File:Blue EN boxart.png", "jaune": "File:Yellow EN boxart.png",
+                    "or": "File:Gold EN boxart.png", "argent": "File:Silver EN boxart.png", "cristal": "File:Crystal EN boxart.png"}
 
 
 def livingdex_jobs():
