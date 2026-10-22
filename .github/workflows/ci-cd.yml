@@ -1,7 +1,8 @@
 # Intégration et déploiement continus de PokeBank (mise en place : README, section « CI/CD »).
 # - Tests : à chaque push, sur une machine Ubuntu propre. Les images (hors du dépôt) sont copiées depuis le VPS.
 # - Déploiement : bouton « Run workflow » de l'onglet Actions, sur main seulement, si les tests passent. Sauvegarde des
-#   données, envoi du code (même archive que deploy\publier.ps1), reconstruction Docker, puis vérification que le site répond.
+#   données, envoi du code (même archive que deploy\publier.ps1), images manquantes (outils/images.py, comme
+#   deploy\images-serveur.cmd), reconstruction Docker, puis vérification que le site répond.
 # Dépôt public : les journaux des Actions sont visibles de tous, n'y afficher ni secret ni donnée du site.
 # Secrets du dépôt : VPS_HOST (adresse IP), VPS_USER (debian), VPS_SSH_KEY (clé privée réservée à GitHub),
 # VPS_KNOWN_HOSTS (empreinte du serveur, ssh-keyscan).
@@ -86,7 +87,7 @@ jobs:
             Dockerfile .dockerignore docker-compose.yml Caddyfile .env.example PokeBank.sln PokeBank deploy outils
           scp -o BatchMode=yes "$RUNNER_TEMP/pokebank.tgz" "$CIBLE:pokebank.tgz"
 
-      - name: Sauvegarde, mise à jour et vérification
+      - name: Sauvegarde, mise à jour, images et vérification
         env:
           CIBLE: ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}
         run: |
@@ -106,6 +107,21 @@ jobs:
           rm -rf "$DOSSIER/PokeBank/wwwroot/images"
           tar -xzf pokebank.tgz -C "$DOSSIER"
           cd "$DOSSIER"
+
+          echo "== Images"
+          # Seulement celles qui manquent (les présentes sont gardées) : nouvelles images d'une fonctionnalité, nouvelles
+          # espèces... Avant la reconstruction : le site qui démarre lit la liste des images. Un échec ne bloque pas le
+          # déploiement (le site affiche les images de remplacement) : avertissement orange dans GitHub, et seulement le
+          # résumé dans le journal (journal complet sur le VPS : ~/pokebank-images.log).
+          if ! command -v python3 > /dev/null; then
+            echo "::warning title=Images::Python 3 manque sur le VPS (sudo apt install python3) : images pas mises à jour."
+          elif python3 outils/images.py --sortie ~/pokebank-images > ~/pokebank-images.log 2>&1; then
+            grep -E " images, | introuvable " ~/pokebank-images.log || true
+          else
+            grep -E " images, | introuvable |erreur" ~/pokebank-images.log | head -n 20 || true
+            echo "::warning title=Images::Images incomplètes (voir ci-dessus, ou ~/pokebank-images.log sur le VPS) : relancer deploy\images-serveur.cmd."
+          fi
+
           docker compose up -d --build
           docker image prune -f > /dev/null
 

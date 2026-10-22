@@ -408,6 +408,8 @@ migrations de la base s'appliquent au démarrage ; les données restent dans le 
   noms de fichiers, Windows non.
 - **Déploiement** : onglet « Actions » → « CI/CD » → « Run workflow » sur `main`. Il ne part que si les tests passent, puis :
   sauvegarde des données (`sauvegarder.sh`, quelques secondes de coupure), envoi de la même archive que `publier.ps1`,
+  **images manquantes** (`outils/images.py --sortie ~/pokebank-images`, comme `images-serveur` : les présentes sont gardées ;
+  un échec ne bloque pas, avertissement orange et journal complet dans `~/pokebank-images.log` sur le VPS),
   `docker compose up -d --build`, et vérification que le site répond (une minute au plus, sinon échec). Le dépôt est
   public, ses journaux d'Actions aussi : ils n'affichent ni secret ni journal du site (à lire par SSH). Jamais deux déploiements à la fois. La première installation se fait toujours avec `publier.cmd`.
 

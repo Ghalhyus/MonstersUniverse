@@ -102,10 +102,11 @@ tests créent la base avec `EnsureCreated`, sans passer par les migrations.
 ## Images des Pokémon et des objets
 
 **Hors du dépôt Git et de la publication** : stockées sur le VPS (`~/pokebank-images`, monté sur `wwwroot/images`,
-rempli par `deploy\images-serveur.cmd`), copiées en local par `outils\recuperer-images.cmd` (SSH), servies depuis le disque
+rempli à chaque déploiement de la CI/CD et par `deploy\images-serveur.cmd`), copiées en local par `outils\recuperer-images.cmd` (SSH), servies depuis le disque
 par `UseStaticFiles` (`Program.cs` ; `MapStaticAssets` ne connaît que les fichiers de la compilation, d'où aussi
 `Content Remove` dans le `.csproj`). Ne jamais les remettre dans Git. Un nouveau type d'image : l'ajouter à
-`outils/images.py`, puis `images-serveur` sur le VPS ; les tests d'images exigent qu'elles soient là (`WebRootWithImages`).
+`outils/images.py` : le prochain déploiement (« Run workflow ») les télécharge sur le VPS, après les tests ; les tests
+d'images existants exigent qu'elles soient là (`WebRootWithImages`).
 
 Servies par le site, plus rien n'est chargé depuis GitHub : `wwwroot/images/pokemon/<numéro d'espèce>.png`,
 `<numéro>-<forme>.png` (nom de forme de PokéAPI), `femelle/`, et les mêmes sous `pokemon/chromatique/` ;
@@ -164,8 +165,8 @@ suivante), sans lister les dossiers des dépôts.
   distingue pas Rouge de Bleu ni Or d'Argent), les formes du mode Complet (`Forms` : régionales, Méga, Gigamax, d'aspect ;
   ni le sexe, ni les espèces à plus de 10 formes ; seulement celles que le jeu peut contenir), et les images dans
   `outils/images.py` (`LIVINGDEX_SPRITES`, `LIVINGDEX_COVERS`, mêmes noms de dossiers et de fichiers).
-- Les tests ne doivent **pas** exiger ces images : la CI les copie depuis le VPS, qui ne les a qu'après `images-serveur`
-  (lui-même lancé après un déploiement). Une nouvelle image : tester son chemin, pas sa présence.
+- Les tests ne doivent **pas** exiger ces images : la CI les copie depuis le VPS, qui ne les reçoit qu'au déploiement,
+  après les tests. Une nouvelle image : tester son chemin, pas sa présence.
 - Jaquettes : Bulbagarden Archives (API MediaWiki, version réduite `iiurlwidth=480`). Sur ce PC, Python refuse son
   certificat (« certificate has expired ») à cause du magasin de certificats de Windows, pas du site : sur le VPS (Debian)
   ça passe. Pour les avoir en local, `outils\recuperer-images.cmd`, ou un contexte SSL avec `cafile` (paquet de Git :
