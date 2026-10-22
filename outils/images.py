@@ -13,7 +13,10 @@ Rassemble les images servies par le site, dans PokeBank/wwwroot/images/ :
   Chaque dossier a ses planches <Animation>-Anim.png et un AnimData.xml réduit à ces animations (taille des images,
   durées) ; donjon/credits.txt liste les auteurs de chaque dossier (licence CC BY-NC 4.0 : à citer), donjon/formes.json
   le dossier de chaque forme par espèce (« 0026 » : {« Alola » : « 0001 », « Mega_X » : « 0002 »...}) ;
-- parc/foret.png : fond du « Parc », le fond de boîte PC « Forêt » de Diamant Étincelant / Perle Scintillante (PKHeX).
+- parc/foret.png : fond du « Parc », le fond de boîte PC « Forêt » de Diamant Étincelant / Perle Scintillante (PKHeX) ;
+- livingdex/ : sprites des jeux de chaque living dex (livingdex/rouge-bleu/<numéro>.png : Super Game Boy, livingdex/jaune/ :
+  Game Boy Color ; PokéAPI, versions/generation-i/<jeu>/transparent) et jaquettes officielles (livingdex/jaquettes/rouge.png,
+  bleu.png, jaune.png : Bulbagarden Archives, versions anglaises, faute de françaises).
 
 Sources des objets, dans l'ordre :
   1. PokéAPI, par nom anglais (l'apparence d'origine du site), sauf quand ce nom est porté par plusieurs objets ;
@@ -24,7 +27,7 @@ jeton, seulement des fichiers bruts.
 Les objets qu'aucune source n'a (objets rares, objets de Légendes Arceus, accessoires de pique-nique...)
 gardent inconnu.png : il suffit de déposer leur image sous leur numéro pour la remplacer.
 
-Lancement (Python 3, rien à installer) : python outils/images.py [pokemon] [objets] [donjon] [fonds] [--sortie <dossier>]
+Lancement (Python 3, rien à installer) : python outils/images.py [pokemon] [objets] [donjon] [fonds] [livingdex] [--sortie <dossier>]
 (tout, sans argument ; dans PokeBank/wwwroot/images, sauf --sortie : le serveur l'utilise pour ~/pokebank-images, voir
 deploy/images-serveur.ps1). Les images ne sont pas dans le dépôt Git : en local, outils/recuperer-images.cmd les copie
 depuis le serveur, plus vite que les reconstruire.
@@ -40,6 +43,7 @@ import re
 import sys
 import unicodedata
 import urllib.error
+import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 
@@ -48,6 +52,7 @@ POKEAPI = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites"
 POKEAPI_DATA = "https://raw.githubusercontent.com/PokeAPI/pokeapi/master/data/v2/csv"
 POKESPRITE = "https://raw.githubusercontent.com/msikma/pokesprite/master"
 SPRITECOLLAB = "https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master"
+BULBAGARDEN = "https://archives.bulbagarden.net/w/api.php"  # Bulbagarden Archives (jaquettes)
 DONJON_ANIMATIONS = ["Idle", "Walk", "Sleep"]  # animations gardées de SpriteCollab (il y en a une quarantaine)
 TYPES = ["normal", "fighting", "flying", "poison", "ground", "rock", "bug", "ghost", "steel", "fire", "water", "grass",
          "electric", "psychic", "ice", "dragon", "dark", "fairy"]
@@ -56,7 +61,9 @@ OUT = pathlib.Path(__file__).resolve().parent.parent / "PokeBank" / "wwwroot" / 
 
 
 def get(url):
-    with urllib.request.urlopen(url, timeout=60) as r:
+    # Avec un nom : Bulbagarden refuse les requêtes anonymes de Python.
+    request = urllib.request.Request(url, headers={"User-Agent": "PokeBank (outils/images.py)"})
+    with urllib.request.urlopen(request, timeout=60) as r:
         return r.read()
 
 
@@ -215,6 +222,30 @@ def fonds_jobs():
     return {"parc/foret.png": f"{PKHEX}/PKHeX.Drawing.Misc/Resources/img/box/bdsp/box_wp01bdsp.png"}, []
 
 
+# Living dex : dossier des sprites de chaque groupe de jeux (dossier PokéAPI, nombre d'espèces) et jaquettes (fichier
+# Bulbagarden Archives). À garder en accord avec LivingDexGames (PokeBank/Services/LivingDexService.cs).
+LIVINGDEX_SPRITES = {"rouge-bleu": ("generation-i/red-blue", 151), "jaune": ("generation-i/yellow", 151)}
+LIVINGDEX_COVERS = {"rouge": "File:Red EN boxart.png", "bleu": "File:Blue EN boxart.png", "jaune": "File:Yellow EN boxart.png"}
+
+
+def livingdex_jobs():
+    """Sprites des jeux des living dex (PokéAPI, fond transparent) et jaquettes officielles (Bulbagarden Archives)."""
+    jobs, missing = {}, []
+    for folder, (theirs, count) in LIVINGDEX_SPRITES.items():
+        for number in range(1, count + 1):
+            jobs[f"livingdex/{folder}/{number}.png"] = f"{POKEAPI}/pokemon/versions/{theirs}/transparent/{number}.png"
+    for name, title in LIVINGDEX_COVERS.items():
+        if (OUT / "livingdex" / "jaquettes" / f"{name}.png").exists():
+            continue
+        try:  # adresse d'une version réduite (480 px de large, ~450 Ko au lieu de 1,5 Mo), donnée par l'API de Bulbagarden Archives
+            query = json.loads(get(f"{BULBAGARDEN}?action=query&prop=imageinfo&iiprop=url&iiurlwidth=480&format=json&titles={urllib.parse.quote(title)}"))
+            jobs[f"livingdex/jaquettes/{name}.png"] = next(iter(query["query"]["pages"].values()))["imageinfo"][0]["thumburl"]
+        except (urllib.error.URLError, KeyError, StopIteration) as e:
+            missing.append(f"jaquette {name} ({title}) : {e}")
+            print(f"  jaquette {name} introuvable ({title}) : {e}")
+    return jobs, missing
+
+
 def fetch(job):
     """
     Télécharge une image si elle n'est pas déjà là. Une liste d'adresses est une suite d'essais, et une image qui n'y est
@@ -248,7 +279,7 @@ def main():
         del args[i:i + 2]
     failed = False
     parts = {"pokemon": ("Pokémon", pokemon_jobs), "objets": ("objets", item_jobs), "donjon": ("sprites Donjon Mystère", donjon_jobs),
-             "fonds": ("fonds", fonds_jobs)}
+             "fonds": ("fonds", fonds_jobs), "livingdex": ("living dex", livingdex_jobs)}
     chosen = [parts[a] for a in args if a in parts] or list(parts.values())
     for kind, make in chosen:
         jobs, missing = make()

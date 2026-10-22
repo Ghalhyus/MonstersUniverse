@@ -57,7 +57,7 @@
     <a class="small" href="sauvegardes">Gérer mes sauvegardes</a>
     <label class="collection-columns small">
         Colonnes
-        <input type="range" class="form-range" min="@MinColumns" max="@MaxColumns"
+        <input type="range" class="form-range" min="@GridColumns.Min" max="@GridColumns.Max"
                @bind="columns" @bind:event="oninput" @bind:after="ColumnsChanged" @onchange="RememberColumns" />
         <span class="fw-semibold">@columns</span>
     </label>
@@ -135,25 +135,15 @@ else
 }
 
 @code {
-    private const int MinColumns = 3, MaxColumns = 20;
     private const string BankSource = "banque";
-
-    /// <summary>
-    /// Colonnes par défaut selon la largeur de la fenêtre : étroite (téléphone, moins de <see cref="NarrowWidth"/> px affichés),
-    /// puis en pixels physiques : jusqu'à 1920 (plein écran 1080p), jusqu'à 2560 (plein écran 1440p), au-delà (3440 × 1440, 4K...).
-    /// Les pixels physiques ne dépendent pas de la mise à l'échelle de Windows : plein écran sur un 3440 × 1440 à 150 % = 3440.
-    /// </summary>
-    private const int NarrowWidth = 641;
-    private static readonly int[] WindowWidths = [1920, 2560];
-    private static readonly int[] ColumnsByScreen = [5, 10, 15, 20];
 
     [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = default!;
 
     /// <summary>
     /// Nombre de colonnes choisi au curseur, gardé dans l'adresse (?colonnes=12) pour survivre à un rechargement.
-    /// Absent : il suit la largeur de la fenêtre (<see cref="screenColumns"/>).
+    /// Absent : il suit la largeur de la fenêtre (<see cref="screenColumns"/>, réglages dans <see cref="GridColumns"/>).
     /// </summary>
-    [SupplyParameterFromQuery(Name = "colonnes")] private int? ColumnsFromQuery { get; set; }
+    [SupplyParameterFromQuery(Name = GridColumns.QueryName)] private int? ColumnsFromQuery { get; set; }
     /// <summary>Origine affichée, gardée dans l'adresse : vide (tout), « banque » ou l'identifiant d'une sauvegarde stockée.</summary>
     [SupplyParameterFromQuery(Name = "source")] private string? SourceFromQuery { get; set; }
     /// <summary>Tri gardé dans l'adresse : « arrivee » (absent), « nom » ou « pokedex ».</summary>
@@ -175,8 +165,8 @@ else
     private string search = "";
     private string source = "";
     private bool sourceInitialized;
-    private int columns = ColumnsByScreen[1];
-    private int screenColumns = ColumnsByScreen[1]; // largeur de fenêtre inconnue tant que la page n'est pas interactive
+    private int columns = GridColumns.Default;
+    private int screenColumns = GridColumns.Default; // largeur de fenêtre inconnue tant que la page n'est pas interactive
     private DotNetObjectReference<Collection>? selfRef;
     private IJSObjectReference? screenWatcher;
     private int total;
@@ -211,7 +201,7 @@ else
     // Les paramètres d'adresse sont lus ici (et non dans OnInitialized) pour suivre aussi les navigations ultérieures.
     protected override async Task OnParametersSetAsync()
     {
-        columns = Math.Clamp(ColumnsFromQuery ?? screenColumns, MinColumns, MaxColumns);
+        columns = GridColumns.Clamp(ColumnsFromQuery ?? screenColumns);
         var fromQuery = SourceFromQuery ?? "";
         var sortFromQuery = SortFromAddress();
         var query = QueryHelpers.ParseQuery(Nav.ToAbsoluteUri(Nav.Uri).Query);
@@ -311,7 +301,7 @@ else
 
     /// <summary>Choix au curseur ; revenir à la valeur de la fenêtre rend la main à sa largeur.</summary>
     private void RememberColumns() =>
-        Nav.NavigateTo(Nav.GetUriWithQueryParameter("colonnes", columns == screenColumns ? null : columns), replace: true);
+        Nav.NavigateTo(Nav.GetUriWithQueryParameter(GridColumns.QueryName, columns == screenColumns ? null : columns), replace: true);
 
     // ---------- Largeur de la fenêtre ----------
 
@@ -319,7 +309,7 @@ else
     {
         if (!firstRender) return;
         selfRef = DotNetObjectReference.Create(this);
-        screenWatcher = await JS.InvokeAsync<IJSObjectReference>("watchScreenSize", NarrowWidth, WindowWidths, selfRef);
+        screenWatcher = await JS.InvokeAsync<IJSObjectReference>("watchScreenSize", GridColumns.NarrowWidth, GridColumns.WindowWidths, selfRef);
         ApplyScreenSize(await screenWatcher.InvokeAsync<int>("size"));
     }
 
@@ -329,7 +319,7 @@ else
 
     private void ApplyScreenSize(int size)
     {
-        screenColumns = ColumnsByScreen[Math.Clamp(size, 0, ColumnsByScreen.Length - 1)];
+        screenColumns = GridColumns.ForScreen(size);
         if (ColumnsFromQuery is not null || columns == screenColumns)
             return; // nombre choisi au curseur : la taille de la fenêtre n'y touche pas
         columns = screenColumns;

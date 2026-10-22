@@ -14,6 +14,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<ParkMember> ParkMembers => Set<ParkMember>();
     public DbSet<SyncDevice> SyncDevices => Set<SyncDevice>();
     public DbSet<SyncPairingCode> SyncPairingCodes => Set<SyncPairingCode>();
+    public DbSet<LivingDex> LivingDexes => Set<LivingDex>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -71,6 +72,15 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             e.HasIndex(d => d.TokenHash).IsUnique(); // la console est retrouvée par son jeton
             e.HasIndex(d => d.OwnerId);
             e.HasOne(d => d.Owner).WithMany().HasForeignKey(d => d.OwnerId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<LivingDex>(e =>
+        {
+            e.HasIndex(d => new { d.OwnerId, d.Game }).IsUnique(); // un living dex par jeu et par compte
+            e.HasIndex(d => d.StoredSaveId).IsUnique(); // une sauvegarde ne sert qu'à un living dex
+            e.HasOne(d => d.Owner).WithMany().HasForeignKey(d => d.OwnerId).OnDelete(DeleteBehavior.Cascade);
+            // La sauvegarde est supprimée : son living dex aussi (la confirmation de suppression le signale).
+            e.HasOne(d => d.StoredSave).WithMany().HasForeignKey(d => d.StoredSaveId).OnDelete(DeleteBehavior.Cascade);
         });
 
         builder.Entity<SyncPairingCode>(e =>

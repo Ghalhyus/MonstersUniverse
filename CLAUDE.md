@@ -157,6 +157,20 @@ suivante), sans lister les dossiers des dépôts.
   la vitesse rejoint progressivement celle voulue (`vx`, `vy`), freine à l'arrivée, et l'animation de marche suit la
   vitesse (`WALK_ANIMATION_SPEED`). Une image coûte ~0,1 ms pour 30 Pokémon : une saccade vient du dessin, pas du calcul.
 
+## Living dex
+
+- Jeux et modes : `LivingDexGames` (`Services/LivingDexService.cs`). Ajouter un jeu : son entrée (`All` : jaquette,
+  dossier de sprites, Pokédex régional, dernier numéro national), `For(SaveFile)` (quelle sauvegarde, sachant que PKHeX ne
+  distingue pas Rouge de Bleu ni Or d'Argent), les formes du mode Complet (`Forms` : régionales, Méga, Gigamax, d'aspect ;
+  ni le sexe, ni les espèces à plus de 10 formes ; seulement celles que le jeu peut contenir), et les images dans
+  `outils/images.py` (`LIVINGDEX_SPRITES`, `LIVINGDEX_COVERS`, mêmes noms de dossiers et de fichiers).
+- Les tests ne doivent **pas** exiger ces images : la CI les copie depuis le VPS, qui ne les a qu'après `images-serveur`
+  (lui-même lancé après un déploiement). Une nouvelle image : tester son chemin, pas sa présence.
+- Jaquettes : Bulbagarden Archives (API MediaWiki, version réduite `iiurlwidth=480`). Sur ce PC, Python refuse son
+  certificat (« certificate has expired ») à cause du magasin de certificats de Windows, pas du site : sur le VPS (Debian)
+  ça passe. Pour les avoir en local, `outils\recuperer-images.cmd`, ou un contexte SSL avec `cafile` (paquet de Git :
+  `/usr/ssl/certs/ca-bundle.crt`).
+
 ## Ajouter une catégorie d'objets à l'inventaire
 
 Même modèle que les Pokéballs, médicaments, baies et CT : `ItemCategory` et la liste d'objets dans `SaveBag`

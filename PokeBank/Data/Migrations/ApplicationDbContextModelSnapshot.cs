@@ -339,6 +339,36 @@ namespace PokeBank.Migrations
                     b.ToTable("BankPokemon");
                 });
 
+            modelBuilder.Entity("PokeBank.Data.LivingDex", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Game")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("OwnerId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("StoredSaveId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StoredSaveId")
+                        .IsUnique();
+
+                    b.HasIndex("OwnerId", "Game")
+                        .IsUnique();
+
+                    b.ToTable("LivingDexes");
+                });
+
             modelBuilder.Entity("PokeBank.Data.OwnedItem", b =>
                 {
                     b.Property<string>("OwnerId")
@@ -639,6 +669,25 @@ namespace PokeBank.Migrations
                         .WithMany()
                         .HasForeignKey("StoredSaveId")
                         .OnDelete(DeleteBehavior.Cascade);
+
+                    b.Navigation("Owner");
+
+                    b.Navigation("StoredSave");
+                });
+
+            modelBuilder.Entity("PokeBank.Data.LivingDex", b =>
+                {
+                    b.HasOne("PokeBank.Data.ApplicationUser", "Owner")
+                        .WithMany()
+                        .HasForeignKey("OwnerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("PokeBank.Data.StoredSave", "StoredSave")
+                        .WithMany()
+                        .HasForeignKey("StoredSaveId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.Navigation("Owner");
 
