@@ -235,6 +235,9 @@ namespace PokeBank.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Fingerprint")
+                        .HasColumnType("TEXT");
+
                     b.Property<byte>("Form")
                         .HasColumnType("INTEGER");
 
@@ -330,6 +333,8 @@ namespace PokeBank.Migrations
                     b.HasIndex("StoredSaveId");
 
                     b.HasIndex("OwnerId", "DepositedAt");
+
+                    b.HasIndex("OwnerId", "Fingerprint");
 
                     b.ToTable("BankPokemon");
                 });

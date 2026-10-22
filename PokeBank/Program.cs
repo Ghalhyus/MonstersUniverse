@@ -73,6 +73,7 @@ using (var scope = app.Services.CreateScope())
     await BankService.FillSortNamesAsync(db); // nom de tri des Pokémon enregistrés avant son ajout
     await BankService.FillSpriteDetailsAsync(db); // sexe et objet tenu (image) des Pokémon enregistrés avant leur ajout
     await BankService.FillFilterDetailsAsync(db); // types, nature, IV... (filtres de « Ma collection ») des Pokémon plus anciens
+    await PokemonFingerprint.FillAsync(db); // empreinte (doublons) des Pokémon plus anciens
 }
 PokemonSprites.Load(app.Environment.WebRootPath); // images des Pokémon et de leurs formes
 

@@ -83,6 +83,33 @@ reçu le nom actuel du fichier (migration `JournalFileNames`), sauf celles dont 
 - Tant qu'elle est stockée, la sauvegarde est **refusée dans « Transfert »** (au chargement et à la validation).
 - Une mise à jour avec moins de temps de jeu que la version stockée demande confirmation (ancienne copie ?).
 
+### Doublons (vieille copie d'une sauvegarde)
+
+Un Pokémon déposé dans le stockage interne peut réapparaître dans une **vieille copie** de sa sauvegarde, celle d'avant le
+dépôt (exemple vécu : le Pikachu Rockeur de Rubis Oméga, déposé le 13/10, retrouvé dans la sauvegarde stockée le 16/10).
+Chaque Pokémon a une **empreinte** (`BankPokemon.Fingerprint`, `Services/PokemonFingerprint.cs`), sans l'espèce, qui
+change à l'évolution :
+
+- 3e génération et suivantes : PID + ID dresseur complet (ID + ID secret), qui ne changent jamais, même d'un jeu à l'autre ;
+- 1re et 2e génération (sans PID) : IV + ID dresseur + nom du dresseur + famille d'évolution (environ 1 risque sur 65 000
+  de confondre deux Pokémon du même dresseur et de la même famille).
+
+Une sauvegarde dont un Pokémon est déjà **ailleurs dans le compte** (stockage interne ou autre sauvegarde stockée ;
+**jamais entre comptes**) est **refusée** : « Sauvegarde refusée : 1 Pokémon de cette sauvegarde est déjà ailleurs dans ton
+compte : Pikachu N.20 (stockage interne). C'est sans doute une vieille copie : envoie la sauvegarde actuelle de ton jeu. »
+(5 noms au plus). Il faut envoyer la sauvegarde actuelle du jeu, qui n'a plus le Pokémon déposé.
+
+- **« Mes sauvegardes »** (ajout et mise à jour) et la **3DS** (`raison` : `Duplicate`). Une mise à jour ne se compare
+  pas à sa propre version précédente ; le contrôle passe avant la question du temps de jeu.
+- **« Transfert »** : refus au chargement. La validation refuse aussi le dépôt d'un Pokémon déjà au stockage interne
+  (déposé entre-temps depuis un autre onglet), avant les retraits : retirer l'original et déposer sa copie le dupliquerait.
+  Un Pokémon retiré du stockage interne vers un jeu peut y revenir plus tard (il n'y est plus).
+- Revers acceptés : deux Pokémon d'événement à PID fixe (même distribution) ou d'échange en jeu ont la même empreinte
+  sans être des copies, et un Pokémon échangé entre deux de tes jeux bloque le second tant que le premier est stocké dans
+  une version qui l'a encore (mettre à jour le premier d'abord).
+
+L'empreinte est calculée à l'enregistrement, et au démarrage pour les Pokémon plus anciens (migration `PokemonFingerprints`).
+
 ### Synchronisation depuis une 3DS
 
 Le homebrew **PokeBank Sync** (dépôt à part, `3DS_Saves_Synchronization`) envoie les sauvegardes Pokémon d'une 3DS
@@ -265,6 +292,7 @@ est incompatible (espèce, attaques ou objets inexistants dans le jeu, conversio
 |---|---|
 | `PokeBank/Services/SaveSession.cs` | Sauvegarde chargée + dépôts/retraits en attente (PKHeX) |
 | `PokeBank/Services/BankService.cs` | Accès base, validation transactionnelle, copies de sécurité |
+| `PokeBank/Services/PokemonFingerprint.cs` | Empreinte d'un Pokémon et recherche de ses doublons dans le compte (vieille copie d'une sauvegarde) |
 | `PokeBank/Services/PokemonInfo.cs` | Noms français (dont « Rouge / Bleu », « Or / Argent » pour les groupes de jeux), sprites, légalité |
 | `PokeBank/Components/Pages/Bank.razor` | Page « Transfert et stockage interne » (`/transfert`) : boîtes, glisser-déposer, sélection multiple |
 | `PokeBank/Components/Pages/Park.razor` | Page « Parc » : boîte où vivent jusqu'à 30 Pokémon, fenêtre de choix, fiche au clic |

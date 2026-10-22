@@ -22,6 +22,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         builder.Entity<BankPokemon>(e =>
         {
             e.HasIndex(p => new { p.OwnerId, p.DepositedAt });
+            e.HasIndex(p => new { p.OwnerId, p.Fingerprint }); // doublons (vieille copie d'une sauvegarde)
             e.HasOne(p => p.Owner).WithMany().HasForeignKey(p => p.OwnerId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(p => p.StoredSave).WithMany().HasForeignKey(p => p.StoredSaveId).OnDelete(DeleteBehavior.Cascade);
         });

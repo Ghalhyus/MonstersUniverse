@@ -15,6 +15,22 @@ public class SaveSessionTests
         return sav.Write().ToArray();
     }
 
+    /// <summary>
+    /// Pokémon de <paramref name="ot"/> (n° <paramref name="index"/>) : son propre PID, stable d'un appel à l'autre. Les
+    /// sauvegardes stockées par un même compte ne peuvent pas avoir le même Pokémon (doublons, PokemonFingerprint), or
+    /// <see cref="CreatePk5(ushort, byte)"/> donne toujours le même PID.
+    /// </summary>
+    internal static PK5 CreatePk5(ushort species, byte level, string ot, int index = 0)
+    {
+        var pk = CreatePk5(species, level);
+        uint hash = 2166136261; // FNV-1a : string.GetHashCode change d'une exécution à l'autre
+        foreach (var c in $"{ot}#{index}")
+            hash = (hash ^ c) * 16777619;
+        pk.PID = hash;
+        pk.RefreshChecksum();
+        return pk;
+    }
+
     internal static PK5 CreatePk5(ushort species, byte level)
     {
         var pk = new PK5

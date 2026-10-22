@@ -461,6 +461,14 @@
                         "Supprime-la depuis « Ma collection » (elle te sera rendue) pour pouvoir l'utiliser ici."), isError: true);
                     return;
                 }
+                // Un de ses Pokémon est déjà ailleurs dans le compte : vieille copie de la sauvegarde (clonage possible).
+                var duplicates = await BankStore.FindDuplicatesAsync(userId, StoredSaveService.ReadAllPokemon(Session.Save!).Select(p => p.Pokemon));
+                if (PokemonFingerprint.RefusalMessage(duplicates, PokemonFingerprint.TransferAdvice) is { } refusal)
+                {
+                    Session.Close();
+                    Show(refusal, isError: true);
+                    return;
+                }
                 currentBox = 0;
                 ClearSelection();
                 Show($"Sauvegarde chargée : {Info.GameName(Session.Save!)}.");

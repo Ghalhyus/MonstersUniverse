@@ -24,7 +24,7 @@ public sealed class InventoryServiceTests : IDisposable
     private static byte[] Save(uint money = 100_000, int hours = 10, string ot = "Ludo", params (int Item, int Count)[] items)
     {
         var sav = new SAV5B2W2 { OT = ot, TID16 = 12345, SID16 = 54321, PlayedHours = hours, Money = money };
-        sav.SetBoxSlotAtIndex(SaveSessionTests.CreatePk5(25, 5), 0, 0);
+        sav.SetBoxSlotAtIndex(SaveSessionTests.CreatePk5(25, 5, ot), 0, 0);
         if (items.Length > 0)
             SaveSessionTests.GiveItems(sav, items);
         return sav.Write().ToArray();
@@ -601,12 +601,27 @@ public sealed class InventoryServiceTests : IDisposable
     [Fact]
     public async Task SingleUseMachines_From80Copies_AreLockedForThatSaveOnly()
     {
+        static PKM OtherPokemon(PKM pk)
+        {
+            pk.PID ^= 0x5A5A5A5A;
+            pk.RefreshChecksum();
+            return pk;
+        }
         // Deux parties de Platine : Lucas a 85 CT26 Séisme (1 + 84), Aurore 10 (1 + 9).
         static byte[] Platinum(string ot, int extraEarthquakes)
         {
             Assert.True(SaveUtil.TryGetSaveFile(SaveSessionTests.CreatePlatinumSave(), out var sav, "platine.sav"));
             sav!.OT = ot;
             SaveSessionTests.GiveItems(sav, (TM26, extraEarthquakes));
+            if (ot == "Aurore") // d'autres Pokémon que ceux de Lucas : un compte n'a jamais deux fois le même (doublons)
+            {
+                for (int i = 0; i < sav.PartyCount; i++)
+                    sav.SetPartySlotAtIndex(OtherPokemon(sav.GetPartySlotAtIndex(i)), i);
+                for (int b = 0; b < sav.BoxCount; b++)
+                    for (int s = 0; s < sav.BoxSlotCount; s++)
+                        if (sav.GetBoxSlotAtIndex(b, s) is { Species: > 0 } pk)
+                            sav.SetBoxSlotAtIndex(OtherPokemon(pk), b, s);
+            }
             return sav.Write().ToArray();
         }
         Assert.True((await _saves.AddAsync("sacha", "lucas.sav", Platinum("Lucas", 84))).Ok);

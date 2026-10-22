@@ -21,7 +21,7 @@ public sealed record StoredSaveInfo(
     public string ServerChanges => StoredSaveService.DescribeServerChanges(WithdrawnOnServer, ItemsChangedOnServer);
 }
 
-public enum StoreStatus { Ok, Invalid, AlreadyStored, NotFound, WrongTrainer, OlderPlayTime, ModifiedOnServer, Conflict, CollectionFull }
+public enum StoreStatus { Ok, Invalid, AlreadyStored, NotFound, WrongTrainer, OlderPlayTime, ModifiedOnServer, Conflict, CollectionFull, Duplicate }
 
 /// <param name="OldPlayTime">Pour <see cref="StoreStatus.OlderPlayTime"/> : temps de jeu de la version stockée (secondes).</param>
 /// <param name="NewPlayTime">Pour <see cref="StoreStatus.OlderPlayTime"/> : temps de jeu du fichier envoyé (secondes).</param>
@@ -97,6 +97,8 @@ public sealed class StoredSaveService(
             return refused;
 
         var pokemon = ReadAllPokemon(sav).ToList();
+        if (await DuplicateRefusalAsync(db, ownerId, pokemon, exceptSaveId: null) is { } duplicate)
+            return duplicate;
         var usage = await CollectionCapacity.GetUsageAsync(db, ownerId);
         if (CollectionCapacity.Exceeds(usage, usage.Used + pokemon.Count))
             return new(StoreStatus.CollectionFull, CollectionCapacity.SaveFullMessage(usage, pokemon.Count));
@@ -142,6 +144,10 @@ public sealed class StoredSaveService(
         if (identity.Key != save.IdentityKey)
             return new(StoreStatus.WrongTrainer,
                 $"Ce fichier n'est pas la même partie : dresseur {identity.TrainerName} ({identity.TrainerId}) au lieu de {save.TrainerName} ({save.TrainerId}).");
+        // Sans les Pokémon de sa version précédente, qu'elle remplace.
+        var pokemon = ReadAllPokemon(sav).ToList();
+        if (await DuplicateRefusalAsync(db, ownerId, pokemon, exceptSaveId: save.Id) is { } duplicate)
+            return duplicate;
         var modification = await db.SaveModifications.FindAsync(save.IdentityKey);
         if (modification is not null)
         {
@@ -159,7 +165,6 @@ public sealed class StoredSaveService(
         await using var tx = await db.Database.BeginTransactionAsync();
 
         // Seule la différence avec la version stockée compte ; une version avec moins de Pokémon passe toujours.
-        var pokemon = ReadAllPokemon(sav).ToList();
         var usage = await CollectionCapacity.GetUsageAsync(db, ownerId);
         if (CollectionCapacity.Exceeds(usage, usage.Used - save.PokemonCount + pokemon.Count))
             return new(StoreStatus.CollectionFull, CollectionCapacity.SaveFullMessage(usage, pokemon.Count, save.PokemonCount));
@@ -314,6 +319,20 @@ public sealed class StoredSaveService(
     /// Tous les Pokémon que PKHeX trouve dans la sauvegarde, avec leur emplacement :
     /// équipe, boîtes, puis le reste (pension, Boîte Combat... selon le jeu).
     /// </summary>
+    /// <summary>
+    /// Refus d'une sauvegarde dont un Pokémon est déjà ailleurs dans le compte (stockage interne ou autre sauvegarde stockée,
+    /// sauf <paramref name="exceptSaveId"/>) : vieille copie, voir <see cref="PokemonFingerprint"/>. Null si aucun.
+    /// </summary>
+    private async Task<StoreResult?> DuplicateRefusalAsync(ApplicationDbContext db, string ownerId,
+        List<(PKM Pokemon, string Location)> pokemon, int? exceptSaveId)
+    {
+        var copies = await PokemonFingerprint.FindAsync(db, ownerId, pokemon.Select(p => PokemonFingerprint.Of(p.Pokemon)), exceptSaveId);
+        if (PokemonFingerprint.RefusalMessage(copies, PokemonFingerprint.StoreAdvice) is not { } message)
+            return null;
+        logger.LogInformation("Utilisateur {User} : sauvegarde refusée, {Count} Pokémon déjà dans le compte.", ownerId, copies.Count);
+        return new(StoreStatus.Duplicate, message);
+    }
+
     public static IEnumerable<(PKM Pokemon, string Location)> ReadAllPokemon(SaveFile sav)
     {
         if (sav.HasParty)

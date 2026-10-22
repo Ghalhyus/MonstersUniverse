@@ -25,7 +25,7 @@ public sealed class CollectionCapacityTests : IDisposable
     {
         var sav = new SAV5B2W2 { OT = ot, TID16 = 12345, SID16 = 54321, PlayedHours = hours };
         for (int i = 0; i < count; i++)
-            sav.SetBoxSlotAtIndex(SaveSessionTests.CreatePk5((ushort)(i % 600 + 1), 5), i / 30, i % 30);
+            sav.SetBoxSlotAtIndex(SaveSessionTests.CreatePk5((ushort)(i % 600 + 1), 5, ot, i), i / 30, i % 30);
         return sav.Write().ToArray();
     }
 
@@ -45,7 +45,13 @@ public sealed class CollectionCapacityTests : IDisposable
     private async Task<int> AddBankPokemon(string owner, int count)
     {
         using var db = _db.NewContext();
-        var entries = Enumerable.Range(0, count).Select(_ => BankService.CreateEntry(new PokemonInfo(), SaveSessionTests.CreatePk5(25, 5), owner, DateTime.UtcNow)).ToList();
+        // Chacun son PID : d'autres Pokémon que ceux des sauvegardes (CreatePk5), sinon leur dépôt serait refusé (doublon).
+        var entries = Enumerable.Range(0, count).Select(i =>
+        {
+            var pk = SaveSessionTests.CreatePk5(25, 5);
+            pk.PID = 0x0B000000u + (uint)i;
+            return BankService.CreateEntry(new PokemonInfo(), pk, owner, DateTime.UtcNow);
+        }).ToList();
         db.BankPokemon.AddRange(entries);
         await db.SaveChangesAsync();
         return entries[0].Id;

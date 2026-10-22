@@ -127,6 +127,12 @@ suivante), sans lister les dossiers des dépôts.
 - Les colonnes des filtres de « Ma collection » (`Type1`, `Nature`, `IvHp`... : `PokemonTraits.Fill`) sont remplies à
   l'enregistrement (`BankService.CreateEntry`) et au démarrage pour les Pokémon plus anciens (`FillFilterDetailsAsync`,
   repère : `Nature` null). Un nouveau filtre qui demande une nouvelle colonne suit le même chemin.
+- `BankPokemon.Fingerprint` (doublons, `PokemonFingerprint`) : même chemin, remplie au démarrage (repère : null ; vide si
+  illisible). Une sauvegarde dont un Pokémon est déjà dans le compte est refusée. Or les Pokémon de test
+  (`SaveSessionTests.CreatePk5(espèce, niveau)`) ont **tous le même PID** : deux sauvegardes stockées par un même compte,
+  ou un dépôt à côté de Pokémon déjà au stockage interne, sont alors refusés comme doublons. Utiliser
+  `CreatePk5(espèce, niveau, dresseur, n°)` (PID propre au dresseur, stable : les tests de la 3DS renvoient des fichiers
+  identiques) ou changer le PID (`CollectionCapacityTests.AddBankPokemon`).
 - `BankPokemon.Gender` et `HeldItem` (pour l'image) sont remplis au démarrage pour les Pokémon plus anciens
   (`BankService.FillSpriteDetailsAsync`).
 - Tests : `PokemonSpritesTests` (formes, femelles, Méga, et la liste des formes de PKHeX sans image), `RealSavesTests`

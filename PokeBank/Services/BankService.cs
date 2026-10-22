@@ -189,6 +189,20 @@ public sealed class BankService(
         return query.OrderByDescending(p => p.DepositedAt).ThenBy(p => p.Position).ThenByDescending(p => p.Id);
     }
 
+    /// <summary>
+    /// Pokémon de cette sauvegarde déjà ailleurs dans le compte (stockage interne, sauvegardes stockées) : son chargement
+    /// dans « Transfert » est refusé.
+    /// </summary>
+    public async Task<List<DuplicateCopy>> FindDuplicatesAsync(string ownerId, IEnumerable<PKM> pokemon)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+        return await PokemonFingerprint.FindAsync(db, ownerId, pokemon.Select(PokemonFingerprint.Of));
+    }
+
+    /// <summary>Refus d'un dépôt : ce Pokémon est déjà dans le stockage interne (vieille copie de la sauvegarde ?).</summary>
+    public static string AlreadyInStorageMessage(string name) =>
+        $"{name} est déjà dans ton stockage interne (le même Pokémon, d'une vieille copie de la sauvegarde ?) : dépôt refusé.";
+
     public static PKM? ToPkm(BankPokemon entry) =>
         EntityFormat.GetFromBytes(entry.Data.ToArray(), (EntityContext)entry.Context);
 
@@ -215,6 +229,7 @@ public sealed class BankService(
             IsLegal = view.IsLegal,
             OriginalTrainer = pk.OriginalTrainerName,
             OriginGame = view.OriginGame,
+            Fingerprint = PokemonFingerprint.Of(pk),
             DepositedAt = now,
         };
         PokemonTraits.Fill(entry, pk); // types, nature, IV... pour les filtres de « Ma collection »
@@ -236,6 +251,15 @@ public sealed class BankService(
         var key = SaveIdentity.Of(sav).Key;
         if (await db.StoredSaves.AnyAsync(s => s.IdentityKey == key))
             throw new InvalidOperationException("Cette sauvegarde est maintenant stockée sur le serveur : elle ne peut plus être utilisée dans « Transfert ».");
+
+        // Un Pokémon déjà au stockage interne ne peut pas y entrer une seconde fois (vieille copie de la sauvegarde) : la
+        // page refuse déjà une telle sauvegarde au chargement, ceci couvre un dépôt fait entre-temps depuis un autre onglet.
+        // Vérifié avant les retraits, sinon retirer l'original et déposer sa copie le dupliquerait.
+        var deposited = session.Deposits.Select(d => PokemonFingerprint.Of(d.Pokemon)).ToList();
+        var inStorage = await PokemonFingerprint.FindAsync(db, ownerId, deposited, internalOnly: true);
+        if (inStorage.Count > 0)
+            throw new InvalidOperationException(AlreadyInStorageMessage(inStorage[0].IsEgg ? "Un Œuf" : inStorage[0].SpeciesName)
+                + " Annule son dépôt, puis valide de nouveau.");
 
         foreach (var w in session.Withdrawals)
         {

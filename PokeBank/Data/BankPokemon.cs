@@ -58,6 +58,12 @@ public class BankPokemon
     public bool IsLegal { get; set; }
     public string OriginalTrainer { get; set; } = "";
     public string OriginGame { get; set; } = "";
+    /// <summary>
+    /// Empreinte (PID + ID dresseur ; IV + dresseur + famille en 1re et 2e génération : <see cref="Services.PokemonFingerprint"/>)
+    /// pour reconnaître le même Pokémon à deux endroits du compte. Vide si illisible ; null : pas encore calculée
+    /// (Pokémon plus anciens, remplie au démarrage).
+    /// </summary>
+    public string? Fingerprint { get; set; }
 
     public DateTime DepositedAt { get; set; }
 
