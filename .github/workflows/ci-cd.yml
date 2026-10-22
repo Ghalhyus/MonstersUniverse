@@ -1,0 +1,124 @@
+# Intégration et déploiement continus de PokeBank (mise en place : README, section « CI/CD »).
+# - Tests : à chaque push, sur une machine Ubuntu propre. Les images (hors du dépôt) sont copiées depuis le VPS.
+# - Déploiement : bouton « Run workflow » de l'onglet Actions, sur main seulement, si les tests passent. Sauvegarde des
+#   données, envoi du code (même archive que deploy\publier.ps1), reconstruction Docker, puis vérification que le site répond.
+# Secrets du dépôt : VPS_HOST (adresse IP), VPS_USER (debian), VPS_SSH_KEY (clé privée réservée à GitHub),
+# VPS_KNOWN_HOSTS (empreinte du serveur, ssh-keyscan).
+name: CI/CD
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  DOSSIER: pokebank # dossier du site sur le VPS (comme publier.ps1)
+
+jobs:
+  tests:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Accès SSH au VPS
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+        run: |
+          if [ -z "$VPS_SSH_KEY" ] || [ -z "$VPS_KNOWN_HOSTS" ] || [ -z "$VPS_HOST" ] || [ -z "$VPS_USER" ]; then
+            echo "::error::Secrets VPS_HOST, VPS_USER, VPS_SSH_KEY ou VPS_KNOWN_HOSTS manquants : voir la section « CI/CD » du README."
+            exit 1
+          fi
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      # Images des Pokémon, objets et sprites Donjon Mystère : exigées par les tests d'images (comme outils\recuperer-images.cmd).
+      - name: Images (depuis le VPS)
+        env:
+          CIBLE: ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}
+        run: |
+          mkdir -p PokeBank/wwwroot/images
+          ssh -o BatchMode=yes "$CIBLE" 'tar -czf - -C ~/pokebank-images .' > "$RUNNER_TEMP/images.tgz"
+          tar -xzf "$RUNNER_TEMP/images.tgz" -C PokeBank/wwwroot/images
+          echo "$(find PokeBank/wwwroot/images -type f | wc -l) images récupérées"
+
+      - name: Tests
+        run: dotnet test PokeBank.Tests/PokeBank.Tests.csproj
+
+  deploiement:
+    name: Déploiement
+    needs: tests
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    concurrency:
+      group: deploiement-production # jamais deux déploiements à la fois
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Accès SSH au VPS
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      # Même contenu que deploy\publier.ps1 : sans les images (dossier ~/pokebank-images du serveur).
+      - name: Envoi du code
+        env:
+          CIBLE: ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}
+        run: |
+          tar -czf "$RUNNER_TEMP/pokebank.tgz" --exclude=bin --exclude=obj --exclude=PokeBank/wwwroot/images \
+            Dockerfile .dockerignore docker-compose.yml Caddyfile .env.example PokeBank.sln PokeBank deploy outils
+          scp -o BatchMode=yes "$RUNNER_TEMP/pokebank.tgz" "$CIBLE:pokebank.tgz"
+
+      - name: Sauvegarde, mise à jour et vérification
+        env:
+          CIBLE: ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}
+        run: |
+          ssh -o BatchMode=yes "$CIBLE" "DOSSIER=$DOSSIER bash -s" <<'SCRIPT'
+          set -euo pipefail
+          if [ ! -f "$DOSSIER/.env" ]; then
+            echo "Site pas encore installé sur ce VPS : première installation avec deploy\publier.cmd (voir le README)."
+            exit 1
+          fi
+
+          echo "== Sauvegarde des données"
+          bash "$DOSSIER/deploy/sauvegarder.sh"
+
+          echo "== Mise à jour"
+          # Dossier des images créé avant Docker : sinon Docker le crée au nom de root (voir publier.ps1).
+          mkdir -p ~/pokebank-images
+          rm -rf "$DOSSIER/PokeBank/wwwroot/images"
+          tar -xzf pokebank.tgz -C "$DOSSIER"
+          cd "$DOSSIER"
+          docker compose up -d --build
+          docker image prune -f > /dev/null
+
+          echo "== Vérification"
+          # Depuis le conteneur de Caddy (réseau interne de Docker) ; X-Forwarded-Proto comme Caddy, pour éviter la
+          # redirection vers HTTPS. Une minute au plus : migrations et remplissages du démarrage compris.
+          for essai in $(seq 30); do
+            if docker compose exec -T caddy wget -q -O /dev/null --header "X-Forwarded-Proto: https" http://pokebank:8080/; then
+              echo "PokeBank est à jour et répond."
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Le site ne répond pas après une minute : dernières lignes du journal."
+          docker compose logs --tail 50 pokebank
+          exit 1
+          SCRIPT

@@ -321,6 +321,7 @@ l'IP du VPS.
 | `deploy/publier.cmd` (`publier.ps1`) | Depuis Windows : envoie le code sur le VPS et le met à jour |
 | `deploy/installer-serveur.sh` | Sur le VPS, une seule fois : pare-feu, Docker, `.env`, sauvegarde nocturne, démarrage |
 | `deploy/sauvegarder.sh` | Sauvegarde du volume de données (lancée chaque nuit par cron, gardée 14 jours) |
+| `.github/workflows/ci-cd.yml` | GitHub Actions : tests à chaque push, déploiement par un bouton (voir « CI/CD ») |
 
 **Première installation**
 
@@ -329,8 +330,33 @@ l'IP du VPS.
    (demande le nom de domaine, génère le code d'invitation et l'affiche à la fin).
 3. Depuis Windows : `deploy\images-serveur.cmd ubuntu@IP_DU_VPS` (images, voir plus bas).
 
-**Mises à jour** : `deploy\publier.cmd ubuntu@IP_DU_VPS` suffit. Les migrations de la base s'appliquent au démarrage ;
-les données restent dans le volume Docker.
+**Mises à jour** : par GitHub (« CI/CD » ci-dessous), ou `deploy\publier.cmd ubuntu@IP_DU_VPS` depuis Windows. Les
+migrations de la base s'appliquent au démarrage ; les données restent dans le volume Docker.
+
+**CI/CD** (GitHub Actions, `.github/workflows/ci-cd.yml`) :
+
+- **Tests** à chaque push, sur une machine Ubuntu propre (un fichier oublié dans un commit s'y voit) : .NET 9, images
+  copiées depuis `~/pokebank-images` du VPS par SSH (exigées par les tests d'images), puis `dotnet test`. Résultat dans
+  l'onglet « Actions » du dépôt et à côté de chaque commit. Attention : Linux distingue majuscules et minuscules dans les
+  noms de fichiers, Windows non.
+- **Déploiement** : onglet « Actions » → « CI/CD » → « Run workflow » sur `main`. Il ne part que si les tests passent, puis :
+  sauvegarde des données (`sauvegarder.sh`, quelques secondes de coupure), envoi de la même archive que `publier.ps1`,
+  `docker compose up -d --build`, et vérification que le site répond (une minute au plus, sinon échec avec la fin du
+  journal). Jamais deux déploiements à la fois. La première installation se fait toujours avec `publier.cmd`.
+
+Mise en place (une fois), avec une clé SSH réservée à GitHub (révocable sans toucher à la tienne), dans PowerShell :
+
+1. Créer la clé, sans phrase de passe (Entrée deux fois) :
+   `ssh-keygen -t ed25519 -C github-actions-pokebank -f "$HOME\.ssh\pokebank-github"`
+2. L'autoriser sur le VPS :
+   `Get-Content "$HOME\.ssh\pokebank-github.pub" | ssh ubuntu@IP_DU_VPS "cat >> ~/.ssh/authorized_keys"`
+3. Lire l'empreinte du VPS que ton PC connaît déjà (lignes sans `#`) : `ssh-keygen -F IP_DU_VPS`
+4. Sur GitHub, « Settings » → « Secrets and variables » → « Actions » → « New repository secret » :
+   `VPS_HOST` (IP du VPS), `VPS_USER` (`ubuntu`, `debian`...), `VPS_SSH_KEY` (tout le contenu de
+   `$HOME\.ssh\pokebank-github`, la clé **privée**, lignes `-----BEGIN/END` comprises), `VPS_KNOWN_HOSTS` (les lignes
+   de l'étape 3).
+
+Pour retirer l'accès de GitHub : effacer la ligne `github-actions-pokebank` de `~/.ssh/authorized_keys` sur le VPS.
 
 **Images** : ni dans le dépôt ni dans la publication. Elles sont stockées sur le VPS dans `~/pokebank-images` (hors de la
 sauvegarde nocturne : elles se retéléchargent), monté en lecture seule à la place de `wwwroot/images` (`docker-compose.yml`)
@@ -380,6 +406,7 @@ PokeBank s'appuie sur le travail d'autres projets :
 | [SQLite](https://sqlite.org) | Base de données | Domaine public |
 | [xUnit](https://xunit.net), [coverlet](https://github.com/coverlet-coverage/coverlet) | Tests | Apache-2.0, MIT |
 | [Caddy](https://caddyserver.com), [Docker](https://www.docker.com) | Mise en ligne (HTTPS, conteneurs) | Apache-2.0 |
+| [GitHub Actions](https://github.com/features/actions) : [actions/checkout](https://github.com/actions/checkout), [actions/setup-dotnet](https://github.com/actions/setup-dotnet) | Tests et déploiement (`.github/workflows/ci-cd.yml`) | MIT |
 | [Bulbapedia](https://bulbapedia.bulbagarden.net) | Référence consultée pour vérifier l'ordre des Noigrumes d'Or/Argent/Cristal | — |
 
 Pokémon et tous les noms et images associés sont des marques et créations de Nintendo, Creatures Inc., GAME FREAK Inc. et

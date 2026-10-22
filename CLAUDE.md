@@ -33,6 +33,14 @@ Ce fichier ne garde que ce que le README ne dit pas.
   dans le navigateur ; mettre à jour la liste du README.
   **`git status` ne montre pas les `.sav`** (ignorés) : chercher les fichiers déposés avec `ls`, pas avec Git.
 
+## CI/CD
+
+`.github/workflows/ci-cd.yml` (README, « CI/CD ») : tests sur Ubuntu à chaque push, déploiement par le bouton « Run
+workflow ». Le CLI `gh` n'est pas installé : les résultats de GitHub ne sont pas lisibles d'ici, l'utilisateur copie le
+message d'un échec. Les tests y tournent sous **Linux** : noms de fichiers sensibles à la casse, séparateur `/`, culture
+`fr-FR` par ICU. Un nouveau fichier nécessaire au déploiement s'ajoute à l'archive des deux côtés (`publier.ps1` et le
+workflow).
+
 ## Compiler et tester pendant que l'appli tourne
 
 L'appli lancée par l'utilisateur verrouille `PokeBank/bin` : compiler et tester dans un dossier à part.
