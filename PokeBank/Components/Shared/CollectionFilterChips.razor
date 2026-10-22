@@ -76,6 +76,19 @@
                                 </label>
                             }
                             break;
+                        case Criterion.Level:
+                            <p class="small text-muted mb-2">Bornes comprises (1 à 100) ; vide : peu importe.</p>
+                            <label class="filter-iv">
+                                <span>De</span>
+                                <input type="number" class="form-control form-control-sm" min="1" max="100" value="@Value.MinLevel"
+                                       aria-label="Niveau minimal" @onchange="e => Set(Value.WithLevels(Number(e), Value.MaxLevel))" />
+                            </label>
+                            <label class="filter-iv">
+                                <span>À</span>
+                                <input type="number" class="form-control form-control-sm" min="1" max="100" value="@Value.MaxLevel"
+                                       aria-label="Niveau maximal" @onchange="e => Set(Value.WithLevels(Value.MinLevel, Number(e)))" />
+                            </label>
+                            break;
                         case Criterion.Form:
                             @foreach (var (kind, _) in PokemonCriteria.FormSlugs)
                             {
@@ -133,7 +146,7 @@
     [Parameter] public IReadOnlyCollection<int> Abilities { get; set; } = [];
 
     /// <summary>Filtres, dans l'ordre des pastilles.</summary>
-    private enum Criterion { Generation, Type, Gender, Nature, Ability, Iv, Form, Mega, Shiny, Egg }
+    private enum Criterion { Generation, Type, Gender, Nature, Ability, Iv, Level, Form, Mega, Shiny, Nickname, Egg }
 
     private readonly HashSet<Criterion> added = []; // pastilles ajoutées, même sans valeur choisie (« Tous »)
     private Criterion? open;
@@ -154,6 +167,7 @@
         Criterion.Nature => Value.Natures.Count > 0,
         Criterion.Ability => Value.Abilities.Count > 0,
         Criterion.Iv => Value.MinIvs.Any(iv => iv > 0),
+        Criterion.Level => Value.MinLevel is not null || Value.MaxLevel is not null,
         Criterion.Form => Value.Forms.Count > 0,
         _ => YesNo(c) is not null,
     };
@@ -166,9 +180,11 @@
         Criterion.Nature => "Nature",
         Criterion.Ability => "Talent",
         Criterion.Iv => "IV",
+        Criterion.Level => "Niveau",
         Criterion.Form => "Forme",
         Criterion.Mega => "Méga-Évolution",
         Criterion.Shiny => "Chromatique",
+        Criterion.Nickname => "Surnom",
         _ => "Œuf",
     };
 
@@ -183,6 +199,13 @@
             Criterion.Nature => Value.Natures.Select(Info.NatureName).Order(FrenchOrder),
             Criterion.Ability => Value.Abilities.Select(Info.AbilityName).Order(FrenchOrder),
             Criterion.Iv => Value.MinIvs.Select((v, i) => v > 0 ? $"{ShortStat(i)} ≥ {v}" : null).OfType<string>(),
+            Criterion.Level => (Value.MinLevel, Value.MaxLevel) switch
+            {
+                (null, null) => [],
+                ({ } min, null) => [$"≥ {min}"],
+                (null, { } max) => [$"≤ {max}"],
+                ({ } min, { } max) => [min == max ? $"{min}" : $"{min} à {max}"],
+            },
             Criterion.Form => PokemonCriteria.FormSlugs.Where(f => Value.Forms.Contains(f.Kind)).Select(f => FormName(f.Kind)),
             _ => YesNo(c) switch { true => ["Oui"], false => ["Non"], null => [] },
         };
@@ -221,6 +244,7 @@
     {
         Criterion.Mega => Value.Mega,
         Criterion.Shiny => Value.Shiny,
+        Criterion.Nickname => Value.Nicknamed,
         Criterion.Egg => Value.Egg,
         _ => null,
     };
@@ -248,10 +272,14 @@
         return Set(Value with { MinIvs = ivs });
     }
 
+    /// <summary>Nombre tapé dans une case (vide ou illisible : null).</summary>
+    private static int? Number(ChangeEventArgs e) => int.TryParse(e.Value?.ToString(), out var v) ? v : null;
+
     private Task SetYesNo(Criterion c, bool? value) => Set(c switch
     {
         Criterion.Mega => Value with { Mega = value },
         Criterion.Shiny => Value with { Shiny = value },
+        Criterion.Nickname => Value with { Nicknamed = value },
         _ => Value with { Egg = value },
     });
 
@@ -286,9 +314,11 @@
             Criterion.Nature => Value with { Natures = new HashSet<byte>() },
             Criterion.Ability => Value with { Abilities = new HashSet<int>() },
             Criterion.Iv => Value with { MinIvs = new byte[6] },
+            Criterion.Level => Value with { MinLevel = null, MaxLevel = null },
             Criterion.Form => Value with { Forms = new HashSet<FormKind>() },
             Criterion.Mega => Value with { Mega = null },
             Criterion.Shiny => Value with { Shiny = null },
+            Criterion.Nickname => Value with { Nicknamed = null },
             _ => Value with { Egg = null },
         });
     }

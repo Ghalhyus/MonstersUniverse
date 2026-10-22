@@ -146,11 +146,15 @@ croix retire le filtre, « + Filtre » en ajoute un, « Tout effacer » les reti
 numéro de Pokédex : 1re = Bulbizarre à Mew...), **type** (types des jeux
 récents de l'espèce et de sa forme : Mélofée est Fée même venu de Rouge/Bleu), **sexe** (mâle, femelle, asexué), **nature**,
 **talent** (seuls ceux présents dans la collection sont proposés, avec une recherche), **IV** (minimum de 0 à 31 pour
-chaque statistique, « IV : PV ≥ 31, Vit ≥ 25 »), **forme** (standard, Alola, Galar, Hisui, Paldea, autre forme),
-**Méga-Évolution** (tient sa Méga-Gemme ou son orbe, comme pour l'image), **chromatique** et **œuf** (oui / non). Les
+chaque statistique, « IV : PV ≥ 31, Vit ≥ 25 »), **niveau** (« de » et « à », chacun facultatif, bornes comprises :
+« Niveau : ≤ 29 », « ≥ 51 », « 20 à 40 » ; inversées si « de » dépasse « à »), **forme** (standard, Alola, Galar, Hisui,
+Paldea, autre forme), **Méga-Évolution** (tient sa Méga-Gemme ou son orbe, comme pour l'image), **chromatique**,
+**surnom** (nom affiché différent du nom de l'espèce : un surnom identique à l'espèce ne compte pas) et **œuf** (oui / non).
+Les mêmes pastilles servent dans la fenêtre de choix du « Parc ». Les
 valeurs d'un même filtre s'additionnent (Feu ou Eau), les filtres se cumulent (Feu et femelle) ; un filtre sans valeur
 (« Tous ») ne filtre rien. Les œufs sont exclus dès qu'un autre filtre qu'« Œuf » est actif, pour ne pas révéler leur espèce.
-Les filtres sont gardés dans l'adresse (`?generation=1,2&type=feu,eau&sexe=f&iv=pv31,vit25&mega=oui`), avec la recherche, l'origine et le tri.
+Les filtres sont gardés dans l'adresse (`?generation=1,2&type=feu,eau&sexe=f&iv=pv31,vit25&niveau=20-40&surnom=oui&mega=oui`,
+`niveau=-29` : 29 et moins, `niveau=51-` : 51 et plus), avec la recherche, l'origine et le tri.
 
 En 1re et 2e génération, les IV (0 à 15) sont ramenés à l'échelle actuelle (× 2 + 1 : 15 → 31 ; Atq. Spé. et Déf. Spé.
 valent le « Spécial »), la nature est celle que donne leur transfert vers les jeux suivants (expérience modulo 25, aussi

@@ -58,12 +58,12 @@ public sealed class CollectionFiltersTests : IDisposable
     private int _nextId = 1;
 
     private BankPokemon Add(byte type1, byte type2 = 255, byte gender = 0, byte nature = 0, int ability = 0, byte[]? ivs = null,
-        FormKind form = FormKind.Standard, bool mega = false, bool shiny = false, bool egg = false)
+        FormKind form = FormKind.Standard, bool mega = false, bool shiny = false, bool egg = false, byte level = 5, string nickname = "Test")
     {
         ivs ??= new byte[6];
         var entry = new BankPokemon
         {
-            Id = _nextId++, OwnerId = "sacha", SpeciesName = "Test", Nickname = "Test", DepositedAt = DateTime.UtcNow, Data = [1],
+            Id = _nextId++, OwnerId = "sacha", SpeciesName = "Test", Nickname = nickname, Level = level, DepositedAt = DateTime.UtcNow, Data = [1],
             Type1 = type1, Type2 = type2 == 255 ? type1 : type2, Gender = gender, Nature = nature, Ability = ability,
             IvHp = ivs[0], IvAtk = ivs[1], IvDef = ivs[2], IvSpA = ivs[3], IvSpD = ivs[4], IvSpe = ivs[5],
             FormKind = form, MegaReady = mega, IsShiny = shiny, IsEgg = egg,
@@ -107,6 +107,49 @@ public sealed class CollectionFiltersTests : IDisposable
 
         Assert.Equal([perfect, trickRoom], await Find(new() { MinIvs = [31, 0, 0, 0, 0, 0] }));
         Assert.Equal([perfect], await Find(new() { MinIvs = [31, 0, 0, 0, 0, 25] }));
+    }
+
+    [Fact]
+    public async Task Levels_AreBoundsIncluded()
+    {
+        var low = Add(Fire, level: 29).Id;
+        var mid = Add(Fire, level: 30).Id;
+        var high = Add(Fire, level: 51).Id;
+        Add(Fire, level: 29, egg: true); // les œufs ne sortent pas
+
+        Assert.Equal([low], await Find(PokemonCriteria.None.WithLevels(null, 29)));
+        Assert.Equal([high], await Find(PokemonCriteria.None.WithLevels(51, null)));
+        Assert.Equal([low, mid], await Find(PokemonCriteria.None.WithLevels(20, 30)));
+        Assert.Equal([low, mid], await Find(PokemonCriteria.None.WithLevels(30, 20))); // bornes inversées
+        Assert.Equal([mid], await Find(PokemonCriteria.None.WithLevels(30, 30)));
+        Assert.Equal("niveau=-100", PokemonCriteria.None.WithLevels(0, 250).Key); // 0 : pas de borne ; 100 au plus
+    }
+
+    [Fact]
+    public async Task Nickname_IsADisplayedNameOtherThanTheSpecies()
+    {
+        var plain = Add(Fire).Id; // nom affiché = nom de l'espèce
+        var named = Add(Fire, nickname: "Pumpkin").Id;
+        Add(Fire, nickname: "Œuf", egg: true);
+
+        Assert.Equal([named], await Find(new() { Nicknamed = true }));
+        Assert.Equal([plain], await Find(new() { Nicknamed = false }));
+    }
+
+    [Fact]
+    public void LevelsAndNickname_RoundTripThroughTheAddress()
+    {
+        static PokemonCriteria Read(string? level, string? nickname = null) =>
+            PokemonCriteria.FromQuery(name => name switch { "niveau" => level, "surnom" => nickname, _ => null });
+        Assert.Equal("20-40", PokemonCriteria.None.WithLevels(20, 40).ToQuery()["niveau"]);
+        Assert.Equal("-29", PokemonCriteria.None.WithLevels(null, 29).ToQuery()["niveau"]);
+        Assert.Equal("51-", PokemonCriteria.None.WithLevels(51, null).ToQuery()["niveau"]);
+        Assert.Null(PokemonCriteria.None.ToQuery()["niveau"]);
+        Assert.Equal(PokemonCriteria.None.WithLevels(20, 40).Key, Read("40-20").Key); // inversées à la lecture
+        Assert.Equal(PokemonCriteria.None.WithLevels(51, null).Key, Read("51-").Key);
+        Assert.True(Read("abc").IsEmpty);
+        Assert.Equal("oui", new PokemonCriteria { Nicknamed = true }.ToQuery()["surnom"]);
+        Assert.False(Read(null, "non").Nicknamed);
     }
 
     [Fact]
