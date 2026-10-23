@@ -23,7 +23,10 @@ public enum LivingDexMode
 
 /// <summary>Un jeu de living dex : nom, jaquette, sprites, et Pokémon de chaque mode.</summary>
 /// <param name="Cover">Jaquette officielle (outils/images.py, partie « livingdex »).</param>
-/// <param name="SpriteFolder">Sprites du jeu, « images/livingdex/rouge-bleu/25.png » (Pikachu).</param>
+/// <param name="SpriteFolder">
+/// Sprites du jeu, « images/livingdex/rouge-bleu/25.png » (Pikachu) ; null à partir de la 6e génération : les images de la
+/// collection (<see cref="PokemonSprites"/>), les sprites 3D de ces jeux n'ayant pas plu.
+/// </param>
 /// <param name="Region">Région du Pokédex régional (« Kanto », « Johto », « Hoenn »).</param>
 /// <param name="Regional">Pokédex régional (numéros nationaux, dans l'ordre du Pokédex du jeu).</param>
 /// <param name="NationalMax">Dernier numéro national que le jeu peut contenir.</param>
@@ -33,8 +36,13 @@ public enum LivingDexMode
 /// sauvegarde ne peut donc avoir que celle-là : une seule case, remplie par n'importe quel Deoxys.
 /// </param>
 /// <param name="RegionalStart">Premier numéro du Pokédex régional : 1, sauf Unys qui commence à 0 (Victini).</param>
-public sealed record LivingDexGameInfo(LivingDexGame Game, string Name, string Cover, string SpriteFolder, byte Generation,
-    string Region, IReadOnlyList<ushort> Regional, ushort NationalMax, byte DeoxysForm = 0, int RegionalStart = 1);
+/// <param name="Sections">
+/// Sous-Pokédex qui forment le régional, dans l'ordre (Kalos : Centre, Côtes, Montagnes), avec leur nombre de Pokémon :
+/// chacun a sa numérotation et son titre dans la grille. Null : un seul Pokédex, celui de <paramref name="Region"/>.
+/// </param>
+public sealed record LivingDexGameInfo(LivingDexGame Game, string Name, string Cover, string? SpriteFolder, byte Generation,
+    string Region, IReadOnlyList<ushort> Regional, ushort NationalMax, byte DeoxysForm = 0, int RegionalStart = 1,
+    IReadOnlyList<(string Name, int Count)>? Sections = null);
 
 /// <summary>Une case du living dex : un Pokémon (et sa forme) demandé par le mode.</summary>
 /// <param name="AnyForm">Remplie par n'importe quelle forme de l'espèce, même en Complet (Deoxys de 3e génération, Arceus).</param>
@@ -44,7 +52,18 @@ public sealed record LivingDexGameInfo(LivingDexGame Game, string Name, string C
 /// second Shaymin et la Gracidée suffisent, sans le bloquer dans l'équipe.
 /// </param>
 /// <param name="Hint">Conseil affiché tant que la case manque (saisons de Vivaldaim et Haydaim : « à garder en boîte »).</param>
-public sealed record LivingDexSlot(ushort Species, byte Form, bool AnyForm = false, ushort KeyItem = 0, string? Hint = null);
+/// <param name="MegaItem">
+/// Case Méga-Évolution ou Primo-Résurgence (formes de combat, jamais dans une sauvegarde) : remplie par un exemplaire
+/// <b>de plus</b> de l'espèce qui tient cette Méga-Gemme (Gemme Rouge / Bleue pour les Primo) ; la case de l'espèce en
+/// prend un autre.
+/// </param>
+/// <param name="MegaMove">Pareil, pour Méga-Rayquaza, qui n'a pas de gemme : un Rayquaza de plus qui connaît cette capacité.</param>
+/// <param name="FormsFrom">
+/// Case remplie par n'importe quelle forme de <paramref name="FormsFrom"/> à <paramref name="Form"/> (Pikachu Cosplayeur :
+/// un seul par partie, qui change de costume) ; 0 : la forme exacte.
+/// </param>
+public sealed record LivingDexSlot(ushort Species, byte Form, bool AnyForm = false, ushort KeyItem = 0, string? Hint = null,
+    ushort MegaItem = 0, ushort MegaMove = 0, byte FormsFrom = 0);
 
 /// <summary>Case du living dex avec le Pokémon de la sauvegarde qui la remplit, s'il y en a un.</summary>
 /// <param name="Number">Numéro affiché : celui du Pokédex régional en mode Régional (Germignon : 1 à Johto), sinon le national.</param>
@@ -55,10 +74,11 @@ public sealed record LivingDexSlot(ushort Species, byte Form, bool AnyForm = fal
 /// <param name="Fallback">Image de la même forme sur le site, si le sprite du jeu manque (images pas encore récupérées).</param>
 /// <param name="Note">
 /// Condition de la case (<see cref="LivingDexSlot.KeyItem"/>) : « Gracidée dans le sac », « il faut un deuxième Shaymin » ;
-/// ou conseil d'une case manquante (<see cref="LivingDexSlot.Hint"/>).
+/// ou conseil d'une case manquante (<see cref="LivingDexSlot.Hint"/>) ; gemme d'une case Méga.
 /// </param>
+/// <param name="Section">Sous-Pokédex régional de la case (Kalos Centre, Côtes, Montagnes), null s'il n'y en a qu'un.</param>
 public sealed record LivingDexEntry(int Number, ushort Species, byte Form, string Name, string Sprite, int? BankId, string? Location,
-    string Fallback = "", string? Note = null)
+    string Fallback = "", string? Note = null, string? Section = null)
 {
     public bool Owned => BankId is not null;
 }
@@ -79,7 +99,7 @@ public sealed record LivingDexCandidate(int SaveId, string Label, IReadOnlyList<
 
 public sealed record LivingDexResult(bool Ok, string Message, int? Id = null);
 
-/// <summary>Jeux qui ont un living dex : 1re à 5e génération pour l'instant.</summary>
+/// <summary>Jeux qui ont un living dex : 1re à 6e génération pour l'instant.</summary>
 public static class LivingDexGames
 {
     private static readonly ushort[] Kanto = Enumerable.Range(1, 151).Select(n => (ushort)n).ToArray();
@@ -105,7 +125,14 @@ public static class LivingDexGames
 
     private const ushort Pichu = 172, Unown = 201, Deoxys = 386, Burmy = 412, Wormadam = 413, Shellos = 422, Gastrodon = 423,
         Rotom = 479, Giratina = 487, Shaymin = 492, Arceus = 493, Basculin = 550, Deerling = 585, Sawsbuck = 586, Tornadus = 641,
-        Thundurus = 642, Landorus = 645, Kyurem = 646, Keldeo = 647, Genesect = 649;
+        Thundurus = 642, Landorus = 645, Kyurem = 646, Keldeo = 647, Genesect = 649, Pikachu = 25, Flabebe = 669,
+        Floette = 670, Florges = 671, Pumpkaboo = 710, Gourgeist = 711, Hoopa = 720;
+
+    /// <summary>Rayquaza, et Draco-Ascension : sa Méga-Évolution n'a pas de gemme, elle vient de cette capacité.</summary>
+    public const ushort Rayquaza = 384, DragonAscent = 620;
+
+    /// <summary>Vase Scellé : objet rare qui libère Hoopa (Hoopa Déchaîné).</summary>
+    public const ushort PrisonBottle = 765;
 
     /// <summary>Gracidée : objet rare qui donne à Shaymin sa Forme Céleste.</summary>
     private const ushort Gracidea = 466;
@@ -214,6 +241,58 @@ public static class LivingDexGames
         649,
     ];
 
+    /// <summary>
+    /// Pokédex de Kalos de X et Y : trois sous-Pokédex à la suite, Centre (153), Côtes (153) et Montagnes (151), chacun
+    /// numéroté à partir de 1 ; 457 Pokémon, sans doublon. Repris des données de PokéAPI (pokemon_dex_numbers.csv,
+    /// Pokédex 12, 13 et 14 « kalos-central », « kalos-coastal », « kalos-mountain »).
+    /// </summary>
+    private static readonly ushort[] Kalos =
+    [
+        // Centre
+        650, 651, 652, 653, 654, 655, 656, 657, 658, 659, 660, 263, 264, 661, 662, 663, 16, 17, 18, 664, 665, 666, 10, 11, 12,
+        13, 14, 15, 511, 512, 513, 514, 515, 516, 172, 25, 26, 399, 400, 206, 298, 183, 184, 412, 413, 414, 283, 284, 129, 130,
+        341, 342, 118, 119, 318, 319, 667, 668, 54, 55, 83, 447, 448, 280, 281, 282, 475, 669, 670, 671, 406, 315, 407, 165, 166,
+        415, 416, 300, 301, 1, 2, 3, 4, 5, 6, 7, 8, 9, 672, 673, 674, 675, 676, 84, 85, 311, 312, 316, 317, 559,
+        560, 63, 64, 65, 43, 44, 45, 182, 161, 162, 290, 291, 292, 677, 678, 352, 679, 680, 681, 543, 544, 545, 531, 235, 453,
+        454, 580, 581, 682, 683, 684, 685, 313, 314, 187, 188, 189, 446, 143, 293, 294, 295, 307, 308, 41, 42, 169, 610, 611, 612,
+        719, 720, 721,
+        // Côtes
+        425, 426, 619, 620, 335, 336, 325, 326, 359, 686, 687, 337, 338, 371, 372, 373, 278, 279, 276, 277, 688, 689, 557, 558, 72,
+        73, 320, 321, 370, 690, 691, 692, 693, 120, 121, 90, 91, 211, 116, 117, 230, 369, 551, 552, 553, 694, 695, 449, 450, 111,
+        112, 464, 95, 208, 527, 528, 66, 67, 68, 104, 105, 115, 303, 696, 697, 698, 699, 142, 597, 598, 209, 210, 309, 310, 228,
+        229, 133, 134, 135, 136, 196, 197, 470, 471, 700, 587, 193, 469, 701, 561, 622, 623, 299, 476, 296, 297, 538, 539, 396, 397,
+        398, 434, 435, 29, 30, 31, 32, 33, 34, 702, 433, 358, 439, 122, 577, 578, 579, 360, 202, 524, 525, 526, 302, 703, 128,
+        241, 179, 180, 181, 127, 214, 417, 79, 80, 199, 102, 103, 441, 458, 226, 366, 367, 368, 223, 224, 222, 170, 171, 594, 131,
+        144, 145, 146,
+        // Montagnes
+        50, 51, 328, 329, 330, 443, 444, 445, 74, 75, 76, 218, 219, 213, 451, 452, 194, 195, 704, 705, 706, 588, 589, 616, 617,
+        69, 70, 71, 455, 92, 93, 94, 60, 61, 62, 186, 23, 24, 618, 339, 340, 509, 510, 261, 262, 504, 505, 624, 625, 707,
+        198, 430, 590, 591, 270, 271, 272, 418, 419, 550, 708, 709, 710, 711, 607, 608, 609, 479, 81, 82, 462, 100, 101, 568, 569,
+        220, 221, 473, 712, 713, 613, 614, 238, 124, 582, 583, 584, 459, 460, 225, 215, 461, 532, 533, 534, 324, 27, 28, 304, 305,
+        306, 246, 247, 248, 631, 632, 167, 168, 21, 22, 615, 227, 714, 715, 207, 472, 163, 164, 174, 39, 40, 353, 354, 570, 571,
+        574, 575, 576, 438, 185, 327, 216, 217, 108, 463, 123, 212, 132, 333, 334, 621, 633, 634, 635, 147, 148, 149, 716, 717, 718,
+        150,
+    ];
+
+    private static readonly (string Name, int Count)[] KalosSections = [("Kalos Centre", 153), ("Kalos Côtes", 153), ("Kalos Montagnes", 151)];
+
+    /// <summary>
+    /// Pokédex de Hoenn de Rubis Oméga et Saphir Alpha : 211 Pokémon (Arcko d'abord, Deoxys à la fin). Repris des données
+    /// de PokéAPI (pokemon_dex_numbers.csv, Pokédex 15 « updated-hoenn »).
+    /// </summary>
+    private static readonly ushort[] HoennOras =
+    [
+        252, 253, 254, 255, 256, 257, 258, 259, 260, 261, 262, 263, 264, 265, 266, 267, 268, 269, 270, 271, 272, 273, 274, 275, 276,
+        277, 278, 279, 280, 281, 282, 475, 283, 284, 285, 286, 287, 288, 289, 63, 64, 65, 290, 291, 292, 293, 294, 295, 296, 297,
+        118, 119, 129, 130, 298, 183, 184, 74, 75, 76, 299, 476, 300, 301, 41, 42, 169, 72, 73, 302, 303, 304, 305, 306, 66,
+        67, 68, 307, 308, 309, 310, 311, 312, 81, 82, 462, 100, 101, 313, 314, 43, 44, 45, 182, 84, 85, 406, 315, 407, 316,
+        317, 318, 319, 320, 321, 322, 323, 218, 219, 324, 88, 89, 109, 110, 325, 326, 27, 28, 327, 227, 328, 329, 330, 331, 332,
+        333, 334, 335, 336, 337, 338, 339, 340, 341, 342, 343, 344, 345, 346, 347, 348, 174, 39, 40, 349, 350, 351, 120, 121, 352,
+        353, 354, 355, 356, 477, 357, 433, 358, 359, 37, 38, 172, 25, 26, 54, 55, 360, 202, 177, 178, 203, 231, 232, 127, 214,
+        111, 112, 464, 361, 362, 478, 363, 364, 365, 366, 367, 368, 369, 222, 170, 171, 370, 116, 117, 230, 371, 372, 373, 374, 375,
+        376, 377, 378, 379, 380, 381, 382, 383, 384, 385, 386,
+    ];
+
     // Dossiers et fichiers : à garder en accord avec outils/images.py (LIVINGDEX_SPRITES, LIVINGDEX_COVERS).
     public static readonly IReadOnlyList<LivingDexGameInfo> All =
     [
@@ -249,6 +328,11 @@ public static class LivingDexGames
             RegionalStart: 0),
         new(LivingDexGame.White2, "Pokémon Blanche 2", "images/livingdex/jaquettes/blanche-2.png", "images/livingdex/noire-blanche/", 5, "Unys", Unova2, 649,
             RegionalStart: 0),
+        // 6e génération : les images de la collection (pas de sprites du jeu, SpriteFolder null).
+        new(LivingDexGame.X, "Pokémon X", "images/livingdex/jaquettes/x.png", null, 6, "Kalos", Kalos, 721, Sections: KalosSections),
+        new(LivingDexGame.Y, "Pokémon Y", "images/livingdex/jaquettes/y.png", null, 6, "Kalos", Kalos, 721, Sections: KalosSections),
+        new(LivingDexGame.OmegaRuby, "Pokémon Rubis Oméga", "images/livingdex/jaquettes/rubis-omega.png", null, 6, "Hoenn", HoennOras, 721),
+        new(LivingDexGame.AlphaSapphire, "Pokémon Saphir Alpha", "images/livingdex/jaquettes/saphir-alpha.png", null, 6, "Hoenn", HoennOras, 721),
     ];
 
     public static LivingDexGameInfo Get(LivingDexGame game) => All.Single(g => g.Game == game);
@@ -257,8 +341,8 @@ public static class LivingDexGames
     /// Jeux possibles pour une sauvegarde : PKHeX reconnaît Jaune, Cristal, Émeraude et Platine, mais pas Rouge de Bleu, Or
     /// d'Argent, Rubis de Saphir, Rouge Feu de Vert Feuille, Diamant de Perle ni HeartGold de SoulSilver (même format) : au
     /// joueur de choisir. Pour Rouge Feu / Vert Feuille,
-    /// PKHeX répond « Rouge Feu » faute de mieux : les deux sont toujours proposés. En 5e génération, chaque sauvegarde dit
-    /// son jeu. Aucun pour une sauvegarde d'une autre génération, ni pour Colosseum / XD.
+    /// PKHeX répond « Rouge Feu » faute de mieux : les deux sont toujours proposés. En 5e et 6e génération, chaque
+    /// sauvegarde dit son jeu. Aucun pour une sauvegarde d'une autre génération, ni pour Colosseum / XD.
     /// </summary>
     public static IReadOnlyList<LivingDexGame> For(SaveFile sav) => sav.Generation switch
     {
@@ -307,6 +391,15 @@ public static class LivingDexGames
             _ when sav is SAV5B2W2 => [LivingDexGame.Black2, LivingDexGame.White2],
             _ => [LivingDexGame.Black, LivingDexGame.White],
         },
+        6 => sav.Version switch
+        {
+            GameVersion.X => [LivingDexGame.X],
+            GameVersion.Y => [LivingDexGame.Y],
+            GameVersion.OR => [LivingDexGame.OmegaRuby],
+            GameVersion.AS => [LivingDexGame.AlphaSapphire],
+            _ when sav is SAV6AO => [LivingDexGame.OmegaRuby, LivingDexGame.AlphaSapphire],
+            _ => [LivingDexGame.X, LivingDexGame.Y],
+        },
         _ => [],
     };
 
@@ -335,22 +428,61 @@ public static class LivingDexGames
     /// la 3e génération : ni forme régionale, ni Méga-Évolution, ni Gigamax ; les formes de Morphéo n'existent qu'en combat,
     /// Deoxys a celle de son jeu (<see cref="Base"/>). À partir de la 4e, celles de <see cref="AspectForms"/> que le jeu
     /// connaît, et Shaymin Céleste à part (<see cref="LivingDexSlot.KeyItem"/>) ; Arceus et Genesect n'ont qu'une case,
-    /// quelle que soit leur Plaque ou leur Module.
+    /// quelle que soit leur Plaque ou leur Module. En 6e : Hoopa Déchaîné comme Shaymin Céleste (Vase Scellé), une case
+    /// Pikachu Cosplayeur pour tous ses costumes, une case par Méga-Évolution et Primo-Résurgence (<see cref="Megas"/>) ;
+    /// Prismillon (et ses pré-évolutions) et Couafarel n'ont qu'une case, quel que soit leur motif ou leur coupe.
     /// </summary>
     private static IEnumerable<LivingDexSlot> Forms(LivingDexGameInfo game, ushort species) => species switch
     {
         Unown when UnownForms(game) > 1 => Enumerable.Range(0, UnownForms(game)).Select(f => new LivingDexSlot(species, (byte)f)),
-        Shaymin when game.Generation >= 4 && FormCount(game, species) > 1 =>
-            [new(species, 0, AnyForm: true), new(species, 1, AnyForm: true, KeyItem: Gracidea)],
+        (Shaymin or Hoopa) when game.Generation >= 4 && FormCount(game, species) > 1 =>
+            [new(species, 0, AnyForm: true), new(species, 1, AnyForm: true, KeyItem: species == Shaymin ? Gracidea : PrisonBottle)],
         Arceus or Genesect when game.Generation >= 4 => [new(species, 0, AnyForm: true)],
+        // Pikachu Cosplayeur (Rubis Oméga / Saphir Alpha) : un seul par partie, qui change de costume (formes 1 à 6).
+        Pikachu when game.Generation == 6 && FormCount(game, species) > 1 =>
+            [new(species, 0), new(species, (byte)(FormCount(game, species) - 1), FormsFrom: 1)],
+        // Floette Éternelle (forme 5) : jamais distribuée.
+        Floette when game.Generation >= 6 => Enumerable.Range(0, 5).Select(f => new LivingDexSlot(species, (byte)f)),
         // 5e génération : seuls ceux de l'équipe prennent la saison du jeu (au chargement) ; en boîte, ils gardent la leur.
         Deerling or Sawsbuck when game.Generation == 5 =>
             Enumerable.Range(0, FormCount(game, species)).Select(f => new LivingDexSlot(species, (byte)f,
                 Hint: "à garder en boîte (dans l'équipe, il prend la saison du jeu)")),
         _ when game.Generation >= 4 && AspectForms.Contains(species) =>
             Enumerable.Range(0, FormCount(game, species)).Select(f => new LivingDexSlot(species, (byte)f)),
+        // 6e génération : n'importe quelle forme remplit la case de l'espèce (motifs de Prismillon, coupes de Couafarel,
+        // Mistigrix femelle...) ; et ses Méga-Évolutions.
+        _ when game.Generation >= 6 => [new(species, 0, AnyForm: true), .. Megas(game, species)],
         _ => [Base(game, species)],
     };
+
+    /// <summary>
+    /// Cases Méga-Évolution et Primo-Résurgence du jeu (formes de combat, que PKHeX connaît pour ce jeu) : chacune remplie
+    /// par un exemplaire de plus qui tient sa gemme (<see cref="LivingDexSlot.MegaItem"/>), ou, pour Méga-Rayquaza qui n'en a
+    /// pas, qui connaît Draco-Ascension.
+    /// </summary>
+    private static IEnumerable<LivingDexSlot> Megas(LivingDexGameInfo game, ushort species) =>
+        Enumerable.Range(1, Math.Max(0, FormCount(game, species) - 1)).Select(f => (byte)f)
+            .Where(f => FormInfo.IsMegaForm(species, f) || FormInfo.IsPrimalForm(species, f))
+            .Select(f => ItemStorage9ZA.GetExpectedMegaStoneOrPrimalOrb(species, f) is var item and > 0
+                ? new LivingDexSlot(species, f, AnyForm: true, MegaItem: (ushort)item)
+                : new LivingDexSlot(species, f, AnyForm: true, MegaMove: DragonAscent));
+
+    /// <summary>
+    /// Numéro régional de la case <paramref name="index"/> et son sous-Pokédex (Kalos : chacun recommence à 1), null sans
+    /// sous-Pokédex.
+    /// </summary>
+    public static (string? Section, int Number) RegionalNumber(LivingDexGameInfo game, int index)
+    {
+        if (game.Sections is null)
+            return (null, index + game.RegionalStart);
+        foreach (var (name, count) in game.Sections)
+        {
+            if (index < count)
+                return (name, index + game.RegionalStart);
+            index -= count;
+        }
+        return (null, index + game.RegionalStart);
+    }
 
     private static int UnownForms(LivingDexGameInfo game) => game.Generation switch { 2 => 26, >= 3 => 28, _ => 1 };
 
@@ -360,11 +492,13 @@ public static class LivingDexGames
     /// Cheniselle, mers de Sancoki et Tritosor, Motisma, Giratina Originel (tient l'Orbe Platiné) ; ces deux derniers
     /// n'existent qu'à partir de Platine. En 5e, Bargantua (motifs), et dans Noire 2 / Blanche 2 seulement les formes
     /// Totémiques de Boréas, Fulguris et Démétéros, Kyurem Blanc et Noir, Keldeo Décidé. Le nombre de formes de chaque jeu
-    /// vient de PKHeX (<see cref="FormCount"/>). Pas Morphéo, Ceriflor, Darumacho ni Meloetta : leurs formes n'existent
-    /// qu'en combat.
+    /// vient de PKHeX (<see cref="FormCount"/>). En 6e, les fleurs de Flabébé et Florges (Floette à part, sans
+    /// l'Éternelle) et les tailles de Pitrouille et Banshitrouye. Pas Morphéo, Ceriflor, Darumacho, Meloetta, Exagide ni
+    /// Xerneas : leurs formes n'existent qu'en combat ; ni Mistigrix, dont la forme est le sexe.
     /// </summary>
     private static readonly ushort[] AspectForms =
-        [Pichu, Deoxys, Burmy, Wormadam, Shellos, Gastrodon, Rotom, Giratina, Basculin, Tornadus, Thundurus, Landorus, Kyurem, Keldeo];
+        [Pichu, Deoxys, Burmy, Wormadam, Shellos, Gastrodon, Rotom, Giratina, Basculin, Tornadus, Thundurus, Landorus, Kyurem, Keldeo,
+         Deerling, Sawsbuck, Flabebe, Florges, Pumpkaboo, Gourgeist];
 
     /// <summary>Formes de l'espèce que le jeu connaît (données de PKHeX : Motisma n'en a qu'une en Diamant / Perle).</summary>
     private static int FormCount(LivingDexGameInfo game, ushort species) => (game.Game switch
@@ -373,19 +507,28 @@ public static class LivingDexGames
         LivingDexGame.Platinum => PersonalTable.Pt,
         LivingDexGame.HeartGold or LivingDexGame.SoulSilver => PersonalTable.HGSS,
         LivingDexGame.Black or LivingDexGame.White => PersonalTable.BW,
-        _ => PersonalTable.B2W2,
+        LivingDexGame.Black2 or LivingDexGame.White2 => PersonalTable.B2W2,
+        LivingDexGame.X or LivingDexGame.Y => PersonalTable.XY,
+        _ => PersonalTable.AO,
     })[species].FormCount;
 
-    /// <summary>La case est remplie par ce Pokémon : même espèce ; en Complet, même forme (sauf <see cref="LivingDexSlot.AnyForm"/>).</summary>
+    /// <summary>
+    /// La case est remplie par ce Pokémon : même espèce ; en Complet, même forme (sauf <see cref="LivingDexSlot.AnyForm"/>,
+    /// ou l'une des formes de <see cref="LivingDexSlot.FormsFrom"/> à <see cref="LivingDexSlot.Form"/>). Les cases Méga
+    /// demandent en plus la gemme (vérifiée par le service).
+    /// </summary>
     public static bool Fills(LivingDexSlot slot, ushort species, byte form, LivingDexMode mode) =>
-        species == slot.Species && (mode != LivingDexMode.Complete || slot.AnyForm || form == slot.Form);
+        species == slot.Species && (mode != LivingDexMode.Complete || slot.AnyForm || form == slot.Form
+                                    || slot.FormsFrom != 0 && form >= slot.FormsFrom && form <= slot.Form);
 
     /// <summary>
-    /// Sprite du jeu d'une case : « 201.png » (Zarbi A), « 201-b.png », « 201-question.png », « 386-speed.png » (Deoxys
-    /// Vitesse), « 492-sky.png » (Shaymin Céleste) : noms de PokéAPI, à garder en accord avec outils/images.py (LIVINGDEX_FORMS).
+    /// Sprite d'une case. Jusqu'à la 5e génération, celui du jeu : « 201.png » (Zarbi A), « 201-b.png », « 201-question.png »,
+    /// « 386-speed.png » (Deoxys Vitesse), « 492-sky.png » (Shaymin Céleste) : noms de PokéAPI, à garder en accord avec
+    /// outils/images.py (LIVINGDEX_FORMS). Ensuite, l'image de la collection (<see cref="Fallback"/>).
     /// </summary>
-    public static string Sprite(LivingDexGameInfo game, LivingDexSlot slot) =>
-        $"{game.SpriteFolder}{slot.Species}{FormSuffix(slot)}.png";
+    public static string Sprite(LivingDexGameInfo game, LivingDexSlot slot) => game.SpriteFolder is null
+        ? Fallback(game, slot)
+        : $"{game.SpriteFolder}{slot.Species}{FormSuffix(slot)}.png";
 
     private static string FormSuffix(LivingDexSlot slot) => (slot.Species, slot.Form) switch
     {
@@ -429,12 +572,16 @@ public static class LivingDexGames
         var species = FrenchStrings.specieslist[slot.Species];
         var forms = FormConverter.GetFormList(slot.Species, FrenchStrings.types, FrenchStrings.forms, GameInfo.GenderSymbolUnicode, Context(game));
         var form = slot.Form < forms.Length ? forms[slot.Form] : $"{slot.Form}";
+        if (slot.MegaItem != 0 || slot.MegaMove != 0)
+            return FormInfo.IsPrimalForm(slot.Species, slot.Form) ? $"Primo-{species}"
+                : form.EndsWith(" X") || form.EndsWith(" Y") ? $"Méga-{species} {form[^1]}" : $"Méga-{species}";
         return slot.Species switch
         {
             Unown when mode == LivingDexMode.Complete && UnownForms(game) > 1 => $"{species} {form}",
-            Burmy or Wormadam or Shellos or Gastrodon or Basculin or Deerling or Sawsbuck when mode == LivingDexMode.Complete
-                => $"{species} ({FormLabel(slot.Species, form)})",
-            Kyurem when slot.Form != 0 => $"{species} {form}",
+            Burmy or Wormadam or Shellos or Gastrodon or Basculin or Deerling or Sawsbuck or Flabebe or Floette or Florges or Pumpkaboo
+                or Gourgeist when mode == LivingDexMode.Complete => $"{species} ({FormLabel(slot.Species, form)})",
+            Kyurem or Hoopa when slot.Form != 0 => $"{species} {form}",
+            Pikachu when slot.FormsFrom != 0 => "Pikachu Cosplayeur",
             _ when slot.Form != 0 => $"{species} ({FormLabel(slot.Species, form)})",
             _ => species,
         };
@@ -446,14 +593,20 @@ public static class LivingDexGames
         Burmy or Wormadam => $"cape {form}",
         Shellos or Gastrodon => $"mer {form}",
         Basculin => $"motif {form}",
+        Flabebe or Floette or Florges => $"fleur {form}",
+        Pumpkaboo or Gourgeist => $"taille {form}",
         Pichu => "Troizépi", // PKHeX n'a que l'anglais (« Spiky »)
         Keldeo => "forme Décidée", // PKHeX : « Décidé »
         _ => form,
     };
 
-    /// <summary>Image de la même forme sur le site (formes des jeux récents), si le sprite du jeu manque.</summary>
-    public static string Fallback(LivingDexGameInfo game, LivingDexSlot slot) =>
-        PokemonSprites.Url(slot.Species, slot.Form, Context(game), female: false, heldItem: 0, shiny: false);
+    /// <summary>
+    /// Image de la même forme dans la collection : celle des cases à partir de la 6e génération, et le remplacement d'un
+    /// sprite du jeu absent avant (images pas encore récupérées). Méga par la gemme, comme un Pokémon qui la tient.
+    /// </summary>
+    public static string Fallback(LivingDexGameInfo game, LivingDexSlot slot) => slot.MegaItem != 0
+        ? PokemonSprites.Url(slot.Species, 0, Context(game), female: false, heldItem: slot.MegaItem, shiny: false) // Méga par la gemme
+        : PokemonSprites.Url(slot.Species, slot.Form, Context(game), female: false, heldItem: 0, shiny: false);
 
     private static EntityContext Context(LivingDexGameInfo game) => game.Generation switch
     {
@@ -461,7 +614,8 @@ public static class LivingDexGames
         2 => EntityContext.Gen2,
         3 => EntityContext.Gen3,
         4 => EntityContext.Gen4,
-        _ => EntityContext.Gen5,
+        5 => EntityContext.Gen5,
+        _ => EntityContext.Gen6,
     };
 
     private static readonly GameStrings FrenchStrings = GameInfo.GetStrings("fr");
@@ -554,7 +708,7 @@ public sealed class LivingDexService(
         var taken = await db.LivingDexes.Where(d => d.OwnerId == ownerId).Select(d => d.Game).ToListAsync();
         var linked = db.LivingDexes.Select(d => d.StoredSaveId);
         var saves = await db.StoredSaves.AsNoTracking()
-            .Where(s => s.OwnerId == ownerId && s.Generation <= 5 &&!linked.Contains(s.Id))
+            .Where(s => s.OwnerId == ownerId && s.Generation <= 6 &&!linked.Contains(s.Id))
             .OrderBy(s => s.UploadedAt)
             .Select(s => new { s.Id, s.GameName, s.TrainerName, s.FileName, s.Data })
             .ToListAsync();
@@ -616,21 +770,55 @@ public sealed class LivingDexService(
         return new(dex.Id, game, SaveLabel(dex.TrainerName, dex.FileName), modes, mode, entries);
     }
 
-    /// <summary>Cases d'un mode avec le Pokémon de la sauvegarde qui remplit chacune : le même comptage partout (page, vue générale).</summary>
+    /// <summary>
+    /// Cases d'un mode avec le Pokémon de la sauvegarde qui remplit chacune : le même comptage partout (page, vue générale).
+    /// Les cases Méga (<see cref="LivingDexSlot.MegaItem"/>, <see cref="LivingDexSlot.MegaMove"/>) prennent d'abord leurs
+    /// exemplaires, que les autres cases ne reprennent pas : il faut un exemplaire de plus par Méga-Évolution.
+    /// </summary>
     private static async Task<List<LivingDexEntry>> EntriesAsync(ApplicationDbContext db, LivingDexGameInfo game, int saveId, LivingDexMode mode)
     {
         var owned = await OwnedAsync(db, saveId);
         var slots = LivingDexGames.Slots(game, mode);
         var bag = slots.Any(s => s.KeyItem != 0) ? await BagItemsAsync(db, saveId) : new HashSet<int>();
+
+        var megaCopies = new Dictionary<int, OwnedCopy>(); // index de la case Méga → son exemplaire
+        for (var i = 0; i < slots.Count; i++)
+        {
+            var slot = slots[i];
+            if (slot.MegaItem == 0 && slot.MegaMove == 0)
+                continue;
+            var copy = owned.FirstOrDefault(p => p.Species == slot.Species && !megaCopies.ContainsValue(p)
+                && (slot.MegaItem != 0 ? p.HeldItem == slot.MegaItem : p.KnowsMegaMove));
+            if (copy is not null)
+                megaCopies[i] = copy;
+        }
+        var available = megaCopies.Count == 0 ? owned : owned.Except(megaCopies.Values).ToList();
+
         return slots.Select((slot, index) =>
         {
-            var (copy, note) = slot.KeyItem == 0 ? (Find(owned, slot, mode), null) : FindWithItem(owned, slot, mode, bag);
+            var (copy, note) = slot switch
+            {
+                { MegaItem: not 0 } or { MegaMove: not 0 } => (megaCopies.GetValueOrDefault(index), MegaNote(slot, megaCopies.ContainsKey(index))),
+                { KeyItem: not 0 } => FindWithItem(available, slot, mode, bag),
+                _ => (Find(available, slot, mode), null),
+            };
             if (copy is null && slot.Hint is not null)
                 note = slot.Hint;
-            return new LivingDexEntry(mode == LivingDexMode.Regional ? index + game.RegionalStart : slot.Species, slot.Species, slot.Form,
+            var (section, number) = LivingDexGames.RegionalNumber(game, index);
+            return new LivingDexEntry(mode == LivingDexMode.Regional ? number : slot.Species, slot.Species, slot.Form,
                 LivingDexGames.Name(game, slot, mode), LivingDexGames.Sprite(game, slot), copy?.Id, copy?.Location,
-                LivingDexGames.Fallback(game, slot), note);
+                LivingDexGames.Fallback(game, slot), note, mode == LivingDexMode.Regional ? section : null);
         }).ToList();
+    }
+
+    /// <summary>
+    /// Infobulle d'une case Méga : « avec Dracaufite X » ; manquante, « il faut un Dracaufeu de plus avec Dracaufite X »
+    /// (Méga-Rayquaza : « qui connaît Draco-Ascension »).
+    /// </summary>
+    private static string MegaNote(LivingDexSlot slot, bool filled)
+    {
+        var condition = slot.MegaItem != 0 ? $"avec {FrenchStrings.itemlist[slot.MegaItem]}" : $"qui connaît {FrenchStrings.movelist[slot.MegaMove]}";
+        return filled ? condition : $"il faut un {FrenchStrings.specieslist[slot.Species]} de plus {condition}";
     }
 
     public async Task<bool> DeleteAsync(string ownerId, int id)
@@ -651,15 +839,23 @@ public sealed class LivingDexService(
     }
 
     /// <summary>Pokémon de la sauvegarde qui remplit une case.</summary>
-    private sealed record OwnedCopy(int Id, ushort Species, byte Form, string? Location);
+    /// <param name="HeldItem">Objet tenu (Méga-Gemme des cases Méga).</param>
+    /// <param name="KnowsMegaMove">Rayquaza qui connaît Draco-Ascension (case Méga-Rayquaza, qui n'a pas de gemme).</param>
+    private sealed record OwnedCopy(int Id, ushort Species, byte Form, string? Location, int HeldItem, bool KnowsMegaMove);
 
     /// <summary>Pokémon de la sauvegarde (les œufs ne comptent pas), dans son ordre : équipe, puis boîtes.</summary>
-    private static async Task<List<OwnedCopy>> OwnedAsync(ApplicationDbContext db, int saveId) =>
-        await db.BankPokemon.AsNoTracking()
+    private static async Task<List<OwnedCopy>> OwnedAsync(ApplicationDbContext db, int saveId)
+    {
+        var rows = await db.BankPokemon.AsNoTracking()
             .Where(p => p.StoredSaveId == saveId && !p.IsEgg)
             .OrderBy(p => p.Position)
-            .Select(p => new OwnedCopy(p.Id, p.Species, p.Form, p.Location))
+            // Octets seulement pour les Rayquaza : leurs capacités disent s'ils peuvent méga-évoluer.
+            .Select(p => new { p.Id, p.Species, p.Form, p.Location, p.HeldItem, p.Context, Data = p.Species == LivingDexGames.Rayquaza ? p.Data : null })
             .ToListAsync();
+        return rows.Select(p => new OwnedCopy(p.Id, p.Species, p.Form, p.Location, p.HeldItem ?? 0,
+            p.Data is not null && EntityFormat.GetFromBytes(p.Data, (EntityContext)p.Context) is { } pk && pk.HasMove(LivingDexGames.DragonAscent)))
+            .ToList();
+    }
 
     /// <summary>
     /// Premier Pokémon de la sauvegarde qui remplit la case : la même espèce, sous n'importe quelle forme en Régional et
@@ -677,7 +873,7 @@ public sealed class LivingDexService(
     {
         var second = owned.Where(p => LivingDexGames.Fills(slot, p.Species, p.Form, mode)).Skip(1).FirstOrDefault();
         var itemName = FrenchStrings.itemlist[slot.KeyItem];
-        var item = $"la {itemName}"; // « la Gracidée » : seul objet de ce genre pour l'instant
+        var item = $"{(slot.KeyItem == LivingDexGames.PrisonBottle ? "le" : "la")} {itemName}"; // « la Gracidée », « le Vase Scellé »
         var species = FrenchStrings.specieslist[slot.Species];
         return (second, bag.Contains(slot.KeyItem)) switch
         {

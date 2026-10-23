@@ -259,6 +259,8 @@ button.livingdex-slot:hover { border-color: var(--bs-primary); box-shadow: 0 0 0
 .livingdex-slot img { width: 100%; aspect-ratio: 1; image-rendering: pixelated; }
 .livingdex-slot.missing { background: var(--bs-tertiary-bg); }
 .livingdex-slot.missing img { filter: brightness(0); }
+.livingdex-section { grid-column: 1 / -1; margin: .75rem 0 0; font-size: 1.1rem; }
+.livingdex-section:first-child { margin-top: 0; }
 .collection-dialog {
     position: fixed;
     z-index: 1050;

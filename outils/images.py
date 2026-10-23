@@ -16,14 +16,15 @@ Rassemble les images servies par le site, dans MonsutaPotaru/wwwroot/images/ :
 - parc/foret.png : fond du « Parc », le fond de boîte PC « Forêt » de Diamant Étincelant / Perle Scintillante (PKHeX) ;
 - livingdex/ : sprites des jeux de chaque living dex (livingdex/rouge-bleu/<numéro>.png : Super Game Boy, livingdex/jaune/ :
   Game Boy Color, livingdex/or/, argent/, cristal/, rubis-saphir/, emeraude/, rouge-feu-vert-feuille/, diamant-perle/,
-  platine/, heartgold-soulsilver/, noire-blanche/ ; PokéAPI, versions/generation-i à v/<jeu>), avec les formes qu'une
+  platine/, heartgold-soulsilver/, noire-blanche/ ; PokéAPI, versions/generation-i à v/<jeu> ; à partir de la 6e, les
+  images de pokemon/), avec les formes qu'une
   sauvegarde du jeu peut contenir (Zarbi : 201-b.png..., 201-exclamation.png, 201-question.png ; Deoxys : 386-speed.png,
   386-attack.png, 386-defense.png ; 4e génération : 412-sandy.png, 422-east.png, 479-heat.png, 487-origin.png,
   492-sky.png... ; 5e : 550-blue-striped.png, 585-summer.png, 641-therian.png, 646-black.png, 647-resolute.png...), et
   jaquettes officielles (livingdex/jaquettes/rouge.png, bleu.png, jaune.png, or.png, argent.png, cristal.png, rubis.png,
   saphir.png, emeraude.png, rouge-feu.png, vert-feuille.png, diamant.png, perle.png, platine.png, heartgold.png,
-  soulsilver.png, noire.png, blanche.png, noire-2.png, blanche-2.png : Bulbagarden Archives, versions anglaises, faute
-  de françaises).
+  soulsilver.png, noire.png, blanche.png, noire-2.png, blanche-2.png, x.png, y.png, rubis-omega.png, saphir-alpha.png :
+  Bulbagarden Archives, versions anglaises, faute de françaises).
 
 Sources des objets, dans l'ordre :
   1. PokéAPI, par nom anglais (l'apparence d'origine du site), sauf quand ce nom est porté par plusieurs objets ;
@@ -241,6 +242,7 @@ LIVINGDEX_SPRITES = {"rouge-bleu": ("generation-i/red-blue/transparent", 151), "
                      "heartgold-soulsilver": ("generation-iv/heartgold-soulsilver", 493),
                      # 5e génération : PokéAPI n'a que les sprites (fixes) de Noire / Blanche, repris par Noire 2 / Blanche 2
                      "noire-blanche": ("generation-v/black-white", 649)}
+# À partir de la 6e génération, les living dex prennent les images de la collection (pokemon/) : pas de sprites à eux.
 UNOWN_2 = {f"201-{c}": f"201-{c}" for c in "bcdefghijklmnopqrstuvwxyz"}  # Zarbi B à Z (A : 201.png)
 UNOWN_3 = {**UNOWN_2, "201-exclamation": "201-exclamation", "201-question": "201-question"}
 LIVINGDEX_FORMS = {"or": UNOWN_2, "argent": UNOWN_2, "cristal": UNOWN_2, "rubis-saphir": UNOWN_3,
@@ -275,7 +277,9 @@ LIVINGDEX_COVERS = {"rouge": "File:Red EN boxart.png", "bleu": "File:Blue EN box
                     "platine": "File:Platinum EN boxart.png", "heartgold": "File:HeartGold EN boxart.jpg",
                     "soulsilver": "File:SoulSilver EN boxart.jpg",
                     "noire": "File:Black EN boxart.png", "blanche": "File:White EN boxart.png",
-                    "noire-2": "File:Black 2 EN boxart.png", "blanche-2": "File:White 2 EN boxart.png"}
+                    "noire-2": "File:Black 2 EN boxart.png", "blanche-2": "File:White 2 EN boxart.png",
+                    "x": "File:X EN boxart.png", "y": "File:Y EN boxart.png",
+                    "rubis-omega": "File:Omega Ruby EN boxart.png", "saphir-alpha": "File:Alpha Sapphire EN boxart.png"}
 
 
 def livingdex_jobs():

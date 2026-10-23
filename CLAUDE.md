@@ -171,7 +171,8 @@ suivante), sans lister les dossiers des dépôts.
   génération a la forme de son jeu, `DeoxysForm`, case `AnyForm` ; à partir de la 4e, le nombre de formes de chaque jeu
   vient de `PersonalTable` de PKHeX (`FormCount`, liste `AspectForms`), et les règles de légalité de PKHeX disent ce
   qu'une boîte peut garder : `FormVerifier` sur GitHub), le premier numéro du Pokédex régional (`RegionalStart` : 0 pour
-  Unys), et les images dans `outils/images.py` (`LIVINGDEX_SPRITES`, `LIVINGDEX_FORMS`,
+  Unys), et les images dans `outils/images.py` (jusqu'à la 5e génération seulement : à partir de la 6e, les images de la
+  collection, `SpriteFolder` null ; l'utilisateur a trouvé les sprites 3D hideux) (`LIVINGDEX_SPRITES`, `LIVINGDEX_FORMS`,
   `LIVINGDEX_COVERS`, mêmes noms de dossiers et de fichiers que `LivingDexGames.Sprite` : « 201-b.png », « 386-speed.png »).
   Chaque forme a sa propre image (test `Complete_EachFormHasItsOwnNameAndSprite`).
 - Forme qui ne tient pas en boîte (Shaymin Céleste en 4e) : l'utilisateur ne veut pas bloquer l'équipe. Case
@@ -179,6 +180,13 @@ suivante), sans lister les dossiers des dépôts.
   stockée, `BagItemsAsync`), avec ce qui manque en infobulle (`LivingDexEntry.Note`). Conseil d'une case manquante :
   `LivingDexSlot.Hint` (saisons de Vivaldaim et Haydaim en 5e : seuls ceux de l'équipe changent de saison ; l'utilisateur
   m'a repris quand j'ai dit « même en boîte », vérifier ce genre de règle avant de l'affirmer).
+- Méga-Évolutions (6e) : cases `MegaItem` / `MegaMove`, remplies par un exemplaire **de plus** qui tient la gemme
+  (`BankPokemon.HeldItem`) ; `EntriesAsync` leur attribue leurs exemplaires d'abord, les autres cases ne les reprennent
+  pas. Gemme d'une forme : `ItemStorage9ZA.GetExpectedMegaStoneOrPrimalOrb` (formes limitées à celles du jeu,
+  `FormCount` : PKHeX connaît aussi les Méga de Légendes Z-A). Méga-Rayquaza n'a pas de gemme : Draco-Ascension, lue
+  dans les octets des seuls Rayquaza. Sous-Pokédex (Kalos) : `LivingDexGameInfo.Sections`, `RegionalNumber`.
+- L'utilisateur trouve certaines formes trop longues à rassembler : une seule case pour Prismillon (motifs), comme
+  Arceus et Genesect. Lui poser la question pour une espèce à beaucoup de formes avant de toutes les compter.
 - Les tests ne doivent **pas** exiger ces images : la CI les copie depuis le VPS, qui ne les reçoit qu'au déploiement,
   après les tests. Une nouvelle image : tester son chemin, pas sa présence.
 - Jaquettes : Bulbagarden Archives (API MediaWiki, version réduite `iiurlwidth=480`). Sur ce PC, Python refuse son

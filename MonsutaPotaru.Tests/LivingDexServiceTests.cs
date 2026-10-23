@@ -105,7 +105,78 @@ public sealed class LivingDexServiceTests : IDisposable
         Assert.Equal([LivingDexGame.Black2], LivingDexGames.For(black2!));
         Assert.Equal([LivingDexGame.Black, LivingDexGame.White], LivingDexGames.For(new SAV5BW()));
         Assert.Equal([LivingDexGame.Black2, LivingDexGame.White2], LivingDexGames.For(new SAV5B2W2()));
-        Assert.Empty(LivingDexGames.For(new SAV6XY()));
+
+        // 6e génération : chaque sauvegarde dit son jeu.
+        Assert.True(SaveUtil.TryGetSaveFile(RealSave("rubis-omega.sav"), out var omegaRuby, "rubis-omega.sav"));
+        Assert.Equal([LivingDexGame.OmegaRuby], LivingDexGames.For(omegaRuby!));
+        Assert.Equal([LivingDexGame.X, LivingDexGame.Y], LivingDexGames.For(new SAV6XY()));
+        Assert.Equal([LivingDexGame.OmegaRuby, LivingDexGame.AlphaSapphire], LivingDexGames.For(new SAV6AO()));
+        Assert.Empty(LivingDexGames.For(new SAV7SM()));
+    }
+
+    [Theory]
+    [InlineData(LivingDexGame.X, 457, 825, 30)] // Kalos (3 sous-Pokédex) ; 30 Méga
+    [InlineData(LivingDexGame.Y, 457, 825, 30)]
+    [InlineData(LivingDexGame.OmegaRuby, 211, 847, 50)] // + 18 Méga, 2 Primo, Pikachu Cosplayeur, Hoopa Déchaîné
+    [InlineData(LivingDexGame.AlphaSapphire, 211, 847, 50)]
+    public void SixthGeneration_HasItsRegion_National721_FormsAndMegas(LivingDexGame value, int regional, int complete, int megas)
+    {
+        var game = LivingDexGames.Get(value);
+        Assert.Equal([LivingDexMode.Regional, LivingDexMode.National, LivingDexMode.Complete], LivingDexGames.Modes(game));
+        Assert.Equal(regional, LivingDexGames.Slots(game, LivingDexMode.Regional).Count);
+        Assert.Equal(721, LivingDexGames.Slots(game, LivingDexMode.National).Count);
+        var slots = LivingDexGames.Slots(game, LivingDexMode.Complete);
+        Assert.Equal(complete, slots.Count);
+        Assert.Equal(megas, slots.Count(s => s.MegaItem != 0 || s.MegaMove != 0));
+        int Forms(ushort species) => slots.Count(s => s.Species == species);
+        Assert.Equal((5, 5, 5, 4, 4), (Forms(669), Forms(670), Forms(671), Forms(710), Forms(711))); // fleurs (sans l'Éternelle), tailles
+        Assert.Equal((1, 1, 1, 1, 1, 1), (Forms(666), Forms(676), Forms(678), Forms(681), Forms(716), Forms(649))); // une case chacun
+        Assert.All(slots.Where(s => s.Species is 666 or 676 or 678), s => Assert.True(s.AnyForm)); // tout motif, coupe, sexe
+        Assert.Equal((4, 4), (Forms(585), Forms(586))); // saisons, sans conseil : elles ne changent plus en 6e
+        Assert.All(slots, s => Assert.Null(s.Hint));
+        Assert.Null(game.SpriteFolder); // images de la collection
+    }
+
+    [Fact]
+    public void SixthGeneration_Megas_Kalos_AndOmegaRubyForms()
+    {
+        var x = LivingDexGames.Get(LivingDexGame.X);
+        // Kalos : Centre, Côtes, Montagnes, chacun numéroté à partir de 1.
+        Assert.Equal([("Kalos Centre", 1), ("Kalos Centre", 153), ("Kalos Côtes", 1), ("Kalos Montagnes", 151)],
+            new[] { 0, 152, 153, 456 }.Select(i => LivingDexGames.RegionalNumber(x, i)));
+        Assert.Equal(((string?)null, 1), LivingDexGames.RegionalNumber(LivingDexGames.Get(LivingDexGame.OmegaRuby), 0));
+
+        var oras = LivingDexGames.Get(LivingDexGame.OmegaRuby);
+        var slots = LivingDexGames.Slots(oras, LivingDexMode.Complete);
+        LivingDexSlot Slot(ushort species, byte form) => slots.Single(s => s.Species == species && s.Form == form);
+        string Name(LivingDexSlot s) => LivingDexGames.Name(oras, s, LivingDexMode.Complete);
+
+        var megaX = Slot(6, 1);
+        // Images de la collection : la Méga par sa gemme, comme un Dracaufeu qui tient le Dracaufite X.
+        Assert.Equal(("Méga-Dracaufeu X", PokemonSprites.Url(6, 0, EntityContext.Gen6, false, 660, false), (ushort)660),
+            (Name(megaX), LivingDexGames.Sprite(oras, megaX), megaX.MegaItem));
+        Assert.Equal("Méga-Mewtwo Y", Name(Slot(150, 2)));
+        Assert.Equal(("Primo-Kyogre", PokemonSprites.Url(382, 0, EntityContext.Gen6, false, 535, false)),
+            (Name(Slot(382, 1)), LivingDexGames.Sprite(oras, Slot(382, 1))));
+        Assert.Equal(("Méga-Rayquaza", (ushort)0, (ushort)620), (Name(Slot(384, 1)), Slot(384, 1).MegaItem, Slot(384, 1).MegaMove));
+        Assert.True(Slot(6, 0).AnyForm);
+
+        var cosplay = Slot(25, 6);
+        Assert.Equal(("Pikachu Cosplayeur", PokemonSprites.Url(25, 6, EntityContext.Gen6, false, 0, false)), (Name(cosplay), LivingDexGames.Sprite(oras, cosplay)));
+        Assert.True(LivingDexGames.Fills(cosplay, 25, 1, LivingDexMode.Complete)); // Pikachu Rockeur
+        Assert.False(LivingDexGames.Fills(Slot(25, 0), 25, 1, LivingDexMode.Complete)); // le Pikachu ordinaire, à part
+
+        var unbound = Slot(720, 1);
+        Assert.Equal(("Hoopa Déchaîné", (ushort)765), (Name(unbound), unbound.KeyItem));
+        Assert.Equal(("Flabébé (fleur Bleue)", PokemonSprites.Url(669, 3, EntityContext.Gen6, false, 0, false)),
+            (Name(Slot(669, 3)), LivingDexGames.Sprite(oras, Slot(669, 3))));
+        Assert.Equal("Banshitrouye (taille Ultra)", Name(Slot(711, 3)));
+
+        // X / Y : ni Hoopa Déchaîné, ni Pikachu Cosplayeur, ni Méga ajoutées par Rubis Oméga / Saphir Alpha (Méga-Jungko).
+        var xSlots = LivingDexGames.Slots(x, LivingDexMode.Complete);
+        Assert.Single(xSlots, s => s.Species == 720);
+        Assert.Single(xSlots, s => s.Species == 25);
+        Assert.Single(xSlots, s => s.Species == 254);
     }
 
     [Theory]
@@ -267,7 +338,8 @@ public sealed class LivingDexServiceTests : IDisposable
     [Fact]
     public void Complete_EachFormHasItsOwnNameAndSprite()
     {
-        foreach (var game in LivingDexGames.All)
+        // Sprites du jeu (jusqu'à la 5e génération) ; ensuite, ceux de la collection, qui dépendent des images présentes.
+        foreach (var game in LivingDexGames.All.Where(g => g.SpriteFolder is not null))
         {
             var slots = LivingDexGames.Slots(game, LivingDexMode.Complete);
             // Deux cases ne montrent jamais la même image : chaque forme a la sienne.
@@ -306,7 +378,7 @@ public sealed class LivingDexServiceTests : IDisposable
     public async Task Create_OnePerGame_OneSaveForOne()
     {
         var red = await Store("sacha", "rouge.sav");
-        await Store("sacha", "rubis-omega.sav"); // 6e génération : pas de living dex
+        await Store("sacha", "ultra-soleil.sav"); // 7e génération : pas de living dex
 
         var candidate = Assert.Single(await _dex.ListCandidatesAsync("sacha"));
         Assert.Equal(red, candidate.SaveId);
@@ -536,6 +608,49 @@ public sealed class LivingDexServiceTests : IDisposable
             Assert.Equal((mode, page.Owned, page.Entries.Count), (cards[1].Mode, cards[1].Owned, cards[1].Total));
         }
         Assert.Equal(276, (await _dex.ListAsync("sacha", LivingDexMode.Complete))[1].Total); // 251 + 25 lettres de Zarbi
+    }
+
+    [Fact]
+    public async Task OmegaRuby_MegaNeedsOneMoreCopyWithItsStone()
+    {
+        var save = await Store("sacha", "rubis-omega.sav");
+        Assert.Equal([LivingDexGame.OmegaRuby], Assert.Single(await _dex.ListCandidatesAsync("sacha")).Games);
+        var id = (await _dex.CreateAsync("sacha", save, LivingDexGame.OmegaRuby)).Id!.Value;
+
+        var hoenn = (await _dex.GetAsync("sacha", id, LivingDexMode.Regional))!;
+        Assert.Equal((211, 1, (ushort)252), (hoenn.Entries.Count, hoenn.Entries[0].Number, hoenn.Entries[0].Species));
+        Assert.All(hoenn.Entries, e => Assert.Null(e.Section));
+
+        // Un seul Mysdibule, qui tient la Mysdibulite : il remplit la case Méga, la case Mysdibule attend un autre exemplaire.
+        var complete = (await _dex.GetAsync("sacha", id, LivingDexMode.Complete))!;
+        Assert.Equal(847, complete.Entries.Count);
+        var mawile = complete.Entries.Where(e => e.Species == 303).ToList();
+        Assert.Equal(["Mysdibule", "Méga-Mysdibule"], mawile.Select(e => e.Name));
+        Assert.Equal((false, true), (mawile[0].Owned, mawile[1].Owned));
+        Assert.Equal("avec Mysdibulite", mawile[1].Note);
+        var national = (await _dex.GetAsync("sacha", id))!;
+        Assert.True(national.Entries.Single(e => e.Species == 303).Owned); // en National, un Mysdibule suffit
+
+        // Méga manquante : ce qu'il faut ; Pikachu Rockeur remplit la case Pikachu Cosplayeur.
+        Assert.Equal("il faut un Dracaufeu de plus avec Dracaufite X", complete.Entries.Single(e => e.Name == "Méga-Dracaufeu X").Note);
+        // Le Rayquaza de la sauvegarde connaît Draco-Ascension : il remplit Méga-Rayquaza.
+        var megaRayquaza = complete.Entries.Single(e => e.Name == "Méga-Rayquaza");
+        Assert.Equal((true, "qui connaît Draco-Ascension"), (megaRayquaza.Owned, megaRayquaza.Note));
+        Assert.True(complete.Entries.Single(e => e.Name == "Pikachu Cosplayeur").Owned);
+        Assert.Equal("il faut un deuxième Hoopa et le Vase Scellé dans le sac", complete.Entries.Single(e => e.Name == "Hoopa Déchaîné").Note);
+    }
+
+    [Fact]
+    public async Task Kalos_ShowsItsThreeSections()
+    {
+        // Pas de vraie sauvegarde X / Y : celle de Rubis Oméga ne peut pas en être une.
+        var save = await Store("sacha", "rubis-omega.sav");
+        Assert.Equal("Cette sauvegarde n'est pas une partie de Pokémon X.", (await _dex.CreateAsync("sacha", save, LivingDexGame.X)).Message);
+        var x = LivingDexGames.Get(LivingDexGame.X);
+        Assert.Equal(["Kalos Centre", "Kalos Côtes", "Kalos Montagnes"], x.Sections!.Select(s => s.Name));
+        Assert.Equal(457, x.Sections!.Sum(s => s.Count));
+        Assert.Equal(457, x.Regional.Distinct().Count()); // aucun Pokémon dans deux sous-Pokédex
+        Assert.Equal("images/livingdex/jaquettes/rubis-omega.png", LivingDexGames.Get(LivingDexGame.OmegaRuby).Cover);
     }
 
     [Fact]

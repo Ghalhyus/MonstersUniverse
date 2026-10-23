@@ -23,6 +23,10 @@ public enum LivingDexGame
     White = 18,
     Black2 = 19,
     White2 = 20,
+    X = 21,
+    Y = 22,
+    OmegaRuby = 23,
+    AlphaSapphire = 24,
 }
 
 /// <summary>

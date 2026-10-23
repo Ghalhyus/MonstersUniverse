@@ -88,10 +88,17 @@ else if (view is not null)
         <p class="text-muted">Aucun Pokémon de ce living dex dans la sauvegarde pour l'instant.</p>
     }
     <div class="livingdex-grid" style="--columns: @columns">
+        @{ string? section = null; }
         @foreach (var entry in view.Entries.Where(Shown))
         {
             var e = entry;
-            var number = view.Mode == LivingDexMode.Regional ? $"{view.Game.Region} #{e.Number:000} {e.Name} (national #{e.Species:000})" : $"#{e.Number:000} {e.Name}";
+            @* Sous-Pokédex (Kalos Centre, Côtes, Montagnes) : un titre sur toute la largeur avant son premier Pokémon affiché. *@
+            @if (e.Section is not null && e.Section != section)
+            {
+                section = e.Section;
+                <h2 class="livingdex-section">@e.Section</h2>
+            }
+            var number = view.Mode == LivingDexMode.Regional ? $"{e.Section ?? view.Game.Region} #{e.Number:000} {e.Name} (national #{e.Species:000})" : $"#{e.Number:000} {e.Name}";
             var title = $"{number} — {(e.Owned ? e.Location ?? "dans la sauvegarde" : "manquant")}"
                 + (e.Note is null ? "" : e.Owned ? $" · {e.Note}" : $" : {e.Note}");
             @if (e.Owned)
