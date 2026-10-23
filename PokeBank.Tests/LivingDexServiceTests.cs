@@ -9,7 +9,8 @@ namespace PokeBank.Tests;
 /// <summary>
 /// Living dex : un exemplaire de chaque Pokémon du Pokédex d'un jeu, compté dans une sauvegarde stockée (1re génération :
 /// Rouge, Bleu, Jaune ; 2e : Or, Argent, Cristal ; 3e : Rubis, Saphir, Émeraude, Rouge Feu, Vert Feuille ; 4e : Diamant,
-/// Perle, Platine, HeartGold, SoulSilver). Vraies sauvegardes de Rouge, Bleu, Argent et SoulSilver (PokeBank.Tests/Sauvegardes).
+/// Perle, Platine, HeartGold, SoulSilver ; 5e : Noire, Blanche, Noire 2, Blanche 2). Vraies sauvegardes de Rouge, Bleu,
+/// Argent, SoulSilver, Noire et Noire 2 (PokeBank.Tests/Sauvegardes).
 /// </summary>
 public sealed class LivingDexServiceTests : IDisposable
 {
@@ -96,7 +97,70 @@ public sealed class LivingDexServiceTests : IDisposable
         Assert.Equal([LivingDexGame.Diamond, LivingDexGame.Pearl], LivingDexGames.For(new SAV4DP()));
         Assert.True(SaveUtil.TryGetSaveFile(RealSave("soulsilver.sav"), out var soulSilver, "soulsilver.sav"));
         Assert.Equal([LivingDexGame.HeartGold, LivingDexGame.SoulSilver], LivingDexGames.For(soulSilver!));
-        Assert.Empty(LivingDexGames.For(new SAV5B2W2()));
+
+        // 5e génération : chaque sauvegarde dit son jeu ; une sauvegarde vide de PKHeX (« Any ») propose les deux de son format.
+        Assert.True(SaveUtil.TryGetSaveFile(RealSave("noir.sav"), out var black, "noir.sav"));
+        Assert.Equal([LivingDexGame.Black], LivingDexGames.For(black!));
+        Assert.True(SaveUtil.TryGetSaveFile(RealSave("noire-2.sav"), out var black2, "noire-2.sav"));
+        Assert.Equal([LivingDexGame.Black2], LivingDexGames.For(black2!));
+        Assert.Equal([LivingDexGame.Black, LivingDexGame.White], LivingDexGames.For(new SAV5BW()));
+        Assert.Equal([LivingDexGame.Black2, LivingDexGame.White2], LivingDexGames.For(new SAV5B2W2()));
+        Assert.Empty(LivingDexGames.For(new SAV6XY()));
+    }
+
+    [Theory]
+    [InlineData(LivingDexGame.Black, 156, 699)] // 649 + 27 lettres de Zarbi, 3 Deoxys, 2 × 2 capes, 2 mers, 5 Motisma,
+    [InlineData(LivingDexGame.White, 156, 699)] // Giratina, Shaymin, Bargantua Bleu, 2 × 3 saisons
+    [InlineData(LivingDexGame.Black2, 301, 705)] // + 3 formes Totémiques, Kyurem Blanc et Noir, Keldeo Décidé
+    [InlineData(LivingDexGame.White2, 301, 705)]
+    public void FifthGeneration_HasUnova_National649_AndTheFormsOfTheGame(LivingDexGame value, int regional, int complete)
+    {
+        var game = LivingDexGames.Get(value);
+        Assert.Equal([LivingDexMode.Regional, LivingDexMode.National, LivingDexMode.Complete], LivingDexGames.Modes(game));
+        var unova = LivingDexGames.Slots(game, LivingDexMode.Regional);
+        Assert.Equal(regional, unova.Count);
+        Assert.Equal((494, 649), (unova[0].Species, unova[^1].Species)); // Victini (n° 0), Genesect
+        Assert.Equal((0, "Unys"), (game.RegionalStart, game.Region));
+        Assert.Equal(649, LivingDexGames.Slots(game, LivingDexMode.National).Count);
+
+        var slots = LivingDexGames.Slots(game, LivingDexMode.Complete);
+        Assert.Equal(complete, slots.Count);
+        int Forms(ushort species) => slots.Count(s => s.Species == species);
+        Assert.Equal((28, 4, 6, 2, 2, 4, 4), (Forms(201), Forms(386), Forms(479), Forms(492), Forms(550), Forms(585), Forms(586)));
+        Assert.Equal((1, 1, 1, 1, 1), (Forms(172), Forms(351), Forms(421), Forms(555), Forms(648))); // Pichu ; formes de combat
+        Assert.True(Assert.Single(slots, s => s.Species == 649).AnyForm); // Genesect : une case, quel que soit son Module
+        Assert.True(Assert.Single(slots, s => s.Species == 493).AnyForm);
+        var b2w2 = value is LivingDexGame.Black2 or LivingDexGame.White2;
+        Assert.Equal(b2w2 ? (2, 2, 2, 3, 2) : (1, 1, 1, 1, 1), (Forms(641), Forms(642), Forms(645), Forms(646), Forms(647)));
+        Assert.Equal("images/livingdex/noire-blanche/", game.SpriteFolder);
+    }
+
+    [Fact]
+    public void FifthGeneration_FormNames_Sprites_AndSeasons()
+    {
+        var game = LivingDexGames.Get(LivingDexGame.White2);
+        var slots = LivingDexGames.Slots(game, LivingDexMode.Complete);
+        LivingDexSlot Slot(ushort species, byte form) => slots.Single(s => s.Species == species && s.Form == form);
+        string Name(ushort species, byte form) => LivingDexGames.Name(game, Slot(species, form), LivingDexMode.Complete);
+        string Sprite(ushort species, byte form) => LivingDexGames.Sprite(game, Slot(species, form));
+
+        Assert.Equal(("Bargantua (motif Rouge)", "Bargantua (motif Bleu)", "images/livingdex/noire-blanche/550-blue-striped.png"),
+            (Name(550, 0), Name(550, 1), Sprite(550, 1)));
+        Assert.Equal(("Vivaldaim (forme Printemps)", "Haydaim (forme Hiver)", "images/livingdex/noire-blanche/586-winter.png"),
+            (Name(585, 0), Name(586, 3), Sprite(586, 3)));
+        Assert.Equal(("Boréas", "Boréas (forme Totémique)", "images/livingdex/noire-blanche/641-therian.png"),
+            (Name(641, 0), Name(641, 1), Sprite(641, 1)));
+        Assert.Equal(("Kyurem Blanc", "Kyurem Noir", "images/livingdex/noire-blanche/646-white.png", "images/livingdex/noire-blanche/646-black.png"),
+            (Name(646, 1), Name(646, 2), Sprite(646, 1), Sprite(646, 2)));
+        Assert.Equal(("Keldeo (forme Décidée)", "images/livingdex/noire-blanche/647-resolute.png"), (Name(647, 1), Sprite(647, 1)));
+        Assert.Equal("Vivaldaim", LivingDexGames.Name(game, new(585, 0), LivingDexMode.National)); // la saison seulement en Complet
+
+        // Saisons : chacune a sa case (en boîte, elles se gardent), avec un conseil tant qu'elle manque.
+        Assert.All(slots.Where(s => s.Species is 585 or 586), s => Assert.Equal("à garder en boîte (dans l'équipe, il prend la saison du jeu)", s.Hint));
+        Assert.Null(Slot(550, 1).Hint);
+        Assert.Equal("images/livingdex/jaquettes/blanche-2.png", game.Cover);
+        Assert.Equal(["Pokémon Noire", "Pokémon Blanche", "Pokémon Noire 2", "Pokémon Blanche 2"],
+            LivingDexGames.All.Where(g => g.Generation == 5).Select(g => g.Name));
     }
 
     [Theory]
@@ -395,6 +459,44 @@ public sealed class LivingDexServiceTests : IDisposable
         // Complet : le Zarbi de la sauvegarde (D) ne remplit que sa lettre.
         var complete = (await _dex.GetAsync("sacha", id, LivingDexMode.Complete))!;
         Assert.Equal(["Zarbi D"], complete.Entries.Where(e => e.Species == 201 && e.Owned).Select(e => e.Name));
+    }
+
+    [Fact]
+    public async Task Unova_StartsAtZero_AndSeasonsGiveAHint()
+    {
+        var save = await Store("sacha", "noir.sav");
+        var candidate = Assert.Single(await _dex.ListCandidatesAsync("sacha"));
+        Assert.Equal([LivingDexGame.Black], candidate.Games);
+        var id = (await _dex.CreateAsync("sacha", save, LivingDexGame.Black)).Id!.Value;
+
+        var unova = (await _dex.GetAsync("sacha", id, LivingDexMode.Regional))!;
+        Assert.Equal(156, unova.Entries.Count);
+        Assert.Equal((0, (ushort)494, "Victini"), (unova.Entries[0].Number, unova.Entries[0].Species, unova.Entries[0].Name));
+        Assert.Equal((155, (ushort)649), (unova.Entries[^1].Number, unova.Entries[^1].Species));
+        Assert.Equal("images/livingdex/noire-blanche/494.png", unova.Entries[0].Sprite);
+        var national = (await _dex.GetAsync("sacha", id))!;
+        Assert.True(national.Owned > 0);
+
+        // La sauvegarde a un Haydaim d'Automne en boîte : il remplit sa saison, les trois autres manquent avec le conseil.
+        var complete = (await _dex.GetAsync("sacha", id, LivingDexMode.Complete))!;
+        var sawsbuck = complete.Entries.Where(e => e.Species == 586).ToList();
+        Assert.Equal([false, false, true, false], sawsbuck.Select(e => e.Owned));
+        Assert.Equal((string?)null, sawsbuck[2].Note);
+        Assert.All(sawsbuck.Where(e => !e.Owned), e => Assert.Equal("à garder en boîte (dans l'équipe, il prend la saison du jeu)", e.Note));
+    }
+
+    [Fact]
+    public async Task Black2_CountsItsPokemon()
+    {
+        var save = await Store("sacha", "noire-2.sav");
+        Assert.Equal([LivingDexGame.Black2], Assert.Single(await _dex.ListCandidatesAsync("sacha")).Games);
+        var id = (await _dex.CreateAsync("sacha", save, LivingDexGame.Black2)).Id!.Value;
+
+        var national = (await _dex.GetAsync("sacha", id))!;
+        Assert.Equal(59, national.Owned); // 60 Pokémon, 59 espèces
+        var unova = (await _dex.GetAsync("sacha", id, LivingDexMode.Regional))!;
+        Assert.Equal(301, unova.Entries.Count);
+        Assert.Equal((300, (ushort)649), (unova.Entries[^1].Number, unova.Entries[^1].Species));
     }
 
     [Fact]

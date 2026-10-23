@@ -165,14 +165,17 @@ suivante), sans lister les dossiers des dépôts.
   distingue pas Rouge de Bleu, Or d'Argent, Rubis de Saphir, Rouge Feu de Vert Feuille, Diamant de Perle ni HeartGold de
   SoulSilver), les formes du mode Complet (`Forms` : régionales, Méga, Gigamax, d'aspect, lettres de Zarbi ; pas le sexe ;
   **seulement celles qu'une sauvegarde du jeu peut contenir** : les formes de Morphéo n'existent qu'en combat, Deoxys de 3e
-  génération a la forme de son jeu, `DeoxysForm`, case `AnyForm` ; en 4e, le nombre de formes de chaque jeu vient de
-  `PersonalTable` de PKHeX, et les règles de légalité de PKHeX disent ce qu'une boîte peut garder : `FormVerifier` sur
-  GitHub), et les images dans `outils/images.py` (`LIVINGDEX_SPRITES`, `LIVINGDEX_FORMS`,
+  génération a la forme de son jeu, `DeoxysForm`, case `AnyForm` ; à partir de la 4e, le nombre de formes de chaque jeu
+  vient de `PersonalTable` de PKHeX (`FormCount`, liste `AspectForms`), et les règles de légalité de PKHeX disent ce
+  qu'une boîte peut garder : `FormVerifier` sur GitHub), le premier numéro du Pokédex régional (`RegionalStart` : 0 pour
+  Unys), et les images dans `outils/images.py` (`LIVINGDEX_SPRITES`, `LIVINGDEX_FORMS`,
   `LIVINGDEX_COVERS`, mêmes noms de dossiers et de fichiers que `LivingDexGames.Sprite` : « 201-b.png », « 386-speed.png »).
   Chaque forme a sa propre image (test `Complete_EachFormHasItsOwnNameAndSprite`).
 - Forme qui ne tient pas en boîte (Shaymin Céleste en 4e) : l'utilisateur ne veut pas bloquer l'équipe. Case
   `KeyItem` : remplie par un **deuxième** exemplaire de l'espèce et l'objet rare dans le sac (lu dans la sauvegarde
-  stockée, `BagItemsAsync`), avec ce qui manque en infobulle (`LivingDexEntry.Note`).
+  stockée, `BagItemsAsync`), avec ce qui manque en infobulle (`LivingDexEntry.Note`). Conseil d'une case manquante :
+  `LivingDexSlot.Hint` (saisons de Vivaldaim et Haydaim en 5e : seuls ceux de l'équipe changent de saison ; l'utilisateur
+  m'a repris quand j'ai dit « même en boîte », vérifier ce genre de règle avant de l'affirmer).
 - Les tests ne doivent **pas** exiger ces images : la CI les copie depuis le VPS, qui ne les reçoit qu'au déploiement,
   après les tests. Une nouvelle image : tester son chemin, pas sa présence.
 - Jaquettes : Bulbagarden Archives (API MediaWiki, version réduite `iiurlwidth=480`). Sur ce PC, Python refuse son

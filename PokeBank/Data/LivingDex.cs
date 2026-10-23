@@ -19,6 +19,10 @@ public enum LivingDexGame
     Platinum = 14,
     HeartGold = 15,
     SoulSilver = 16,
+    Black = 17,
+    White = 18,
+    Black2 = 19,
+    White2 = 20,
 }
 
 /// <summary>

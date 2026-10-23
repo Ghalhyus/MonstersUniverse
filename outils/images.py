@@ -16,12 +16,14 @@ Rassemble les images servies par le site, dans PokeBank/wwwroot/images/ :
 - parc/foret.png : fond du « Parc », le fond de boîte PC « Forêt » de Diamant Étincelant / Perle Scintillante (PKHeX) ;
 - livingdex/ : sprites des jeux de chaque living dex (livingdex/rouge-bleu/<numéro>.png : Super Game Boy, livingdex/jaune/ :
   Game Boy Color, livingdex/or/, argent/, cristal/, rubis-saphir/, emeraude/, rouge-feu-vert-feuille/, diamant-perle/,
-  platine/, heartgold-soulsilver/ ; PokéAPI, versions/generation-i à iv/<jeu>), avec les formes qu'une sauvegarde du jeu
-  peut contenir (Zarbi : 201-b.png..., 201-exclamation.png, 201-question.png ; Deoxys : 386-speed.png, 386-attack.png,
-  386-defense.png ; 4e génération : 412-sandy.png, 422-east.png, 479-heat.png, 487-origin.png, 492-sky.png...), et
+  platine/, heartgold-soulsilver/, noire-blanche/ ; PokéAPI, versions/generation-i à v/<jeu>), avec les formes qu'une
+  sauvegarde du jeu peut contenir (Zarbi : 201-b.png..., 201-exclamation.png, 201-question.png ; Deoxys : 386-speed.png,
+  386-attack.png, 386-defense.png ; 4e génération : 412-sandy.png, 422-east.png, 479-heat.png, 487-origin.png,
+  492-sky.png... ; 5e : 550-blue-striped.png, 585-summer.png, 641-therian.png, 646-black.png, 647-resolute.png...), et
   jaquettes officielles (livingdex/jaquettes/rouge.png, bleu.png, jaune.png, or.png, argent.png, cristal.png, rubis.png,
   saphir.png, emeraude.png, rouge-feu.png, vert-feuille.png, diamant.png, perle.png, platine.png, heartgold.png,
-  soulsilver.png : Bulbagarden Archives, versions anglaises, faute de françaises).
+  soulsilver.png, noire.png, blanche.png, noire-2.png, blanche-2.png : Bulbagarden Archives, versions anglaises, faute
+  de françaises).
 
 Sources des objets, dans l'ordre :
   1. PokéAPI, par nom anglais (l'apparence d'origine du site), sauf quand ce nom est porté par plusieurs objets ;
@@ -236,7 +238,9 @@ LIVINGDEX_SPRITES = {"rouge-bleu": ("generation-i/red-blue/transparent", 151), "
                      "rubis-saphir": ("generation-iii/ruby-sapphire", 386), "emeraude": ("generation-iii/emerald", 386),
                      "rouge-feu-vert-feuille": ("generation-iii/firered-leafgreen", 386),
                      "diamant-perle": ("generation-iv/diamond-pearl", 493), "platine": ("generation-iv/platinum", 493),
-                     "heartgold-soulsilver": ("generation-iv/heartgold-soulsilver", 493)}
+                     "heartgold-soulsilver": ("generation-iv/heartgold-soulsilver", 493),
+                     # 5e génération : PokéAPI n'a que les sprites (fixes) de Noire / Blanche, repris par Noire 2 / Blanche 2
+                     "noire-blanche": ("generation-v/black-white", 649)}
 UNOWN_2 = {f"201-{c}": f"201-{c}" for c in "bcdefghijklmnopqrstuvwxyz"}  # Zarbi B à Z (A : 201.png)
 UNOWN_3 = {**UNOWN_2, "201-exclamation": "201-exclamation", "201-question": "201-question"}
 LIVINGDEX_FORMS = {"or": UNOWN_2, "argent": UNOWN_2, "cristal": UNOWN_2, "rubis-saphir": UNOWN_3,
@@ -251,8 +255,16 @@ UNOWN_DEOXYS_4 = {**UNOWN_3, "386-attack": "10001", "386-defense": "10002", "386
                   "422-east": "422-east", "423-east": "423-east"}
 PLATINUM_4 = {**UNOWN_DEOXYS_4, "479-heat": "10008", "479-wash": "10009", "479-frost": "10010", "479-fan": "10011",
               "479-mow": "10012", "487-origin": "10007", "492-sky": "10006"}
+# 5e génération (Pichu Troizépi ne la rejoint pas) : motif Bleu de Bargantua (550, 10016), saisons de Vivaldaim (585) et
+# Haydaim (586) ; Noire 2 / Blanche 2 ajoutent les formes Totémiques de Boréas, Fulguris, Démétéros (10019 à 10021),
+# Kyurem Noir et Blanc (10022, 10023) et Keldeo Décidé (10024) : un seul dossier pour les quatre jeux.
+UNOVA_5 = {**PLATINUM_4, "550-blue-striped": "10016",
+           **{f"{n}-{s}": f"{n}-{s}" for n in (585, 586) for s in ("summer", "autumn", "winter")},
+           "641-therian": "10019", "642-therian": "10020", "645-therian": "10021",
+           "646-black": "10022", "646-white": "10023", "647-resolute": "10024"}
 LIVINGDEX_FORMS.update({"diamant-perle": UNOWN_DEOXYS_4, "platine": PLATINUM_4,
-                        "heartgold-soulsilver": {**PLATINUM_4, "172-spiky-eared": "172-spiky-eared"}})
+                        "heartgold-soulsilver": {**PLATINUM_4, "172-spiky-eared": "172-spiky-eared"},
+                        "noire-blanche": UNOVA_5})
 # (Émeraude, Diamant, Perle, HeartGold, SoulSilver : le fichier de Bulbagarden est un JPEG ; le site le garde en .png comme
 # les autres, le navigateur le lit quand même.)
 LIVINGDEX_COVERS = {"rouge": "File:Red EN boxart.png", "bleu": "File:Blue EN boxart.png", "jaune": "File:Yellow EN boxart.png",
@@ -261,7 +273,9 @@ LIVINGDEX_COVERS = {"rouge": "File:Red EN boxart.png", "bleu": "File:Blue EN box
                     "rouge-feu": "File:FireRed EN boxart.png", "vert-feuille": "File:LeafGreen EN boxart.png",
                     "diamant": "File:Diamond EN boxart.jpg", "perle": "File:Pearl EN boxart.jpg",
                     "platine": "File:Platinum EN boxart.png", "heartgold": "File:HeartGold EN boxart.jpg",
-                    "soulsilver": "File:SoulSilver EN boxart.jpg"}
+                    "soulsilver": "File:SoulSilver EN boxart.jpg",
+                    "noire": "File:Black EN boxart.png", "blanche": "File:White EN boxart.png",
+                    "noire-2": "File:Black 2 EN boxart.png", "blanche-2": "File:White 2 EN boxart.png"}
 
 
 def livingdex_jobs():
