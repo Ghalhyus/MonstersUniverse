@@ -15,7 +15,8 @@ public enum LivingDexMode
     /// Chaque forme de chaque Pokémon du national : formes régionales, Méga-Évolutions, Gigamax, formes qui changent
     /// l'aspect (Sancoki / Tritosor, Zarbi...) ; pas le sexe. Seules les formes qu'une sauvegarde du jeu peut contenir
     /// comptent : aucune en 1re génération, les lettres de Zarbi en 2e et 3e (les formes de Morphéo n'existent qu'en
-    /// combat ; Deoxys a la forme de son jeu, voir <see cref="LivingDexGameInfo.DeoxysForm"/>).
+    /// combat ; Deoxys a la forme de son jeu, voir <see cref="LivingDexGameInfo.DeoxysForm"/>), celles de
+    /// <see cref="LivingDexGames"/> (« Forms ») en 4e.
     /// </summary>
     Complete,
 }
@@ -35,8 +36,13 @@ public sealed record LivingDexGameInfo(LivingDexGame Game, string Name, string C
     string Region, IReadOnlyList<ushort> Regional, ushort NationalMax, byte DeoxysForm = 0);
 
 /// <summary>Une case du living dex : un Pokémon (et sa forme) demandé par le mode.</summary>
-/// <param name="AnyForm">Remplie par n'importe quelle forme de l'espèce, même en Complet (Deoxys de 3e génération).</param>
-public sealed record LivingDexSlot(ushort Species, byte Form, bool AnyForm = false);
+/// <param name="AnyForm">Remplie par n'importe quelle forme de l'espèce, même en Complet (Deoxys de 3e génération, Arceus).</param>
+/// <param name="KeyItem">
+/// Case remplie par un <b>autre</b> exemplaire de l'espèce que celui de la case précédente, avec cet objet rare dans le
+/// sac de la sauvegarde : Shaymin Forme Céleste (Gracidée), qui redevient Terrestre dans une boîte en 4e génération ; un
+/// second Shaymin et la Gracidée suffisent, sans le bloquer dans l'équipe.
+/// </param>
+public sealed record LivingDexSlot(ushort Species, byte Form, bool AnyForm = false, ushort KeyItem = 0);
 
 /// <summary>Case du living dex avec le Pokémon de la sauvegarde qui la remplit, s'il y en a un.</summary>
 /// <param name="Number">Numéro affiché : celui du Pokédex régional en mode Régional (Germignon : 1 à Johto), sinon le national.</param>
@@ -45,8 +51,9 @@ public sealed record LivingDexSlot(ushort Species, byte Form, bool AnyForm = fal
 /// <param name="BankId">Pokémon de la sauvegarde (sa fiche), null : manquant.</param>
 /// <param name="Location">« Boîte 3, case 12 », « Équipe 2 ».</param>
 /// <param name="Fallback">Image de la même forme sur le site, si le sprite du jeu manque (images pas encore récupérées).</param>
+/// <param name="Note">Condition de la case (<see cref="LivingDexSlot.KeyItem"/>) : « Gracidée dans le sac », « il faut un deuxième Shaymin ».</param>
 public sealed record LivingDexEntry(int Number, ushort Species, byte Form, string Name, string Sprite, int? BankId, string? Location,
-    string Fallback = "")
+    string Fallback = "", string? Note = null)
 {
     public bool Owned => BankId is not null;
 }
@@ -64,7 +71,7 @@ public sealed record LivingDexCandidate(int SaveId, string Label, IReadOnlyList<
 
 public sealed record LivingDexResult(bool Ok, string Message, int? Id = null);
 
-/// <summary>Jeux qui ont un living dex : 1re à 3e génération pour l'instant.</summary>
+/// <summary>Jeux qui ont un living dex : 1re à 4e génération pour l'instant.</summary>
 public static class LivingDexGames
 {
     private static readonly ushort[] Kanto = Enumerable.Range(1, 151).Select(n => (ushort)n).ToArray();
@@ -88,7 +95,11 @@ public static class LivingDexGames
         251,
     ];
 
-    private const ushort Unown = 201, Deoxys = 386;
+    private const ushort Pichu = 172, Unown = 201, Deoxys = 386, Burmy = 412, Wormadam = 413, Shellos = 422, Gastrodon = 423,
+        Rotom = 479, Giratina = 487, Shaymin = 492, Arceus = 493;
+
+    /// <summary>Gracidée : objet rare qui donne à Shaymin sa Forme Céleste.</summary>
+    private const ushort Gracidea = 466;
 
     /// <summary>
     /// Pokédex de Hoenn de Rubis, Saphir et Émeraude : 202 Pokémon, dans l'ordre du jeu (Arcko d'abord, Jirachi et Deoxys
@@ -105,6 +116,57 @@ public static class LivingDexGames
         355, 356, 357, 358, 359, 37, 38, 172, 25, 26, 54, 55, 360, 202, 177, 178, 203, 231, 232, 127, 214, 111, 112, 361,
         362, 363, 364, 365, 366, 367, 368, 369, 222, 170, 171, 370, 116, 117, 230, 371, 372, 373, 374, 375, 376, 377, 378, 379,
         380, 381, 382, 383, 384, 385, 386,
+    ];
+
+    /// <summary>
+    /// Pokédex de Sinnoh de Diamant et Perle : 151 Pokémon (Tortipouss d'abord, Manaphy à la fin). Repris des données de
+    /// PokéAPI (pokemon_dex_numbers.csv, Pokédex 5 « original-sinnoh »).
+    /// </summary>
+    private static readonly ushort[] Sinnoh =
+    [
+        387, 388, 389, 390, 391, 392, 393, 394, 395, 396, 397, 398, 399, 400, 401, 402, 403, 404, 405, 63, 64, 65, 129, 130, 406,
+        315, 407, 41, 42, 169, 74, 75, 76, 95, 208, 408, 409, 410, 411, 66, 67, 68, 54, 55, 412, 413, 414, 265, 266, 267,
+        268, 269, 415, 416, 417, 418, 419, 420, 421, 422, 423, 214, 190, 424, 425, 426, 427, 428, 92, 93, 94, 200, 429, 198, 430,
+        431, 432, 118, 119, 339, 340, 433, 358, 434, 435, 307, 308, 436, 437, 77, 78, 438, 185, 439, 122, 440, 113, 242, 173, 35,
+        36, 441, 172, 25, 26, 163, 164, 442, 443, 444, 445, 446, 143, 201, 447, 448, 194, 195, 278, 279, 203, 449, 450, 298, 183,
+        184, 451, 452, 453, 454, 455, 223, 224, 456, 457, 72, 73, 349, 350, 458, 226, 459, 460, 215, 461, 480, 481, 482, 483, 484,
+        490,
+    ];
+
+    /// <summary>
+    /// Pokédex de Sinnoh de Platine, agrandi : 210 Pokémon (Giratina à la fin). Repris des données de PokéAPI
+    /// (pokemon_dex_numbers.csv, Pokédex 6 « extended-sinnoh »).
+    /// </summary>
+    private static readonly ushort[] SinnohPlatinum =
+    [
+        387, 388, 389, 390, 391, 392, 393, 394, 395, 396, 397, 398, 399, 400, 401, 402, 403, 404, 405, 63, 64, 65, 129, 130, 406,
+        315, 407, 41, 42, 169, 74, 75, 76, 95, 208, 408, 409, 410, 411, 66, 67, 68, 54, 55, 412, 413, 414, 265, 266, 267,
+        268, 269, 415, 416, 417, 418, 419, 420, 421, 422, 423, 214, 190, 424, 425, 426, 427, 428, 92, 93, 94, 200, 429, 198, 430,
+        431, 432, 118, 119, 339, 340, 433, 358, 434, 435, 307, 308, 436, 437, 77, 78, 438, 185, 439, 122, 440, 113, 242, 173, 35,
+        36, 441, 172, 25, 26, 163, 164, 442, 443, 444, 445, 446, 143, 201, 447, 448, 194, 195, 278, 279, 203, 449, 450, 298, 183,
+        184, 451, 452, 453, 454, 455, 223, 224, 456, 457, 72, 73, 349, 350, 458, 226, 459, 460, 215, 461, 480, 481, 482, 483, 484,
+        490, 479, 207, 472, 299, 476, 280, 281, 282, 475, 108, 463, 133, 134, 135, 136, 196, 197, 470, 471, 333, 334, 175, 176, 468,
+        228, 229, 81, 82, 462, 114, 465, 193, 469, 357, 111, 112, 464, 355, 356, 477, 137, 233, 474, 123, 212, 239, 125, 466, 240,
+        126, 467, 220, 221, 473, 361, 362, 478, 359, 487,
+    ];
+
+    /// <summary>
+    /// Pokédex de Johto de HeartGold et SoulSilver : 256 Pokémon (Germignon d'abord, Celebi à la fin). Repris des données
+    /// de PokéAPI (pokemon_dex_numbers.csv, Pokédex 7 « updated-johto »).
+    /// </summary>
+    private static readonly ushort[] JohtoHgss =
+    [
+        152, 153, 154, 155, 156, 157, 158, 159, 160, 16, 17, 18, 21, 22, 163, 164, 19, 20, 161, 162, 172, 25, 26, 10, 11,
+        12, 13, 14, 15, 165, 166, 167, 168, 74, 75, 76, 41, 42, 169, 173, 35, 36, 174, 39, 40, 175, 176, 27, 28, 23,
+        24, 206, 179, 180, 181, 194, 195, 92, 93, 94, 201, 95, 208, 69, 70, 71, 187, 188, 189, 46, 47, 60, 61, 62, 186,
+        129, 130, 118, 119, 79, 80, 199, 43, 44, 45, 182, 96, 97, 63, 64, 65, 132, 204, 205, 29, 30, 31, 32, 33, 34,
+        193, 469, 191, 192, 102, 103, 185, 202, 48, 49, 123, 212, 127, 214, 109, 110, 88, 89, 81, 82, 100, 101, 190, 424, 209,
+        210, 37, 38, 58, 59, 234, 183, 184, 50, 51, 56, 57, 52, 53, 54, 55, 66, 67, 68, 236, 106, 107, 237, 203, 128,
+        241, 240, 126, 238, 124, 239, 125, 122, 235, 83, 177, 178, 211, 72, 73, 98, 99, 213, 120, 121, 90, 91, 222, 223, 224,
+        170, 171, 86, 87, 108, 463, 114, 465, 133, 134, 135, 136, 196, 197, 116, 117, 230, 207, 225, 220, 221, 473, 216, 217, 231,
+        232, 226, 227, 84, 85, 77, 78, 104, 105, 115, 111, 112, 198, 228, 229, 218, 219, 215, 200, 137, 233, 113, 242, 131, 138,
+        139, 140, 141, 142, 143, 1, 2, 3, 4, 5, 6, 7, 8, 9, 144, 145, 146, 243, 244, 245, 147, 148, 149, 246, 247,
+        248, 249, 250, 150, 151, 251,
     ];
 
     // Dossiers et fichiers : à garder en accord avec outils/images.py (LIVINGDEX_SPRITES, LIVINGDEX_COVERS).
@@ -125,13 +187,22 @@ public static class LivingDexGames
             "Kanto", Kanto, 386, DeoxysForm: 1),
         new(LivingDexGame.LeafGreen, "Pokémon Vert Feuille", "images/livingdex/jaquettes/vert-feuille.png", "images/livingdex/rouge-feu-vert-feuille/", 3,
             "Kanto", Kanto, 386, DeoxysForm: 2),
+        // 4e génération : Diamant et Perle ont les mêmes sprites, HeartGold et SoulSilver aussi.
+        new(LivingDexGame.Diamond, "Pokémon Diamant", "images/livingdex/jaquettes/diamant.png", "images/livingdex/diamant-perle/", 4, "Sinnoh", Sinnoh, 493),
+        new(LivingDexGame.Pearl, "Pokémon Perle", "images/livingdex/jaquettes/perle.png", "images/livingdex/diamant-perle/", 4, "Sinnoh", Sinnoh, 493),
+        new(LivingDexGame.Platinum, "Pokémon Platine", "images/livingdex/jaquettes/platine.png", "images/livingdex/platine/", 4, "Sinnoh", SinnohPlatinum, 493),
+        new(LivingDexGame.HeartGold, "Pokémon Or HeartGold", "images/livingdex/jaquettes/heartgold.png", "images/livingdex/heartgold-soulsilver/", 4,
+            "Johto", JohtoHgss, 493),
+        new(LivingDexGame.SoulSilver, "Pokémon Argent SoulSilver", "images/livingdex/jaquettes/soulsilver.png", "images/livingdex/heartgold-soulsilver/", 4,
+            "Johto", JohtoHgss, 493),
     ];
 
     public static LivingDexGameInfo Get(LivingDexGame game) => All.Single(g => g.Game == game);
 
     /// <summary>
-    /// Jeux possibles pour une sauvegarde : PKHeX reconnaît Jaune, Cristal et Émeraude, mais pas Rouge de Bleu, Or d'Argent,
-    /// Rubis de Saphir ni Rouge Feu de Vert Feuille (même format) : au joueur de choisir. Pour Rouge Feu / Vert Feuille,
+    /// Jeux possibles pour une sauvegarde : PKHeX reconnaît Jaune, Cristal, Émeraude et Platine, mais pas Rouge de Bleu, Or
+    /// d'Argent, Rubis de Saphir, Rouge Feu de Vert Feuille, Diamant de Perle ni HeartGold de SoulSilver (même format) : au
+    /// joueur de choisir. Pour Rouge Feu / Vert Feuille,
     /// PKHeX répond « Rouge Feu » faute de mieux : les deux sont toujours proposés. Aucun pour une sauvegarde d'une autre
     /// génération, ni pour Colosseum / XD.
     /// </summary>
@@ -161,6 +232,17 @@ public static class LivingDexGames
             GameVersion.FR or GameVersion.LG or GameVersion.FRLG => [LivingDexGame.FireRed, LivingDexGame.LeafGreen],
             _ => [], // Colosseum, XD
         },
+        4 => sav.Version switch
+        {
+            GameVersion.Pt => [LivingDexGame.Platinum],
+            GameVersion.D => [LivingDexGame.Diamond],
+            GameVersion.P => [LivingDexGame.Pearl],
+            GameVersion.DP => [LivingDexGame.Diamond, LivingDexGame.Pearl],
+            GameVersion.HG => [LivingDexGame.HeartGold],
+            GameVersion.SS => [LivingDexGame.SoulSilver],
+            GameVersion.HGSS => [LivingDexGame.HeartGold, LivingDexGame.SoulSilver],
+            _ => [], // Battle Revolution
+        },
         _ => [],
     };
 
@@ -185,16 +267,40 @@ public static class LivingDexGames
 
     /// <summary>
     /// Formes d'une espèce en mode Complet, réduites à celles qu'une sauvegarde du jeu peut contenir : les lettres de Zarbi
-    /// (26 en 2e génération, A à Z ; 28 en 3e, avec « ! » et « ? »), enregistrées dans chaque Zarbi. Rien d'autre jusqu'à
+    /// (26 en 2e génération, A à Z ; 28 ensuite, avec « ! » et « ? »), enregistrées dans chaque Zarbi. Rien d'autre jusqu'à
     /// la 3e génération : ni forme régionale, ni Méga-Évolution, ni Gigamax ; les formes de Morphéo n'existent qu'en combat,
-    /// Deoxys a celle de son jeu (<see cref="Base"/>).
+    /// Deoxys a celle de son jeu (<see cref="Base"/>). En 4e, celles de <see cref="AspectForms4"/> que le jeu connaît, et
+    /// Shaymin Céleste à part (<see cref="LivingDexSlot.KeyItem"/>) ; Arceus n'a qu'une case, quelle que soit sa Plaque.
     /// </summary>
-    private static IEnumerable<LivingDexSlot> Forms(LivingDexGameInfo game, ushort species) =>
-        species == Unown && UnownForms(game) > 1
-            ? Enumerable.Range(0, UnownForms(game)).Select(f => new LivingDexSlot(species, (byte)f))
-            : [Base(game, species)];
+    private static IEnumerable<LivingDexSlot> Forms(LivingDexGameInfo game, ushort species) => species switch
+    {
+        Unown when UnownForms(game) > 1 => Enumerable.Range(0, UnownForms(game)).Select(f => new LivingDexSlot(species, (byte)f)),
+        Shaymin when game.Generation == 4 && FormCount(game, species) > 1 =>
+            [new(species, 0, AnyForm: true), new(species, 1, AnyForm: true, KeyItem: Gracidea)],
+        Arceus when game.Generation == 4 => [new(species, 0, AnyForm: true)],
+        _ when game.Generation == 4 && AspectForms4.Contains(species) =>
+            Enumerable.Range(0, FormCount(game, species)).Select(f => new LivingDexSlot(species, (byte)f)),
+        _ => [Base(game, species)],
+    };
 
-    private static int UnownForms(LivingDexGameInfo game) => game.Generation switch { 2 => 26, 3 => 28, _ => 1 };
+    private static int UnownForms(LivingDexGameInfo game) => game.Generation switch { 2 => 26, >= 3 => 28, _ => 1 };
+
+    /// <summary>
+    /// Espèces de 4e génération dont la forme change l'aspect, hors combat : Pichu Troizépi (HeartGold / SoulSilver, il ne
+    /// va pas dans les autres), Deoxys (chaque Deoxys garde sa forme en 4e), capes de Cheniti et Cheniselle, mers de
+    /// Sancoki et Tritosor, Motisma, Giratina Originel (tient l'Orbe Platiné) ; ces deux derniers n'existent qu'à partir
+    /// de Platine. Le nombre de formes de chaque jeu vient de PKHeX (<see cref="FormCount"/>). Pas Morphéo ni Ceriflor :
+    /// leurs formes n'existent qu'en combat.
+    /// </summary>
+    private static readonly ushort[] AspectForms4 = [Pichu, Deoxys, Burmy, Wormadam, Shellos, Gastrodon, Rotom, Giratina];
+
+    /// <summary>Formes de l'espèce que le jeu connaît (données de PKHeX : Motisma n'en a qu'une en Diamant / Perle).</summary>
+    private static int FormCount(LivingDexGameInfo game, ushort species) => (game.Game switch
+    {
+        LivingDexGame.Diamond or LivingDexGame.Pearl => (IPersonalTable)PersonalTable.DP,
+        LivingDexGame.Platinum => PersonalTable.Pt,
+        _ => PersonalTable.HGSS,
+    })[species].FormCount;
 
     /// <summary>La case est remplie par ce Pokémon : même espèce ; en Complet, même forme (sauf <see cref="LivingDexSlot.AnyForm"/>).</summary>
     public static bool Fills(LivingDexSlot slot, ushort species, byte form, LivingDexMode mode) =>
@@ -202,7 +308,7 @@ public static class LivingDexGames
 
     /// <summary>
     /// Sprite du jeu d'une case : « 201.png » (Zarbi A), « 201-b.png », « 201-question.png », « 386-speed.png » (Deoxys
-    /// Vitesse) : noms de PokéAPI, à garder en accord avec outils/images.py (LIVINGDEX_FORMS).
+    /// Vitesse), « 492-sky.png » (Shaymin Céleste) : noms de PokéAPI, à garder en accord avec outils/images.py (LIVINGDEX_FORMS).
     /// </summary>
     public static string Sprite(LivingDexGameInfo game, LivingDexSlot slot) =>
         $"{game.SpriteFolder}{slot.Species}{FormSuffix(slot)}.png";
@@ -216,12 +322,23 @@ public static class LivingDexGames
         (Deoxys, 1) => "-attack",
         (Deoxys, 2) => "-defense",
         (Deoxys, 3) => "-speed",
+        (Pichu, 1) => "-spiky-eared",
+        (Burmy or Wormadam, 1) => "-sandy",
+        (Burmy or Wormadam, 2) => "-trash",
+        (Shellos or Gastrodon, 1) => "-east",
+        (Rotom, var f) when f <= RotomForms.Length => $"-{RotomForms[f - 1]}",
+        (Giratina, 1) => "-origin",
+        (Shaymin, 1) => "-sky",
         _ => $"-{slot.Form}",
     };
 
+    /// <summary>Motisma Chaleur, Lavage, Froid, Hélice, Tonte (formes 1 à 5).</summary>
+    private static readonly string[] RotomForms = ["heat", "wash", "frost", "fan", "mow"];
+
     /// <summary>
-    /// Nom d'une case : celui de l'espèce, avec la lettre de Zarbi en Complet (« Zarbi B ») et la forme de Deoxys quand ce
-    /// n'est pas la Normale (« Deoxys (forme Vitesse) »). Noms de formes de PKHeX, en français.
+    /// Nom d'une case : celui de l'espèce, avec la lettre de Zarbi en Complet (« Zarbi B ») et la forme quand ce n'est pas
+    /// celle de base (« Deoxys (forme Vitesse) », « Motisma (Chaleur) ») ; en Complet, la cape ou la mer de chaque Cheniti,
+    /// Cheniselle, Sancoki et Tritosor (« Sancoki (mer Occident) »). Noms de formes de PKHeX, en français.
     /// </summary>
     public static string Name(LivingDexGameInfo game, LivingDexSlot slot, LivingDexMode mode)
     {
@@ -231,10 +348,20 @@ public static class LivingDexGames
         return slot.Species switch
         {
             Unown when mode == LivingDexMode.Complete && UnownForms(game) > 1 => $"{species} {form}",
-            Deoxys when slot.Form != 0 => $"{species} (forme {form})",
+            Burmy or Wormadam or Shellos or Gastrodon when mode == LivingDexMode.Complete => $"{species} ({FormLabel(slot.Species, form)})",
+            _ when slot.Form != 0 => $"{species} ({FormLabel(slot.Species, form)})",
             _ => species,
         };
     }
+
+    private static string FormLabel(ushort species, string form) => species switch
+    {
+        Deoxys or Giratina or Shaymin => $"forme {form}",
+        Burmy or Wormadam => $"cape {form}",
+        Shellos or Gastrodon => $"mer {form}",
+        Pichu => "Troizépi", // PKHeX n'a que l'anglais (« Spiky »)
+        _ => form,
+    };
 
     /// <summary>Image de la même forme sur le site (formes des jeux récents), si le sprite du jeu manque.</summary>
     public static string Fallback(LivingDexGameInfo game, LivingDexSlot slot) =>
@@ -244,7 +371,8 @@ public static class LivingDexGames
     {
         1 => EntityContext.Gen1,
         2 => EntityContext.Gen2,
-        _ => EntityContext.Gen3,
+        3 => EntityContext.Gen3,
+        _ => EntityContext.Gen4,
     };
 
     private static readonly GameStrings FrenchStrings = GameInfo.GetStrings("fr");
@@ -253,7 +381,7 @@ public static class LivingDexGames
     /// Modes proposés, dans l'ordre Régional, National, Complet : un mode qui demande exactement les mêmes Pokémon
     /// qu'un autre, dans le même ordre, est caché. En 1re génération, il ne reste que le National ; en 2e, le Pokédex de
     /// Johto a les mêmes 251 Pokémon que le national mais dans un autre ordre, et Zarbi ses 26 lettres : les trois modes ;
-    /// en 3e, le Pokédex de Hoenn ou de Kanto, le national et les 28 lettres de Zarbi : les trois.
+    /// en 3e et 4e, le Pokédex régional, le national et les formes : les trois.
     /// </summary>
     public static IReadOnlyList<LivingDexMode> Modes(LivingDexGameInfo game)
     {
@@ -308,7 +436,7 @@ public sealed class LivingDexService(
         var taken = await db.LivingDexes.Where(d => d.OwnerId == ownerId).Select(d => d.Game).ToListAsync();
         var linked = db.LivingDexes.Select(d => d.StoredSaveId);
         var saves = await db.StoredSaves.AsNoTracking()
-            .Where(s => s.OwnerId == ownerId && s.Generation <= 3 && !linked.Contains(s.Id))
+            .Where(s => s.OwnerId == ownerId && s.Generation <= 4 && !linked.Contains(s.Id))
             .OrderBy(s => s.UploadedAt)
             .Select(s => new { s.Id, s.GameName, s.TrainerName, s.FileName, s.Data })
             .ToListAsync();
@@ -367,12 +495,14 @@ public sealed class LivingDexService(
         if (!modes.Contains(mode))
             mode = LivingDexMode.National;
         var owned = await OwnedAsync(db, dex.StoredSaveId);
-        var entries = LivingDexGames.Slots(game, mode).Select((slot, index) =>
+        var slots = LivingDexGames.Slots(game, mode);
+        var bag = slots.Any(s => s.KeyItem != 0) ? await BagItemsAsync(db, dex.StoredSaveId) : new HashSet<int>();
+        var entries = slots.Select((slot, index) =>
         {
-            var copy = Find(owned, slot, mode);
+            var (copy, note) = slot.KeyItem == 0 ? (Find(owned, slot, mode), null) : FindWithItem(owned, slot, mode, bag);
             return new LivingDexEntry(mode == LivingDexMode.Regional ? index + 1 : slot.Species, slot.Species, slot.Form,
                 LivingDexGames.Name(game, slot, mode), LivingDexGames.Sprite(game, slot), copy?.Id, copy?.Location,
-                LivingDexGames.Fallback(game, slot));
+                LivingDexGames.Fallback(game, slot), note);
         }).ToList();
         return new(dex.Id, game, SaveLabel(dex.TrainerName, dex.FileName), modes, mode, entries);
     }
@@ -411,6 +541,37 @@ public sealed class LivingDexService(
     /// </summary>
     private static OwnedCopy? Find(List<OwnedCopy> owned, LivingDexSlot slot, LivingDexMode mode) =>
         owned.FirstOrDefault(p => LivingDexGames.Fills(slot, p.Species, p.Form, mode));
+
+    /// <summary>
+    /// Case à objet rare (<see cref="LivingDexSlot.KeyItem"/>, Shaymin Céleste) : le deuxième exemplaire de l'espèce (le
+    /// premier remplit la case précédente), si l'objet est dans le sac ; avec ce qui manque, pour l'infobulle.
+    /// </summary>
+    private static (OwnedCopy? Copy, string? Note) FindWithItem(List<OwnedCopy> owned, LivingDexSlot slot, LivingDexMode mode,
+        IReadOnlySet<int> bag)
+    {
+        var second = owned.Where(p => LivingDexGames.Fills(slot, p.Species, p.Form, mode)).Skip(1).FirstOrDefault();
+        var itemName = FrenchStrings.itemlist[slot.KeyItem];
+        var item = $"la {itemName}"; // « la Gracidée » : seul objet de ce genre pour l'instant
+        var species = FrenchStrings.specieslist[slot.Species];
+        return (second, bag.Contains(slot.KeyItem)) switch
+        {
+            (not null, true) => (second, $"{itemName} dans le sac"),
+            (not null, false) => (null, $"il faut {item} dans le sac"),
+            (null, true) => (null, $"il faut un deuxième {species}"),
+            (null, false) => (null, $"il faut un deuxième {species} et {item} dans le sac"),
+        };
+    }
+
+    private static readonly GameStrings FrenchStrings = GameInfo.GetStrings("fr");
+
+    /// <summary>Objets du sac de la sauvegarde (toutes les poches, quantité non nulle).</summary>
+    private static async Task<IReadOnlySet<int>> BagItemsAsync(ApplicationDbContext db, int saveId)
+    {
+        var save = await db.StoredSaves.AsNoTracking().Where(s => s.Id == saveId).Select(s => new { s.Data, s.FileName }).FirstOrDefaultAsync();
+        if (save is null || !StoredSaveService.TryRead(save.Data, save.FileName, out var sav))
+            return new HashSet<int>();
+        return sav.Inventory.SelectMany(p => p.Items).Where(i => i.Count > 0).Select(i => i.Index).ToHashSet();
+    }
 
     private static string SaveLabel(string trainer, string fileName) => $"{trainer} · {fileName}";
 }

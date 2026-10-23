@@ -14,6 +14,11 @@ public enum LivingDexGame
     Emerald = 9,
     FireRed = 10,
     LeafGreen = 11,
+    Diamond = 12,
+    Pearl = 13,
+    Platinum = 14,
+    HeartGold = 15,
+    SoulSilver = 16,
 }
 
 /// <summary>

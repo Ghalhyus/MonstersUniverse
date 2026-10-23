@@ -67,12 +67,19 @@ public sealed class RealSavesTests : IDisposable
         if (Read(file) is not { } data)
             return;
         var sav = Open(data, file);
-        Assert.True(sav.ChecksumsValid, $"{file} : {sav.ChecksumInfo}");
+        // 4e génération : les blocs annexes (Tour de Combat, vidéos de combat...) que le jeu n'a jamais écrits restent à zéro,
+        // sans somme de contrôle valide (soulsilver.sav) ; seuls les deux blocs principaux comptent.
+        Assert.True(sav.ChecksumsValid || sav is SAV4 && !sav.ChecksumInfo.Contains("block checksum is invalid"),
+            $"{file} : {sav.ChecksumInfo}");
         var written = sav.Write().ToArray();
         // 1re et 2e génération : le jeu ne prépare ses boîtes qu'au premier changement de boîte (zone à FF jusque-là) et
         // garde la boîte en cours à part ; PKHeX écrit des boîtes vides en règle et resynchronise la boîte en cours.
         // Le fichier change donc, pas son contenu.
-        if (sav.Generation >= 3)
+        // HeartGold / SoulSilver : PKHeX marque toutes les boîtes comme modifiées (le jeu n'enregistre que celles-là), et
+        // donne leur somme de contrôle aux blocs annexes vides ; le fichier change la première fois, puis plus.
+        if (sav is SAV4HGSS)
+            Assert.True(Open(written.ToArray(), file).Write().Span.SequenceEqual(written), $"{file} : réécrit différemment par PKHeX");
+        else if (sav.Generation >= 3)
             Assert.True(written.AsSpan().SequenceEqual(data), $"{file} : réécrit différemment par PKHeX");
         var again = Open(written, file);
         Assert.Equal(SaveIdentity.Of(sav).Key, SaveIdentity.Of(again).Key);

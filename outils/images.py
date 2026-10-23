@@ -15,11 +15,13 @@ Rassemble les images servies par le site, dans PokeBank/wwwroot/images/ :
   le dossier de chaque forme par espèce (« 0026 » : {« Alola » : « 0001 », « Mega_X » : « 0002 »...}) ;
 - parc/foret.png : fond du « Parc », le fond de boîte PC « Forêt » de Diamant Étincelant / Perle Scintillante (PKHeX) ;
 - livingdex/ : sprites des jeux de chaque living dex (livingdex/rouge-bleu/<numéro>.png : Super Game Boy, livingdex/jaune/ :
-  Game Boy Color, livingdex/or/, argent/, cristal/, rubis-saphir/, emeraude/, rouge-feu-vert-feuille/ ; PokéAPI,
-  versions/generation-i à iii/<jeu>), avec les formes qu'une sauvegarde du jeu peut contenir (Zarbi : 201-b.png...,
-  201-exclamation.png, 201-question.png ; Deoxys de son jeu : 386-speed.png, 386-attack.png, 386-defense.png), et jaquettes
-  officielles (livingdex/jaquettes/rouge.png, bleu.png, jaune.png, or.png, argent.png, cristal.png, rubis.png, saphir.png,
-  emeraude.png, rouge-feu.png, vert-feuille.png : Bulbagarden Archives, versions anglaises, faute de françaises).
+  Game Boy Color, livingdex/or/, argent/, cristal/, rubis-saphir/, emeraude/, rouge-feu-vert-feuille/, diamant-perle/,
+  platine/, heartgold-soulsilver/ ; PokéAPI, versions/generation-i à iv/<jeu>), avec les formes qu'une sauvegarde du jeu
+  peut contenir (Zarbi : 201-b.png..., 201-exclamation.png, 201-question.png ; Deoxys : 386-speed.png, 386-attack.png,
+  386-defense.png ; 4e génération : 412-sandy.png, 422-east.png, 479-heat.png, 487-origin.png, 492-sky.png...), et
+  jaquettes officielles (livingdex/jaquettes/rouge.png, bleu.png, jaune.png, or.png, argent.png, cristal.png, rubis.png,
+  saphir.png, emeraude.png, rouge-feu.png, vert-feuille.png, diamant.png, perle.png, platine.png, heartgold.png,
+  soulsilver.png : Bulbagarden Archives, versions anglaises, faute de françaises).
 
 Sources des objets, dans l'ordre :
   1. PokéAPI, par nom anglais (l'apparence d'origine du site), sauf quand ce nom est porté par plusieurs objets ;
@@ -232,18 +234,34 @@ LIVINGDEX_SPRITES = {"rouge-bleu": ("generation-i/red-blue/transparent", 151), "
                      "or": ("generation-ii/gold/transparent", 251), "argent": ("generation-ii/silver/transparent", 251),
                      "cristal": ("generation-ii/crystal/transparent", 251),
                      "rubis-saphir": ("generation-iii/ruby-sapphire", 386), "emeraude": ("generation-iii/emerald", 386),
-                     "rouge-feu-vert-feuille": ("generation-iii/firered-leafgreen", 386)}
+                     "rouge-feu-vert-feuille": ("generation-iii/firered-leafgreen", 386),
+                     "diamant-perle": ("generation-iv/diamond-pearl", 493), "platine": ("generation-iv/platinum", 493),
+                     "heartgold-soulsilver": ("generation-iv/heartgold-soulsilver", 493)}
 UNOWN_2 = {f"201-{c}": f"201-{c}" for c in "bcdefghijklmnopqrstuvwxyz"}  # Zarbi B à Z (A : 201.png)
 UNOWN_3 = {**UNOWN_2, "201-exclamation": "201-exclamation", "201-question": "201-question"}
 LIVINGDEX_FORMS = {"or": UNOWN_2, "argent": UNOWN_2, "cristal": UNOWN_2, "rubis-saphir": UNOWN_3,
                    # Deoxys : formes Vitesse (Émeraude), Attaque (Rouge Feu) et Défense (Vert Feuille), Pokémon 10001 à 10003 de PokéAPI
                    "emeraude": {**UNOWN_3, "386-speed": "10003"},
                    "rouge-feu-vert-feuille": {**UNOWN_3, "386-attack": "10001", "386-defense": "10002"}}
-# (Émeraude : le fichier de Bulbagarden est un JPEG ; le site le garde sous emeraude.png comme les autres, le navigateur le lit quand même.)
+# 4e génération : chaque Deoxys garde sa forme ; capes de Cheniti (412) et Cheniselle (413, Pokémon 10004 et 10005), mers de
+# Sancoki (422) et Tritosor (423). Platine et HeartGold / SoulSilver ajoutent Motisma (479, 10008 à 10012), Giratina
+# Originel (487, 10007) et Shaymin Céleste (492, 10006) ; HeartGold / SoulSilver, Pichu Troizépi (172).
+UNOWN_DEOXYS_4 = {**UNOWN_3, "386-attack": "10001", "386-defense": "10002", "386-speed": "10003",
+                  "412-sandy": "412-sandy", "412-trash": "412-trash", "413-sandy": "10004", "413-trash": "10005",
+                  "422-east": "422-east", "423-east": "423-east"}
+PLATINUM_4 = {**UNOWN_DEOXYS_4, "479-heat": "10008", "479-wash": "10009", "479-frost": "10010", "479-fan": "10011",
+              "479-mow": "10012", "487-origin": "10007", "492-sky": "10006"}
+LIVINGDEX_FORMS.update({"diamant-perle": UNOWN_DEOXYS_4, "platine": PLATINUM_4,
+                        "heartgold-soulsilver": {**PLATINUM_4, "172-spiky-eared": "172-spiky-eared"}})
+# (Émeraude, Diamant, Perle, HeartGold, SoulSilver : le fichier de Bulbagarden est un JPEG ; le site le garde en .png comme
+# les autres, le navigateur le lit quand même.)
 LIVINGDEX_COVERS = {"rouge": "File:Red EN boxart.png", "bleu": "File:Blue EN boxart.png", "jaune": "File:Yellow EN boxart.png",
                     "or": "File:Gold EN boxart.png", "argent": "File:Silver EN boxart.png", "cristal": "File:Crystal EN boxart.png",
                     "rubis": "File:Ruby EN boxart.png", "saphir": "File:Sapphire EN boxart.png", "emeraude": "File:Emerald EN boxart.jpg",
-                    "rouge-feu": "File:FireRed EN boxart.png", "vert-feuille": "File:LeafGreen EN boxart.png"}
+                    "rouge-feu": "File:FireRed EN boxart.png", "vert-feuille": "File:LeafGreen EN boxart.png",
+                    "diamant": "File:Diamond EN boxart.jpg", "perle": "File:Pearl EN boxart.jpg",
+                    "platine": "File:Platinum EN boxart.png", "heartgold": "File:HeartGold EN boxart.jpg",
+                    "soulsilver": "File:SoulSilver EN boxart.jpg"}
 
 
 def livingdex_jobs():

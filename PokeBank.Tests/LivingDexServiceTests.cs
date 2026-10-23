@@ -8,12 +8,12 @@ namespace PokeBank.Tests;
 
 /// <summary>
 /// Living dex : un exemplaire de chaque Pokémon du Pokédex d'un jeu, compté dans une sauvegarde stockée (1re génération :
-/// Rouge, Bleu, Jaune ; 2e : Or, Argent, Cristal ; 3e : Rubis, Saphir, Émeraude, Rouge Feu, Vert Feuille). Vraies
-/// sauvegardes de Rouge, Bleu et Argent (PokeBank.Tests/Sauvegardes).
+/// Rouge, Bleu, Jaune ; 2e : Or, Argent, Cristal ; 3e : Rubis, Saphir, Émeraude, Rouge Feu, Vert Feuille ; 4e : Diamant,
+/// Perle, Platine, HeartGold, SoulSilver). Vraies sauvegardes de Rouge, Bleu, Argent et SoulSilver (PokeBank.Tests/Sauvegardes).
 /// </summary>
 public sealed class LivingDexServiceTests : IDisposable
 {
-    private readonly TestDatabase _db = new("sacha", "ondine");
+    private readonly TestDatabase _db = new("sacha", "ondine", "pierre");
     private readonly StoredSaveService _saves;
     private readonly LivingDexService _dex;
 
@@ -90,7 +90,67 @@ public sealed class LivingDexServiceTests : IDisposable
         Assert.Equal([LivingDexGame.Ruby, LivingDexGame.Sapphire], LivingDexGames.For(new SAV3RS()));
         Assert.Equal([LivingDexGame.FireRed, LivingDexGame.LeafGreen], LivingDexGames.For(new SAV3FRLG()));
         Assert.Empty(LivingDexGames.For(new SAV3XD()));
-        Assert.Empty(LivingDexGames.For(new SAV4Pt()));
+
+        // 4e génération : Platine reconnu, pas Diamant de Perle ni HeartGold de SoulSilver.
+        Assert.Equal([LivingDexGame.Platinum], LivingDexGames.For(new SAV4Pt()));
+        Assert.Equal([LivingDexGame.Diamond, LivingDexGame.Pearl], LivingDexGames.For(new SAV4DP()));
+        Assert.True(SaveUtil.TryGetSaveFile(RealSave("soulsilver.sav"), out var soulSilver, "soulsilver.sav"));
+        Assert.Equal([LivingDexGame.HeartGold, LivingDexGame.SoulSilver], LivingDexGames.For(soulSilver!));
+        Assert.Empty(LivingDexGames.For(new SAV5B2W2()));
+    }
+
+    [Theory]
+    [InlineData(LivingDexGame.Diamond, 151, 490, 529)] // Manaphy à la fin ; 493 + 27 lettres de Zarbi + 3 Deoxys + 2 × 2 capes + 2 mers
+    [InlineData(LivingDexGame.Pearl, 151, 490, 529)]
+    [InlineData(LivingDexGame.Platinum, 210, 487, 536)] // Giratina à la fin ; + 5 Motisma, Giratina Originel, Shaymin Céleste
+    [InlineData(LivingDexGame.HeartGold, 256, 251, 537)] // Celebi à la fin ; + Pichu Troizépi
+    [InlineData(LivingDexGame.SoulSilver, 256, 251, 537)]
+    public void FourthGeneration_HasItsRegion_National493_AndTheFormsOfTheGame(LivingDexGame value, int regional, int last, int complete)
+    {
+        var game = LivingDexGames.Get(value);
+        Assert.Equal([LivingDexMode.Regional, LivingDexMode.National, LivingDexMode.Complete], LivingDexGames.Modes(game));
+        var dex = LivingDexGames.Slots(game, LivingDexMode.Regional);
+        Assert.Equal(regional, dex.Count);
+        Assert.Equal(last, dex[^1].Species);
+        Assert.Equal(value is LivingDexGame.HeartGold or LivingDexGame.SoulSilver ? 152 : 387, dex[0].Species); // Germignon, Tortipouss
+        Assert.Equal(493, LivingDexGames.Slots(game, LivingDexMode.National).Count);
+
+        var slots = LivingDexGames.Slots(game, LivingDexMode.Complete);
+        Assert.Equal(complete, slots.Count);
+        int Forms(ushort species) => slots.Count(s => s.Species == species);
+        Assert.Equal((28, 4, 3, 3, 2, 2), (Forms(201), Forms(386), Forms(412), Forms(413), Forms(422), Forms(423)));
+        Assert.Equal((1, 1), (Forms(351), Forms(421))); // Morphéo et Ceriflor : formes de combat
+        Assert.True(Assert.Single(slots, s => s.Species == 493).AnyForm); // Arceus : une case, quelle que soit sa Plaque
+        var platinumForms = value is LivingDexGame.Diamond or LivingDexGame.Pearl ? 1 : 2; // Motisma, Giratina, Shaymin : à partir de Platine
+        Assert.Equal((platinumForms == 1 ? 1 : 6, platinumForms, platinumForms), (Forms(479), Forms(487), Forms(492)));
+        Assert.Equal(value is LivingDexGame.HeartGold or LivingDexGame.SoulSilver ? 2 : 1, Forms(172)); // Pichu Troizépi
+    }
+
+    [Fact]
+    public void FourthGeneration_FormNames_AndSprites()
+    {
+        var game = LivingDexGames.Get(LivingDexGame.HeartGold);
+        var slots = LivingDexGames.Slots(game, LivingDexMode.Complete);
+        string Name(ushort species, byte form) => LivingDexGames.Name(game, slots.Single(s => s.Species == species && s.Form == form), LivingDexMode.Complete);
+        string Sprite(ushort species, byte form) => LivingDexGames.Sprite(game, slots.Single(s => s.Species == species && s.Form == form));
+
+        Assert.Equal(("Sancoki (mer Occident)", "Sancoki (mer Orient)"), (Name(422, 0), Name(422, 1)));
+        Assert.Equal(("Cheniselle (cape Déchet)", "images/livingdex/heartgold-soulsilver/413-trash.png"), (Name(413, 2), Sprite(413, 2)));
+        Assert.Equal(("Motisma", "Motisma (Chaleur)", "Motisma (Tonte)"), (Name(479, 0), Name(479, 1), Name(479, 5)));
+        Assert.Equal(("images/livingdex/heartgold-soulsilver/479-heat.png", "images/livingdex/heartgold-soulsilver/479-mow.png"),
+            (Sprite(479, 1), Sprite(479, 5)));
+        Assert.Equal(("Giratina (forme Originelle)", "images/livingdex/heartgold-soulsilver/487-origin.png"), (Name(487, 1), Sprite(487, 1)));
+        Assert.Equal(("Shaymin (forme Céleste)", "images/livingdex/heartgold-soulsilver/492-sky.png"), (Name(492, 1), Sprite(492, 1)));
+        Assert.Equal(("Pichu (Troizépi)", "images/livingdex/heartgold-soulsilver/172-spiky-eared.png"), (Name(172, 1), Sprite(172, 1)));
+        Assert.Equal(("Deoxys", "Deoxys (forme Attaque)"), (Name(386, 0), Name(386, 1)));
+        Assert.Equal("Sancoki", LivingDexGames.Name(game, new(422, 0), LivingDexMode.National)); // la mer seulement en Complet
+
+        // Shaymin Céleste : un deuxième Shaymin, de n'importe quelle forme, avec la Gracidée (case suivante).
+        var sky = slots.Single(s => s.Species == 492 && s.Form == 1);
+        Assert.Equal((true, (ushort)466), (sky.AnyForm, sky.KeyItem));
+        Assert.True(slots.Single(s => s.Species == 492 && s.Form == 0).AnyForm);
+        Assert.Equal("images/livingdex/diamant-perle/", LivingDexGames.Get(LivingDexGame.Pearl).SpriteFolder);
+        Assert.Equal("images/livingdex/jaquettes/soulsilver.png", LivingDexGames.Get(LivingDexGame.SoulSilver).Cover);
     }
 
     [Fact]
@@ -265,6 +325,76 @@ public sealed class LivingDexServiceTests : IDisposable
         Assert.Equal("images/livingdex/argent/152.png", johto.Entries[0].Sprite);
         Assert.Equal(national.Owned, johto.Owned); // mêmes Pokémon, autre ordre
         Assert.True(johto.Owned > 0);
+    }
+
+    /// <summary>SoulSilver de l'utilisateur, avec des Shaymin en boîte (Terrestres, PID propre au dresseur) et la Gracidée ou non.</summary>
+    private static byte[] SoulSilverWith(string owner, int shaymins, bool gracidea)
+    {
+        Assert.True(SaveUtil.TryGetSaveFile(RealSave("soulsilver.sav"), out var sav, "soulsilver.sav"));
+        var free = Enumerable.Range(0, sav!.SlotCount).Where(i => sav.GetBoxSlotAtIndex(i).Species == 0).ToList();
+        for (var n = 0; n < shaymins; n++)
+        {
+            var pk = new PK4
+            {
+                Species = 492, Version = GameVersion.Pt, Language = (int)LanguageID.French, OriginalTrainerName = "Ghal",
+                TID16 = 12345, PID = (uint)(0x49200000 + owner.Length * 16 + n), MetLevel = 30, Move1 = 33,
+            };
+            pk.CurrentLevel = 30;
+            pk.ClearNickname();
+            pk.RefreshChecksum();
+            sav.SetBoxSlotAtIndex(pk, free[n]);
+        }
+        if (gracidea)
+            SaveSessionTests.GiveItems(sav, (466, 1));
+        return sav.Write().ToArray();
+    }
+
+    [Theory]
+    [InlineData(1, true, false, "il faut un deuxième Shaymin")]
+    [InlineData(2, false, false, "il faut la Gracidée dans le sac")]
+    [InlineData(0, false, false, "il faut un deuxième Shaymin et la Gracidée dans le sac")]
+    [InlineData(2, true, true, "Gracidée dans le sac")]
+    public async Task ShayminSky_NeedsASecondShaymin_AndTheGracidea(int shaymins, bool gracidea, bool filled, string note)
+    {
+        var result = await _saves.AddAsync("sacha", "soulsilver.sav", SoulSilverWith("sacha", shaymins, gracidea));
+        Assert.True(result.Ok, result.Message);
+        var save = Assert.Single(await _saves.ListAsync("sacha")).Id;
+        var id = (await _dex.CreateAsync("sacha", save, LivingDexGame.SoulSilver)).Id!.Value;
+
+        var view = (await _dex.GetAsync("sacha", id, LivingDexMode.Complete))!;
+        var land = view.Entries.Single(e => e.Species == 492 && e.Form == 0);
+        var sky = view.Entries.Single(e => e.Species == 492 && e.Form == 1);
+        Assert.Equal(shaymins > 0, land.Owned);
+        Assert.Null(land.Note);
+        Assert.Equal((filled, note), (sky.Owned, sky.Note));
+        if (filled)
+            Assert.NotEqual(land.BankId, sky.BankId); // deux Shaymin différents
+
+        // En National, un seul Shaymin suffit, sans condition.
+        var national = (await _dex.GetAsync("sacha", id))!.Entries.Single(e => e.Species == 492);
+        Assert.Equal((shaymins > 0, (string?)null), (national.Owned, national.Note));
+    }
+
+    [Fact]
+    public async Task SoulSilver_CountsItsPokemon()
+    {
+        var save = await Store("sacha", "soulsilver.sav");
+        var candidate = Assert.Single(await _dex.ListCandidatesAsync("sacha"));
+        Assert.Equal([LivingDexGame.HeartGold, LivingDexGame.SoulSilver], candidate.Games);
+        Assert.Equal("Or HeartGold / Argent SoulSilver — Ghal · soulsilver.sav", candidate.Label); // pas « HGSS » (PokemonInfo.GroupNames)
+        var id = (await _dex.CreateAsync("sacha", save, LivingDexGame.SoulSilver)).Id!.Value;
+
+        var johto = (await _dex.GetAsync("sacha", id, LivingDexMode.Regional))!;
+        Assert.Equal(256, johto.Entries.Count);
+        Assert.Equal((1, (ushort)152, "images/livingdex/heartgold-soulsilver/152.png"),
+            (johto.Entries[0].Number, johto.Entries[0].Species, johto.Entries[0].Sprite));
+        var national = (await _dex.GetAsync("sacha", id))!;
+        Assert.Equal(28, national.Owned); // 28 espèces dans la sauvegarde, toutes du Pokédex de Johto
+        Assert.Equal(28, johto.Owned);
+
+        // Complet : le Zarbi de la sauvegarde (D) ne remplit que sa lettre.
+        var complete = (await _dex.GetAsync("sacha", id, LivingDexMode.Complete))!;
+        Assert.Equal(["Zarbi D"], complete.Entries.Where(e => e.Species == 201 && e.Owned).Select(e => e.Name));
     }
 
     [Fact]

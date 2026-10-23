@@ -54,7 +54,7 @@ Migration EF : la générer dans une **copie** du projet (`PokeBank` copié dans
 <Nom>` dessus), puis recopier les fichiers de `Data/Migrations` (migration, designer, snapshot). La base se met à jour
 toute seule au démarrage (`Database.Migrate()`). Le code doit compiler avant de générer la migration.
 La copie génère l'espace de noms `PokeBank.Data.Migrations` : le remettre à `PokeBank.Migrations` comme les autres. Une
-migration qui modifie des données (SQL seul, sans changement de modèle : `GameNames`, `JournalFileNames`) se teste dans
+migration qui modifie des données (SQL seul, sans changement de modèle : `GameNames`, `JournalFileNames`, `GameGroupNames`) se teste dans
 `MigrationsTests` (base migrée jusqu'à la précédente, lignes ajoutées, puis migration complète et retour) : les autres
 tests créent la base avec `EnsureCreated`, sans passer par les migrations.
 
@@ -162,12 +162,17 @@ suivante), sans lister les dossiers des dépôts.
 
 - Jeux et modes : `LivingDexGames` (`Services/LivingDexService.cs`). Ajouter un jeu : son entrée (`All` : jaquette,
   dossier de sprites, Pokédex régional, dernier numéro national), `For(SaveFile)` (quelle sauvegarde, sachant que PKHeX ne
-  distingue pas Rouge de Bleu, Or d'Argent, Rubis de Saphir ni Rouge Feu de Vert Feuille), les formes du mode Complet
-  (`Forms` : régionales, Méga, Gigamax, d'aspect, lettres de Zarbi ; pas le sexe ; **seulement celles qu'une sauvegarde du
-  jeu peut contenir** : les formes de Morphéo n'existent qu'en combat, Deoxys de 3e génération a la forme de son jeu,
-  `DeoxysForm`, case `AnyForm`), et les images dans `outils/images.py` (`LIVINGDEX_SPRITES`, `LIVINGDEX_FORMS`,
+  distingue pas Rouge de Bleu, Or d'Argent, Rubis de Saphir, Rouge Feu de Vert Feuille, Diamant de Perle ni HeartGold de
+  SoulSilver), les formes du mode Complet (`Forms` : régionales, Méga, Gigamax, d'aspect, lettres de Zarbi ; pas le sexe ;
+  **seulement celles qu'une sauvegarde du jeu peut contenir** : les formes de Morphéo n'existent qu'en combat, Deoxys de 3e
+  génération a la forme de son jeu, `DeoxysForm`, case `AnyForm` ; en 4e, le nombre de formes de chaque jeu vient de
+  `PersonalTable` de PKHeX, et les règles de légalité de PKHeX disent ce qu'une boîte peut garder : `FormVerifier` sur
+  GitHub), et les images dans `outils/images.py` (`LIVINGDEX_SPRITES`, `LIVINGDEX_FORMS`,
   `LIVINGDEX_COVERS`, mêmes noms de dossiers et de fichiers que `LivingDexGames.Sprite` : « 201-b.png », « 386-speed.png »).
   Chaque forme a sa propre image (test `Complete_EachFormHasItsOwnNameAndSprite`).
+- Forme qui ne tient pas en boîte (Shaymin Céleste en 4e) : l'utilisateur ne veut pas bloquer l'équipe. Case
+  `KeyItem` : remplie par un **deuxième** exemplaire de l'espèce et l'objet rare dans le sac (lu dans la sauvegarde
+  stockée, `BagItemsAsync`), avec ce qui manque en infobulle (`LivingDexEntry.Note`).
 - Les tests ne doivent **pas** exiger ces images : la CI les copie depuis le VPS, qui ne les reçoit qu'au déploiement,
   après les tests. Une nouvelle image : tester son chemin, pas sa présence.
 - Jaquettes : Bulbagarden Archives (API MediaWiki, version réduite `iiurlwidth=480`). Sur ce PC, Python refuse son

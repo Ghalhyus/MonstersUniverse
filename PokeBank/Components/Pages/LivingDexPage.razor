@@ -84,7 +84,8 @@ else if (view is not null)
         {
             var e = entry;
             var number = view.Mode == LivingDexMode.Regional ? $"{view.Game.Region} #{e.Number:000} {e.Name} (national #{e.Species:000})" : $"#{e.Number:000} {e.Name}";
-            var title = $"{number} — {(e.Owned ? e.Location ?? "dans la sauvegarde" : "manquant")}";
+            var title = $"{number} — {(e.Owned ? e.Location ?? "dans la sauvegarde" : "manquant")}"
+                + (e.Note is null ? "" : e.Owned ? $" · {e.Note}" : $" : {e.Note}");
             @if (e.Owned)
             {
                 <button type="button" class="livingdex-slot" title="@title" aria-label="@title" @onclick="() => OpenDetail(e)">

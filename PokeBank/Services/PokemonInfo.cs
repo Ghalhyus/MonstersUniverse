@@ -42,8 +42,10 @@ public sealed partial class PokemonInfo
         GroupNames.TryGetValue(version, out var name) ? name : Get(_strings.gamelist, (int)version, version.ToString());
 
     /// <summary>
-    /// Noms des groupes de jeux, absents des listes de PKHeX : une sauvegarde de Rouge/Bleu ou d'Or/Argent ne dit pas lequel des
-    /// deux, et un Pokémon de 1re ou 2e génération pas de quel jeu il vient. À garder en accord avec la migration GameNames.
+    /// Noms des groupes de jeux, absents des listes de PKHeX : une sauvegarde de Rouge/Bleu, d'Or/Argent, de Rubis/Saphir,
+    /// de Diamant/Perle ou de HeartGold/SoulSilver ne dit pas lequel des deux, et un Pokémon de 1re ou 2e génération pas de
+    /// quel jeu il vient. Noms des jeux tels que PKHeX les donne en français (« Or HeartGold »). À garder en accord avec les
+    /// migrations GameNames et GameGroupNames.
     /// </summary>
     public static readonly IReadOnlyDictionary<GameVersion, string> GroupNames = new Dictionary<GameVersion, string>
     {
@@ -51,6 +53,15 @@ public sealed partial class PokemonInfo
         [GameVersion.RBY] = "Rouge / Bleu / Jaune",
         [GameVersion.GS] = "Or / Argent",
         [GameVersion.GSC] = "Or / Argent / Cristal",
+        [GameVersion.RS] = "Rubis / Saphir",
+        [GameVersion.RSE] = "Rubis / Saphir / Émeraude",
+        [GameVersion.FRLG] = "Rouge Feu / Vert Feuille",
+        [GameVersion.COLO] = "Colosseum",
+        [GameVersion.XD] = "XD : Le Souffle des Ténèbres",
+        [GameVersion.RSBOX] = "Pokémon Box",
+        [GameVersion.DP] = "Diamant / Perle",
+        [GameVersion.DPPt] = "Diamant / Perle / Platine",
+        [GameVersion.HGSS] = "Or HeartGold / Argent SoulSilver",
     };
 
     /// <summary>Nom du jeu d'une sauvegarde ; certaines ne précisent pas la version exacte (« Any » pour PKHeX).</summary>
