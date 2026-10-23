@@ -196,8 +196,8 @@ else if (view is not null)
     private void SetMode(LivingDexMode mode) =>
         Navigation.NavigateTo(Navigation.GetUriWithQueryParameter("mode", mode == LivingDexMode.National ? null : ModeSlugs[mode]));
 
-    /// <summary>Sprite du jeu absent (images pas encore récupérées) : l'image de l'espèce du site.</summary>
-    private static string FallbackSprite(LivingDexEntry e) => $"this.onerror=null;this.src='images/pokemon/{e.Species}.png'";
+    /// <summary>Sprite du jeu absent (images pas encore récupérées) : l'image de la même forme sur le site.</summary>
+    private static string FallbackSprite(LivingDexEntry e) => $"this.onerror=null;this.src='{e.Fallback}'";
 
     private async Task OpenDetail(LivingDexEntry e)
     {

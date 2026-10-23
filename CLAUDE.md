@@ -162,9 +162,12 @@ suivante), sans lister les dossiers des dépôts.
 
 - Jeux et modes : `LivingDexGames` (`Services/LivingDexService.cs`). Ajouter un jeu : son entrée (`All` : jaquette,
   dossier de sprites, Pokédex régional, dernier numéro national), `For(SaveFile)` (quelle sauvegarde, sachant que PKHeX ne
-  distingue pas Rouge de Bleu ni Or d'Argent), les formes du mode Complet (`Forms` : régionales, Méga, Gigamax, d'aspect ;
-  ni le sexe, ni les espèces à plus de 10 formes ; seulement celles que le jeu peut contenir), et les images dans
-  `outils/images.py` (`LIVINGDEX_SPRITES`, `LIVINGDEX_COVERS`, mêmes noms de dossiers et de fichiers).
+  distingue pas Rouge de Bleu, Or d'Argent, Rubis de Saphir ni Rouge Feu de Vert Feuille), les formes du mode Complet
+  (`Forms` : régionales, Méga, Gigamax, d'aspect, lettres de Zarbi ; pas le sexe ; **seulement celles qu'une sauvegarde du
+  jeu peut contenir** : les formes de Morphéo n'existent qu'en combat, Deoxys de 3e génération a la forme de son jeu,
+  `DeoxysForm`, case `AnyForm`), et les images dans `outils/images.py` (`LIVINGDEX_SPRITES`, `LIVINGDEX_FORMS`,
+  `LIVINGDEX_COVERS`, mêmes noms de dossiers et de fichiers que `LivingDexGames.Sprite` : « 201-b.png », « 386-speed.png »).
+  Chaque forme a sa propre image (test `Complete_EachFormHasItsOwnNameAndSprite`).
 - Les tests ne doivent **pas** exiger ces images : la CI les copie depuis le VPS, qui ne les reçoit qu'au déploiement,
   après les tests. Une nouvelle image : tester son chemin, pas sa présence.
 - Jaquettes : Bulbagarden Archives (API MediaWiki, version réduite `iiurlwidth=480`). Sur ce PC, Python refuse son

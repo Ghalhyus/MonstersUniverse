@@ -9,6 +9,11 @@ public enum LivingDexGame
     Gold = 4,
     Silver = 5,
     Crystal = 6,
+    Ruby = 7,
+    Sapphire = 8,
+    Emerald = 9,
+    FireRed = 10,
+    LeafGreen = 11,
 }
 
 /// <summary>

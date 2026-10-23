@@ -15,9 +15,11 @@ Rassemble les images servies par le site, dans PokeBank/wwwroot/images/ :
   le dossier de chaque forme par espèce (« 0026 » : {« Alola » : « 0001 », « Mega_X » : « 0002 »...}) ;
 - parc/foret.png : fond du « Parc », le fond de boîte PC « Forêt » de Diamant Étincelant / Perle Scintillante (PKHeX) ;
 - livingdex/ : sprites des jeux de chaque living dex (livingdex/rouge-bleu/<numéro>.png : Super Game Boy, livingdex/jaune/ :
-  Game Boy Color, livingdex/or/, argent/, cristal/ ; PokéAPI, versions/generation-i et ii/<jeu>/transparent) et jaquettes
-  officielles (livingdex/jaquettes/rouge.png, bleu.png, jaune.png, or.png, argent.png, cristal.png : Bulbagarden Archives,
-  versions anglaises, faute de françaises).
+  Game Boy Color, livingdex/or/, argent/, cristal/, rubis-saphir/, emeraude/, rouge-feu-vert-feuille/ ; PokéAPI,
+  versions/generation-i à iii/<jeu>), avec les formes qu'une sauvegarde du jeu peut contenir (Zarbi : 201-b.png...,
+  201-exclamation.png, 201-question.png ; Deoxys de son jeu : 386-speed.png, 386-attack.png, 386-defense.png), et jaquettes
+  officielles (livingdex/jaquettes/rouge.png, bleu.png, jaune.png, or.png, argent.png, cristal.png, rubis.png, saphir.png,
+  emeraude.png, rouge-feu.png, vert-feuille.png : Bulbagarden Archives, versions anglaises, faute de françaises).
 
 Sources des objets, dans l'ordre :
   1. PokéAPI, par nom anglais (l'apparence d'origine du site), sauf quand ce nom est porté par plusieurs objets ;
@@ -223,12 +225,25 @@ def fonds_jobs():
     return {"parc/foret.png": f"{PKHEX}/PKHeX.Drawing.Misc/Resources/img/box/bdsp/box_wp01bdsp.png"}, []
 
 
-# Living dex : dossier des sprites de chaque groupe de jeux (dossier PokéAPI, nombre d'espèces) et jaquettes (fichier
-# Bulbagarden Archives). À garder en accord avec LivingDexGames (PokeBank/Services/LivingDexService.cs).
-LIVINGDEX_SPRITES = {"rouge-bleu": ("generation-i/red-blue", 151), "jaune": ("generation-i/yellow", 151),
-                     "or": ("generation-ii/gold", 251), "argent": ("generation-ii/silver", 251), "cristal": ("generation-ii/crystal", 251)}
+# Living dex : dossier des sprites de chaque groupe de jeux (dossier PokéAPI, avec fond transparent : « transparent » en 1re et
+# 2e génération, ceux de la 3e le sont déjà ; nombre d'espèces), formes de chaque groupe (fichier du site ← fichier PokéAPI)
+# et jaquettes (fichier Bulbagarden Archives). À garder en accord avec LivingDexGames (PokeBank/Services/LivingDexService.cs).
+LIVINGDEX_SPRITES = {"rouge-bleu": ("generation-i/red-blue/transparent", 151), "jaune": ("generation-i/yellow/transparent", 151),
+                     "or": ("generation-ii/gold/transparent", 251), "argent": ("generation-ii/silver/transparent", 251),
+                     "cristal": ("generation-ii/crystal/transparent", 251),
+                     "rubis-saphir": ("generation-iii/ruby-sapphire", 386), "emeraude": ("generation-iii/emerald", 386),
+                     "rouge-feu-vert-feuille": ("generation-iii/firered-leafgreen", 386)}
+UNOWN_2 = {f"201-{c}": f"201-{c}" for c in "bcdefghijklmnopqrstuvwxyz"}  # Zarbi B à Z (A : 201.png)
+UNOWN_3 = {**UNOWN_2, "201-exclamation": "201-exclamation", "201-question": "201-question"}
+LIVINGDEX_FORMS = {"or": UNOWN_2, "argent": UNOWN_2, "cristal": UNOWN_2, "rubis-saphir": UNOWN_3,
+                   # Deoxys : formes Vitesse (Émeraude), Attaque (Rouge Feu) et Défense (Vert Feuille), Pokémon 10001 à 10003 de PokéAPI
+                   "emeraude": {**UNOWN_3, "386-speed": "10003"},
+                   "rouge-feu-vert-feuille": {**UNOWN_3, "386-attack": "10001", "386-defense": "10002"}}
+# (Émeraude : le fichier de Bulbagarden est un JPEG ; le site le garde sous emeraude.png comme les autres, le navigateur le lit quand même.)
 LIVINGDEX_COVERS = {"rouge": "File:Red EN boxart.png", "bleu": "File:Blue EN boxart.png", "jaune": "File:Yellow EN boxart.png",
-                    "or": "File:Gold EN boxart.png", "argent": "File:Silver EN boxart.png", "cristal": "File:Crystal EN boxart.png"}
+                    "or": "File:Gold EN boxart.png", "argent": "File:Silver EN boxart.png", "cristal": "File:Crystal EN boxart.png",
+                    "rubis": "File:Ruby EN boxart.png", "saphir": "File:Sapphire EN boxart.png", "emeraude": "File:Emerald EN boxart.jpg",
+                    "rouge-feu": "File:FireRed EN boxart.png", "vert-feuille": "File:LeafGreen EN boxart.png"}
 
 
 def livingdex_jobs():
@@ -236,7 +251,9 @@ def livingdex_jobs():
     jobs, missing = {}, []
     for folder, (theirs, count) in LIVINGDEX_SPRITES.items():
         for number in range(1, count + 1):
-            jobs[f"livingdex/{folder}/{number}.png"] = f"{POKEAPI}/pokemon/versions/{theirs}/transparent/{number}.png"
+            jobs[f"livingdex/{folder}/{number}.png"] = f"{POKEAPI}/pokemon/versions/{theirs}/{number}.png"
+        for mine, their_file in LIVINGDEX_FORMS.get(folder, {}).items():
+            jobs[f"livingdex/{folder}/{mine}.png"] = f"{POKEAPI}/pokemon/versions/{theirs}/{their_file}.png"
     for name, title in LIVINGDEX_COVERS.items():
         if (OUT / "livingdex" / "jaquettes" / f"{name}.png").exists():
             continue
