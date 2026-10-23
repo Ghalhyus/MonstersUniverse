@@ -1,5 +1,5 @@
 """
-Rassemble les images servies par le site, dans PokeBank/wwwroot/images/ :
+Rassemble les images servies par le site, dans MonsutaPotaru/wwwroot/images/ :
 
 - pokemon/<numéro d'espèce>.png, pokemon/<numéro>-<forme>.png (formes régionales, Méga-Évolutions, Primo-Résurgences,
   Gigamax, Zarbi... sous le nom de forme de PokéAPI : 19-alola.png, 6-mega-x.png), pokemon/femelle/<numéro>.png (espèces
@@ -35,7 +35,7 @@ Les objets qu'aucune source n'a (objets rares, objets de Légendes Arceus, acces
 gardent inconnu.png : il suffit de déposer leur image sous leur numéro pour la remplacer.
 
 Lancement (Python 3, rien à installer) : python outils/images.py [pokemon] [objets] [donjon] [fonds] [livingdex] [--sortie <dossier>]
-(tout, sans argument ; dans PokeBank/wwwroot/images, sauf --sortie : le serveur l'utilise pour ~/pokebank-images, voir
+(tout, sans argument ; dans MonsutaPotaru/wwwroot/images, sauf --sortie : le serveur l'utilise pour ~/monsuta-potaru-images, voir
 deploy/images-serveur.ps1). Les images ne sont pas dans le dépôt Git : en local, outils/recuperer-images.cmd les copie
 depuis le serveur, plus vite que les reconstruire.
 Les images déjà présentes sont gardées (supprimer un dossier pour le reprendre). À relancer quand PKHeX connaît de
@@ -64,12 +64,12 @@ DONJON_ANIMATIONS = ["Idle", "Walk", "Sleep"]  # animations gardées de SpriteCo
 TYPES = ["normal", "fighting", "flying", "poison", "ground", "rock", "bug", "ghost", "steel", "fire", "water", "grass",
          "electric", "psychic", "ice", "dragon", "dark", "fairy"]
 
-OUT = pathlib.Path(__file__).resolve().parent.parent / "PokeBank" / "wwwroot" / "images"
+OUT = pathlib.Path(__file__).resolve().parent.parent / "MonsutaPotaru" / "wwwroot" / "images"
 
 
 def get(url):
     # Avec un nom : Bulbagarden refuse les requêtes anonymes de Python.
-    request = urllib.request.Request(url, headers={"User-Agent": "PokeBank (outils/images.py)"})
+    request = urllib.request.Request(url, headers={"User-Agent": "Monsuta Potaru (outils/images.py)"})
     with urllib.request.urlopen(request, timeout=60) as r:
         return r.read()
 
@@ -231,7 +231,7 @@ def fonds_jobs():
 
 # Living dex : dossier des sprites de chaque groupe de jeux (dossier PokéAPI, avec fond transparent : « transparent » en 1re et
 # 2e génération, ceux de la 3e le sont déjà ; nombre d'espèces), formes de chaque groupe (fichier du site ← fichier PokéAPI)
-# et jaquettes (fichier Bulbagarden Archives). À garder en accord avec LivingDexGames (PokeBank/Services/LivingDexService.cs).
+# et jaquettes (fichier Bulbagarden Archives). À garder en accord avec LivingDexGames (MonsutaPotaru/Services/LivingDexService.cs).
 LIVINGDEX_SPRITES = {"rouge-bleu": ("generation-i/red-blue/transparent", 151), "jaune": ("generation-i/yellow/transparent", 151),
                      "or": ("generation-ii/gold/transparent", 251), "argent": ("generation-ii/silver/transparent", 251),
                      "cristal": ("generation-ii/crystal/transparent", 251),

@@ -1,9 +1,9 @@
-# PokeBank en production : l'application + Caddy (porte d'entrée HTTPS, certificat automatique).
+# Monsuta Potaru en production : l'application + Caddy (porte d'entrée HTTPS, certificat automatique).
 # Réglages dans le fichier .env (voir .env.example). Lancement : docker compose up -d --build
-name: pokebank # nom fixe : le volume de données s'appelle toujours pokebank_pokebank-data
+name: monsuta-potaru # nom fixe : le volume de données s'appelle toujours monsuta-potaru_monsuta-potaru-data
 
 services:
-  pokebank:
+  monsuta-potaru:
     build: .
     restart: unless-stopped
     environment:
@@ -12,10 +12,10 @@ services:
       # (cookies marqués « sécurisés »...). Sans risque : l'application n'est joignable qu'à travers Caddy.
       - ASPNETCORE_FORWARDEDHEADERS_ENABLED=true
     volumes:
-      - pokebank-data:/app/Data # base SQLite, copies de sécurité, clés de connexion
+      - monsuta-potaru-data:/app/Data # base SQLite, copies de sécurité, clés de connexion
       # Images (Pokémon, objets, sprites Donjon Mystère) : dossier du serveur, rempli par deploy\images-serveur.cmd,
       # hors de la sauvegarde nocturne (elles se retéléchargent).
-      - ../pokebank-images:/app/wwwroot/images:ro
+      - ../monsuta-potaru-images:/app/wwwroot/images:ro
 
   caddy:
     image: caddy:2
@@ -31,9 +31,9 @@ services:
       - caddy-data:/data # certificats HTTPS
       - caddy-config:/config
     depends_on:
-      - pokebank
+      - monsuta-potaru
 
 volumes:
-  pokebank-data:
+  monsuta-potaru-data:
   caddy-data:
   caddy-config:

@@ -1,6 +1,9 @@
-# PokeBank
+# Monsuta Potaru
 
-Banque Pokémon privée pour un cercle d'amis, basée sur [PKHeX.Core](https://github.com/kwsch/PKHeX).
+Banque Pokémon privée pour un cercle d'amis, basée sur [PKHeX.Core](https://github.com/kwsch/PKHeX). Anciennement
+« PokeBank » (renommé pour s'éloigner de Pokémon Bank, le service de Nintendo) : le homebrew 3DS garde pour l'instant
+son nom, **PokeBank Sync**, et les clés de connexion leur nom technique « PokeBank » (`SetApplicationName` dans
+`Program.cs` : le changer déconnecterait tout le monde).
 
 - **Stack** : ASP.NET Core 9 + Blazor Server (tout en C#, pas de JavaScript à écrire), SQLite, ASP.NET Identity.
 - **Jeux testés** : Pokémon Noir 2 / Blanc 2. PKHeX sait lire les autres générations ; à valider au cas par cas.
@@ -18,11 +21,11 @@ Sans accès au serveur, `python outils/images.py` les reconstruit depuis leurs p
 le site marche mais affiche des points d'interrogation, et les tests d'images échouent avec un message qui l'explique.
 
 ```bash
-dotnet run --project PokeBank
+dotnet run --project MonsutaPotaru
 ```
 
 Puis ouvrir http://localhost:5265. En développement, le code d'invitation est `pokeamis`
-(voir `PokeBank/appsettings.Development.json`). La base SQLite est créée automatiquement dans `PokeBank/Data/app.db`.
+(voir `MonsutaPotaru/appsettings.Development.json`). La base SQLite est créée automatiquement dans `MonsutaPotaru/Data/app.db`.
 
 Tests :
 
@@ -31,7 +34,7 @@ dotnet test
 ```
 
 `exemple-blanc2.sav` est une sauvegarde de test (Pikachu + Évoli) pour essayer le site sans vraie partie.
-Pour la régénérer : `POKEBANK_SAMPLE_OUT=chemin/fichier.sav dotnet test`.
+Pour la régénérer : `MONSUTA_POTARU_SAMPLE_OUT=chemin/fichier.sav dotnet test`.
 
 `exemple-platine.sav` est une sauvegarde Platine (dresseur Lucas, 50 000 ₽) avec 50 Pokémon légaux d'espèces différentes,
 tirés des vraies rencontres du jeu, et dans le sac 62 Pokéballs (Poké, Super, Hyper, Master, Luxe et Honor Ball),
@@ -41,9 +44,9 @@ Sitrus, Enigma), 11 objets (Pierre Lune, Pierre Feu, Pépite, Restes, Attaque + 
 deux CS (Coupe, Surf), le Vélo (objet rare) et une Lettre Herbe.
 
 Pour simuler « j'ai rejoué un peu » et passer la règle anti-copie de « Mes sauvegardes » (voir l'inventaire plus bas),
-`POKEBANK_ADD_PLAYTIME=chemin/fichier.sav dotnet test` ajoute une heure de jeu au fichier, modifié sur place (n'importe quel jeu). Pour la régénérer : `POKEBANK_SAMPLE_PT_OUT=chemin/fichier.sav dotnet test`.
+`MONSUTA_POTARU_ADD_PLAYTIME=chemin/fichier.sav dotnet test` ajoute une heure de jeu au fichier, modifié sur place (n'importe quel jeu). Pour la régénérer : `MONSUTA_POTARU_SAMPLE_PT_OUT=chemin/fichier.sav dotnet test`.
 
-**Vraies sauvegardes de test** : les fichiers déposés dans `PokeBank.Tests/Sauvegardes/` (versionnés, malgré la règle `*.sav`) passent tout le parcours du site dans `RealSavesTests` : lecture et réécriture à l'identique,
+**Vraies sauvegardes de test** : les fichiers déposés dans `MonsutaPotaru.Tests/Sauvegardes/` (versionnés, malgré la règle `*.sav`) passent tout le parcours du site dans `RealSavesTests` : lecture et réécriture à l'identique,
 dépôt d'un Pokémon puis retour au même emplacement, stockage (tous ses Pokémon dans la collection), retrait d'argent,
 retrait de tous les objets du sac et du PC puis dépôt de retour (objets rares, CS et Cristaux Z intacts). Il suffit d'y ajouter un
 fichier pour qu'il soit testé ; sans le dossier, ces tests ne vérifient rien. Actuellement : Rouge, Bleu, Argent (partie
@@ -131,7 +134,7 @@ avec « Mes sauvegardes » (ouvert de lui-même sur l'une des deux pages) :
   refusés avec le message du site, que la console affiche. Le nom de fichier envoyé est nettoyé (sans dossier, 100
   caractères au plus).
 
-API (JSON, messages en français prêts à afficher ; `PokeBank/Api/SyncEndpoints.cs`) :
+API (JSON, messages en français prêts à afficher ; `MonsutaPotaru/Api/SyncEndpoints.cs`) :
 
 | Requête | Réponse |
 |---|---|
@@ -372,52 +375,52 @@ est incompatible (espèce, attaques ou objets inexistants dans le jeu, conversio
 
 | Fichier | Rôle |
 |---|---|
-| `PokeBank/Services/SaveSession.cs` | Sauvegarde chargée + dépôts/retraits en attente (PKHeX) |
-| `PokeBank/Services/BankService.cs` | Accès base, validation transactionnelle, copies de sécurité |
-| `PokeBank/Services/PokemonFingerprint.cs` | Empreinte d'un Pokémon et recherche de ses doublons dans le compte (vieille copie d'une sauvegarde) |
-| `PokeBank/Services/PokemonInfo.cs` | Noms français (dont « Rouge / Bleu », « Or / Argent », « Diamant / Perle », « Or HeartGold / Argent SoulSilver » pour les groupes de jeux : une sauvegarde de ces jeux ne dit pas lequel des deux ; migrations `GameNames` et `GameGroupNames` pour les noms déjà enregistrés), sprites, légalité |
-| `PokeBank/Components/Pages/Bank.razor` | Page « Transfert et stockage interne » (`/transfert`) : boîtes, glisser-déposer, sélection multiple |
-| `PokeBank/Components/Pages/Park.razor` | Page « Parc » : boîte où vivent jusqu'à 30 Pokémon, fenêtre de choix, fiche au clic |
-| `PokeBank/wwwroot/js/parc.js` | Animation et comportement des Pokémon du parc (énergie, intentions, famille, nuit, curiosité) ; `simulate` pour les essais |
-| `PokeBank/Services/ParkService.cs` | Pokémon du parc : liste, choix (30 au plus, avec des sprites Donjon Mystère), retrait, famille d'évolution |
-| `PokeBank/Data/ParkMember.cs` | Table des Pokémon au parc (supprimée avec le Pokémon) |
-| `PokeBank/Components/Pages/LivingDexes.razor` | Page « Living dex » : cartes des living dex du compte, création (jeu, puis sauvegarde) |
-| `PokeBank/Components/Pages/LivingDexPage.razor` | Page d'un living dex : grille des sprites du jeu (silhouettes des manquants), progression, fiche au clic |
-| `PokeBank/Services/LivingDexService.cs` | Living dex : jeux (`LivingDexGames` : jaquette, sprites, Pokémon de chaque mode, modes cachés), comptage dans la sauvegarde, création, suppression |
-| `PokeBank/Data/LivingDex.cs` | Table des living dex (un par jeu et par compte, supprimé avec sa sauvegarde) |
-| `PokeBank/Components/Pages/Collection.razor` | Toute la collection sur une page (chargée au fil du défilement), filtres en pastilles (`Shared/CollectionFilterChips.razor`), filtre par origine, tri par arrivée (les plus récents d'abord, par défaut), par nom d'espèce ou par numéro de Pokédex (croissants), inversable, gardé dans l'adresse (`?tri=nom&ordre=desc`) ; les œufs toujours à la fin (leur espèce reste cachée), à égalité les plus récents d'abord ; le tri par nom ignore les accents (colonne `SortName`, remplie au démarrage pour les Pokémon plus anciens) ; 5 / 10 / 15 / 20 colonnes par défaut selon la largeur de la fenêtre en pixels physiques (téléphone, jusqu'à 1920, jusqu'à 2560, au-delà ; mise à l'échelle de Windows comprise), recalculées au redimensionnement, modifiables au curseur |
-| `PokeBank/Components/Pages/Saves.razor` | Gestion des sauvegardes stockées (ajout, mise à jour, suppression) |
-| `PokeBank/Components/Pages/Sync3ds.razor` | « Synchronisation 3DS » : consoles reliées (code de liaison, attente de la console, retrait) |
-| `PokeBank/Services/SyncService.cs` | Synchronisation 3DS : codes de liaison, jetons, envoi d'une sauvegarde (ajout, mise à jour ou « déjà à jour ») |
-| `PokeBank/Api/SyncEndpoints.cs` | API du homebrew PokeBank Sync (`/api/sync/...`) et limite d'essais de codes |
-| `PokeBank/Services/StoredSaveService.cs` | Stockage, mise à jour et suppression des sauvegardes stockées |
-| `PokeBank/Services/SaveIdentity.cs` | Empreinte d'une sauvegarde (unicité sur le serveur) |
-| `PokeBank/Services/InventoryService.cs` | Inventaire : retrait de Pokédollars, retrait et dépôt d'objets (sauvegardes stockées), achat d'emplacements, journal |
-| `PokeBank/Services/SaveBag.cs` | Objets du sac et du PC d'une sauvegarde (objets, Pokéballs, médicaments, baies, CT/DT par capacité ; jamais les objets rares, Lettres ni CS) : lecture, retrait, dépôt (PKHeX), conversion des numéros d'objets des jeux de 1re à 3e génération |
-| `PokeBank/Services/CollectionCapacity.cs` | Taille maximale de la collection : règles, occupation, messages |
-| `PokeBank/Components/Pages/Inventory.razor` | Page « Inventaire » (solde, stockage en onglets avec recherche, tri par onglet, liste/grille (colonnes de la grille au curseur) et choix de la source — interne, tout, une sauvegarde —, journal et détail d'un objet en panneau latéral, fenêtre de retrait d'argent) |
-| `PokeBank/Components/Shared/ItemTransferDialog.razor` | Fenêtre de retrait / dépôt d'objets (toutes catégories en une opération ; onglets Sac / PC pour les jeux de 1re à 3e génération) |
-| `PokeBank/Components/Shared/ItemSprite.razor` | Image d'un objet ; celle de l'objet inconnu quand le site n'en a pas |
-| `PokeBank/Services/PokemonCriteria.cs` | Filtres de « Ma collection » : valeurs choisies, requête en base, lecture et écriture dans l'adresse |
-| `PokeBank/Services/PokemonTraits.cs` | Caractéristiques d'un Pokémon enregistrées pour ces filtres (types récents, nature, talent, IV, forme, Méga) |
-| `PokeBank/Services/PokemonSprites.cs` | Choix de l'image d'un Pokémon : forme (noms de PKHeX → noms de PokéAPI), Méga-Évolution selon l'objet tenu, femelle, chromatique |
-| `PokeBank/wwwroot/images/` | Hors du dépôt Git (voir « Lancer en local ») ; images servies par le site : `pokemon/<numéro d'espèce>.png`, `pokemon/<numéro>-<forme>.png` (`19-alola.png`, `6-mega-x.png`, `6-gmax.png`), `pokemon/femelle/`, `pokemon/chromatique/` (mêmes sous-dossiers), `objets/<numéro d'objet>.png`, `objets/ct-<type>.png` pour les CT/DT, un `inconnu.png` dans chaque dossier |
-| `PokeBank/wwwroot/images/parc/foret.png` | Fond du parc (boîte « Forêt » de Diamant Étincelant, PKHeX) |
-| `PokeBank/wwwroot/images/donjon/` | Sprites animés de SpriteCollab (Idle, Walk, Sleep) dans les dossiers de SpriteCollab (`0025/`, `0025/0000/0001/` chromatique...) : planches `<Animation>-Anim.png` et `AnimData.xml` réduit à ces animations ; `credits.txt` (auteurs) |
+| `MonsutaPotaru/Services/SaveSession.cs` | Sauvegarde chargée + dépôts/retraits en attente (PKHeX) |
+| `MonsutaPotaru/Services/BankService.cs` | Accès base, validation transactionnelle, copies de sécurité |
+| `MonsutaPotaru/Services/PokemonFingerprint.cs` | Empreinte d'un Pokémon et recherche de ses doublons dans le compte (vieille copie d'une sauvegarde) |
+| `MonsutaPotaru/Services/PokemonInfo.cs` | Noms français (dont « Rouge / Bleu », « Or / Argent », « Diamant / Perle », « Or HeartGold / Argent SoulSilver » pour les groupes de jeux : une sauvegarde de ces jeux ne dit pas lequel des deux ; migrations `GameNames` et `GameGroupNames` pour les noms déjà enregistrés), sprites, légalité |
+| `MonsutaPotaru/Components/Pages/Bank.razor` | Page « Transfert et stockage interne » (`/transfert`) : boîtes, glisser-déposer, sélection multiple |
+| `MonsutaPotaru/Components/Pages/Park.razor` | Page « Parc » : boîte où vivent jusqu'à 30 Pokémon, fenêtre de choix, fiche au clic |
+| `MonsutaPotaru/wwwroot/js/parc.js` | Animation et comportement des Pokémon du parc (énergie, intentions, famille, nuit, curiosité) ; `simulate` pour les essais |
+| `MonsutaPotaru/Services/ParkService.cs` | Pokémon du parc : liste, choix (30 au plus, avec des sprites Donjon Mystère), retrait, famille d'évolution |
+| `MonsutaPotaru/Data/ParkMember.cs` | Table des Pokémon au parc (supprimée avec le Pokémon) |
+| `MonsutaPotaru/Components/Pages/LivingDexes.razor` | Page « Living dex » : cartes des living dex du compte, création (jeu, puis sauvegarde) |
+| `MonsutaPotaru/Components/Pages/LivingDexPage.razor` | Page d'un living dex : grille des sprites du jeu (silhouettes des manquants), progression, fiche au clic |
+| `MonsutaPotaru/Services/LivingDexService.cs` | Living dex : jeux (`LivingDexGames` : jaquette, sprites, Pokémon de chaque mode, modes cachés), comptage dans la sauvegarde, création, suppression |
+| `MonsutaPotaru/Data/LivingDex.cs` | Table des living dex (un par jeu et par compte, supprimé avec sa sauvegarde) |
+| `MonsutaPotaru/Components/Pages/Collection.razor` | Toute la collection sur une page (chargée au fil du défilement), filtres en pastilles (`Shared/CollectionFilterChips.razor`), filtre par origine, tri par arrivée (les plus récents d'abord, par défaut), par nom d'espèce ou par numéro de Pokédex (croissants), inversable, gardé dans l'adresse (`?tri=nom&ordre=desc`) ; les œufs toujours à la fin (leur espèce reste cachée), à égalité les plus récents d'abord ; le tri par nom ignore les accents (colonne `SortName`, remplie au démarrage pour les Pokémon plus anciens) ; 5 / 10 / 15 / 20 colonnes par défaut selon la largeur de la fenêtre en pixels physiques (téléphone, jusqu'à 1920, jusqu'à 2560, au-delà ; mise à l'échelle de Windows comprise), recalculées au redimensionnement, modifiables au curseur |
+| `MonsutaPotaru/Components/Pages/Saves.razor` | Gestion des sauvegardes stockées (ajout, mise à jour, suppression) |
+| `MonsutaPotaru/Components/Pages/Sync3ds.razor` | « Synchronisation 3DS » : consoles reliées (code de liaison, attente de la console, retrait) |
+| `MonsutaPotaru/Services/SyncService.cs` | Synchronisation 3DS : codes de liaison, jetons, envoi d'une sauvegarde (ajout, mise à jour ou « déjà à jour ») |
+| `MonsutaPotaru/Api/SyncEndpoints.cs` | API du homebrew PokeBank Sync (`/api/sync/...`) et limite d'essais de codes |
+| `MonsutaPotaru/Services/StoredSaveService.cs` | Stockage, mise à jour et suppression des sauvegardes stockées |
+| `MonsutaPotaru/Services/SaveIdentity.cs` | Empreinte d'une sauvegarde (unicité sur le serveur) |
+| `MonsutaPotaru/Services/InventoryService.cs` | Inventaire : retrait de Pokédollars, retrait et dépôt d'objets (sauvegardes stockées), achat d'emplacements, journal |
+| `MonsutaPotaru/Services/SaveBag.cs` | Objets du sac et du PC d'une sauvegarde (objets, Pokéballs, médicaments, baies, CT/DT par capacité ; jamais les objets rares, Lettres ni CS) : lecture, retrait, dépôt (PKHeX), conversion des numéros d'objets des jeux de 1re à 3e génération |
+| `MonsutaPotaru/Services/CollectionCapacity.cs` | Taille maximale de la collection : règles, occupation, messages |
+| `MonsutaPotaru/Components/Pages/Inventory.razor` | Page « Inventaire » (solde, stockage en onglets avec recherche, tri par onglet, liste/grille (colonnes de la grille au curseur) et choix de la source — interne, tout, une sauvegarde —, journal et détail d'un objet en panneau latéral, fenêtre de retrait d'argent) |
+| `MonsutaPotaru/Components/Shared/ItemTransferDialog.razor` | Fenêtre de retrait / dépôt d'objets (toutes catégories en une opération ; onglets Sac / PC pour les jeux de 1re à 3e génération) |
+| `MonsutaPotaru/Components/Shared/ItemSprite.razor` | Image d'un objet ; celle de l'objet inconnu quand le site n'en a pas |
+| `MonsutaPotaru/Services/PokemonCriteria.cs` | Filtres de « Ma collection » : valeurs choisies, requête en base, lecture et écriture dans l'adresse |
+| `MonsutaPotaru/Services/PokemonTraits.cs` | Caractéristiques d'un Pokémon enregistrées pour ces filtres (types récents, nature, talent, IV, forme, Méga) |
+| `MonsutaPotaru/Services/PokemonSprites.cs` | Choix de l'image d'un Pokémon : forme (noms de PKHeX → noms de PokéAPI), Méga-Évolution selon l'objet tenu, femelle, chromatique |
+| `MonsutaPotaru/wwwroot/images/` | Hors du dépôt Git (voir « Lancer en local ») ; images servies par le site : `pokemon/<numéro d'espèce>.png`, `pokemon/<numéro>-<forme>.png` (`19-alola.png`, `6-mega-x.png`, `6-gmax.png`), `pokemon/femelle/`, `pokemon/chromatique/` (mêmes sous-dossiers), `objets/<numéro d'objet>.png`, `objets/ct-<type>.png` pour les CT/DT, un `inconnu.png` dans chaque dossier |
+| `MonsutaPotaru/wwwroot/images/parc/foret.png` | Fond du parc (boîte « Forêt » de Diamant Étincelant, PKHeX) |
+| `MonsutaPotaru/wwwroot/images/donjon/` | Sprites animés de SpriteCollab (Idle, Walk, Sleep) dans les dossiers de SpriteCollab (`0025/`, `0025/0000/0001/` chromatique...) : planches `<Animation>-Anim.png` et `AnimData.xml` réduit à ces animations ; `credits.txt` (auteurs) |
 | `outils/recuperer-images.cmd` | Copie les images du serveur dans `wwwroot/images` par SSH (après un clonage) |
-| `deploy/images-serveur.cmd` (`images-serveur.ps1`) | Remplit ou met à jour les images du serveur (`~/pokebank-images`) et redémarre le site |
+| `deploy/images-serveur.cmd` (`images-serveur.ps1`) | Remplit ou met à jour les images du serveur (`~/monsuta-potaru-images`) et redémarre le site |
 | `outils/images.py` | Rassemble ces images (PokéAPI ; pour les objets, puis pokesprite et PKHeX par numéro d'objet) ; à relancer pour en ajouter |
-| `PokeBank/Data/BankPokemon.cs` | Table des Pokémon (octets bruts + métadonnées ; `StoredSaveId` si lecture seule) |
-| `PokeBank/Data/StoredSave.cs` | Table des sauvegardes stockées |
-| `PokeBank/Data/SyncDevice.cs` | Tables des consoles 3DS reliées (empreinte du jeton) et des codes de liaison |
-| `PokeBank/Data/Wallet.cs` | Tables du porte-monnaie et du journal des opérations |
-| `PokeBank/Data/OwnedItem.cs` | Table des objets de l'inventaire (objets, Pokéballs, médicaments, baies ; CT/DT sous une clé de capacité, `SaveBag.MachineKey`) |
+| `MonsutaPotaru/Data/BankPokemon.cs` | Table des Pokémon (octets bruts + métadonnées ; `StoredSaveId` si lecture seule) |
+| `MonsutaPotaru/Data/StoredSave.cs` | Table des sauvegardes stockées |
+| `MonsutaPotaru/Data/SyncDevice.cs` | Tables des consoles 3DS reliées (empreinte du jeton) et des codes de liaison |
+| `MonsutaPotaru/Data/Wallet.cs` | Tables du porte-monnaie et du journal des opérations |
+| `MonsutaPotaru/Data/OwnedItem.cs` | Table des objets de l'inventaire (objets, Pokéballs, médicaments, baies ; CT/DT sous une clé de capacité, `SaveBag.MachineKey`) |
 
 Ajouter une migration après modification du modèle :
 
 ```bash
 dotnet tool restore
-dotnet ef migrations add NomDeLaMigration --project PokeBank
+dotnet ef migrations add NomDeLaMigration --project MonsutaPotaru
 ```
 
 ## Mise en ligne sur un serveur
@@ -429,65 +432,81 @@ l'IP du VPS.
 | Fichier | Rôle |
 |---|---|
 | `Dockerfile` | Image de l'application |
-| `docker-compose.yml` | Application + Caddy, volume de données `pokebank_pokebank-data` |
+| `docker-compose.yml` | Application + Caddy, volume de données `monsuta-potaru_monsuta-potaru-data` |
 | `Caddyfile` | Réglages de Caddy (le domaine vient de `.env`) |
 | `.env.example` | Modèle des réglages : `DOMAIN` et `INVITE_CODE` (le vrai `.env` est créé sur le serveur) |
 | `deploy/publier.cmd` (`publier.ps1`) | Depuis Windows : envoie le code sur le VPS et le met à jour |
 | `deploy/installer-serveur.sh` | Sur le VPS, une seule fois : pare-feu, Docker, `.env`, sauvegarde nocturne, démarrage |
 | `deploy/sauvegarder.sh` | Sauvegarde du volume de données (lancée chaque nuit par cron, gardée 14 jours) |
+| `deploy/renommer-serveur.cmd` (`.ps1`, `.sh`) | Une seule fois : passage du serveur de « PokeBank » à « Monsuta Potaru » (voir plus bas) |
 | `.github/workflows/ci-cd.yml` | GitHub Actions : tests à chaque push, déploiement par un bouton (voir « CI/CD ») |
 
 **Première installation**
 
 1. Depuis Windows, dans le dossier du projet : `deploy\publier.cmd ubuntu@IP_DU_VPS`
-2. Sur le VPS (`ssh ubuntu@IP_DU_VPS`) : `bash ~/pokebank/deploy/installer-serveur.sh`
+2. Sur le VPS (`ssh ubuntu@IP_DU_VPS`) : `bash ~/monsuta-potaru/deploy/installer-serveur.sh`
    (demande le nom de domaine, génère le code d'invitation et l'affiche à la fin).
 3. Depuis Windows : `deploy\images-serveur.cmd ubuntu@IP_DU_VPS` (images, voir plus bas).
 
 **Mises à jour** : par GitHub (« CI/CD » ci-dessous), ou `deploy\publier.cmd ubuntu@IP_DU_VPS` depuis Windows. Les
 migrations de la base s'appliquent au démarrage ; les données restent dans le volume Docker.
 
+**Changement de nom du serveur** (une seule fois, pour un serveur installé sous le nom « PokeBank ») : Docker préfixe ses
+volumes du nom du projet, le nouveau nom repartirait donc d'une base vide. Après avoir poussé le code renommé :
+
+1. `deploy\renommer-serveur.cmd ubuntu@IP_DU_VPS` : sauvegarde (comme chaque nuit), arrêt de l'ancien site, **copie**
+   des volumes `pokebank_*` vers `monsuta-potaru_*` (base, copies de sécurité, clés de connexion, certificats HTTPS ;
+   nombre de fichiers vérifié), `~/pokebank-images` déplacé en `~/monsuta-potaru-images`, `.env` copié dans
+   `~/monsuta-potaru`, sauvegarde nocturne repointée. Relancé, il ne refait rien. Le site est arrêté à partir d'ici.
+2. « Run workflow » : envoie le code dans `~/monsuta-potaru` et redémarre le site (sa sauvegarde du début est sautée
+   cette fois-là : le dossier n'a encore que le `.env`).
+
+`~/pokebank` et les volumes `pokebank_*` restent pour revenir en arrière ; le script affiche à la fin les commandes de
+retour et de ménage (à faire une fois le site vérifié). Les anciennes archives `pokebank-*.tgz` de `~/sauvegardes`
+partent au bout de 14 jours, comme les nouvelles.
+
 **CI/CD** (GitHub Actions, `.github/workflows/ci-cd.yml`) :
 
 - **Tests** à chaque push, sur une machine Ubuntu propre (un fichier oublié dans un commit s'y voit) : .NET 9, images
-  copiées depuis `~/pokebank-images` du VPS par SSH (exigées par les tests d'images), puis `dotnet test`. Résultat dans
+  copiées depuis `~/monsuta-potaru-images` du VPS par SSH (exigées par les tests d'images), puis `dotnet test`. Résultat dans
   l'onglet « Actions » du dépôt et à côté de chaque commit. Attention : Linux distingue majuscules et minuscules dans les
   noms de fichiers, Windows non.
 - **Déploiement** : onglet « Actions » → « CI/CD » → « Run workflow » sur `main`. Il ne part que si les tests passent, puis :
   sauvegarde des données (`sauvegarder.sh`, quelques secondes de coupure), envoi de la même archive que `publier.ps1`,
-  **images manquantes** (`outils/images.py --sortie ~/pokebank-images`, comme `images-serveur` : les présentes sont gardées ;
-  un échec ne bloque pas, avertissement orange et journal complet dans `~/pokebank-images.log` sur le VPS),
+  **images manquantes** (`outils/images.py --sortie ~/monsuta-potaru-images`, comme `images-serveur` : les présentes sont gardées ;
+  un échec ne bloque pas, avertissement orange et journal complet dans `~/monsuta-potaru-images.log` sur le VPS),
   `docker compose up -d --build`, et vérification que le site répond (une minute au plus, sinon échec). Le dépôt est
   public, ses journaux d'Actions aussi : ils n'affichent ni secret ni journal du site (à lire par SSH). Jamais deux déploiements à la fois. La première installation se fait toujours avec `publier.cmd`.
 
 Mise en place (une fois), avec une clé SSH réservée à GitHub (révocable sans toucher à la tienne), dans PowerShell :
 
 1. Créer la clé, sans phrase de passe (Entrée deux fois) :
-   `ssh-keygen -t ed25519 -C github-actions-pokebank -f "$HOME\.ssh\pokebank-github"`
+   `ssh-keygen -t ed25519 -C github-actions-monsuta-potaru -f "$HOME\.ssh\monsuta-potaru-github"`
 2. L'autoriser sur le VPS :
-   `Get-Content "$HOME\.ssh\pokebank-github.pub" | ssh ubuntu@IP_DU_VPS "cat >> ~/.ssh/authorized_keys"`
+   `Get-Content "$HOME\.ssh\monsuta-potaru-github.pub" | ssh ubuntu@IP_DU_VPS "cat >> ~/.ssh/authorized_keys"`
 3. Lire l'empreinte du VPS que ton PC connaît déjà (lignes sans `#`) : `ssh-keygen -F IP_DU_VPS`
 4. Sur GitHub, « Settings » → « Secrets and variables » → « Actions » → « New repository secret » :
    `VPS_HOST` (IP du VPS), `VPS_USER` (`ubuntu`, `debian`...), `VPS_SSH_KEY` (tout le contenu de
-   `$HOME\.ssh\pokebank-github`, la clé **privée**, lignes `-----BEGIN/END` comprises), `VPS_KNOWN_HOSTS` (les lignes
+   `$HOME\.ssh\monsuta-potaru-github`, la clé **privée**, lignes `-----BEGIN/END` comprises), `VPS_KNOWN_HOSTS` (les lignes
    de l'étape 3).
 
-Pour retirer l'accès de GitHub : effacer la ligne `github-actions-pokebank` de `~/.ssh/authorized_keys` sur le VPS.
+Pour retirer l'accès de GitHub : effacer la ligne `github-actions-monsuta-potaru` de `~/.ssh/authorized_keys` sur le VPS
+(`github-actions-pokebank` pour la clé créée avant le changement de nom : elle reste valable, rien à refaire).
 
-**Images** : ni dans le dépôt ni dans la publication. Elles sont stockées sur le VPS dans `~/pokebank-images` (hors de la
+**Images** : ni dans le dépôt ni dans la publication. Elles sont stockées sur le VPS dans `~/monsuta-potaru-images` (hors de la
 sauvegarde nocturne : elles se retéléchargent), monté en lecture seule à la place de `wwwroot/images` (`docker-compose.yml`)
 et servi depuis le disque (`Program.cs` : `MapStaticAssets` ne connaît que les fichiers présents à la compilation).
-`deploy\images-serveur.cmd ubuntu@IP_DU_VPS` lance `outils/images.py --sortie ~/pokebank-images` sur le VPS (téléchargement
+`deploy\images-serveur.cmd ubuntu@IP_DU_VPS` lance `outils/images.py --sortie ~/monsuta-potaru-images` sur le VPS (téléchargement
 depuis les projets d'origine, ~10 minutes la première fois, les images présentes sont gardées), puis redémarre le site,
 qui lit la liste des images au démarrage. À relancer pour mettre les images à jour. Les développeurs les copient depuis le
 VPS avec `outils\recuperer-images.cmd` (voir « Lancer en local »).
 
 **Sauvegardes** : la sauvegarde de l'hébergeur ne couvre souvent que 24 h, or la base est le seul endroit où sont les
 Pokémon déposés. `deploy/sauvegarder.sh` archive chaque nuit le volume dans `~/sauvegardes` sur le VPS ; en garder aussi
-une copie ailleurs, par exemple : `scp -r ubuntu@IP_DU_VPS:~/sauvegardes C:\Sauvegardes\PokeBank`.
-Pour restaurer une archive : `docker compose stop pokebank`, puis
-`docker run --rm -v pokebank_pokebank-data:/data -v ~/sauvegardes:/backup alpine sh -c "rm -rf /data/* && tar xzf /backup/ARCHIVE.tgz -C /data"`,
-puis `docker compose start pokebank`.
+une copie ailleurs, par exemple : `scp -r ubuntu@IP_DU_VPS:~/sauvegardes C:\Sauvegardes\Monsuta Potaru`.
+Pour restaurer une archive : `docker compose stop monsuta-potaru`, puis
+`docker run --rm -v monsuta-potaru_monsuta-potaru-data:/data -v ~/sauvegardes:/backup alpine sh -c "rm -rf /data/* && tar xzf /backup/ARCHIVE.tgz -C /data"`,
+puis `docker compose start monsuta-potaru`.
 
 Réglages avancés (variables d'environnement, jamais de secret dans `appsettings.json`) : `Bank__InviteCode`,
 `ConnectionStrings__DefaultConnection`, `Bank__BackupPath`, `Bank__KeysPath` (clés de connexion ; par défaut dans
@@ -508,7 +527,7 @@ Réglages avancés (variables d'environnement, jamais de secret dans `appsetting
 
 ## Crédits
 
-PokeBank s'appuie sur le travail d'autres projets :
+Monsuta Potaru s'appuie sur le travail d'autres projets :
 
 | Projet | Utilisé pour | Licence |
 |---|---|---|
@@ -527,4 +546,4 @@ PokeBank s'appuie sur le travail d'autres projets :
 | [Bulbagarden Archives](https://archives.bulbagarden.net) | Jaquettes officielles de Pokémon Rouge, Bleu, Jaune, Or, Argent, Cristal, Rubis, Saphir, Émeraude, Rouge Feu, Vert Feuille, Diamant, Perle, Platine, HeartGold, SoulSilver, Noire, Blanche, Noire 2 et Blanche 2 (versions anglaises réduites, « Red/Blue/Yellow/Gold/Silver/Crystal/Ruby/Sapphire/Emerald/FireRed/LeafGreen/Diamond/Pearl/Platinum/HeartGold/SoulSilver/Black/White/Black 2/White 2 EN boxart », Émeraude, Diamant, Perle, HeartGold et SoulSilver en JPEG), images des living dex (`wwwroot/images/livingdex/jaquettes`, par `outils/images.py livingdex`) | Images © Nintendo / Creatures Inc. / GAME FREAK Inc. ; usage de fan, non commercial |
 
 Pokémon et tous les noms et images associés sont des marques et créations de Nintendo, Creatures Inc., GAME FREAK Inc. et
-The Pokémon Company. PokeBank est un projet de fan privé, sans lien avec eux.
+The Pokémon Company. Monsuta Potaru est un projet de fan privé, sans lien avec eux.

@@ -1,0 +1,137 @@
+﻿@implements IDisposable
+
+@using System.Security.Claims
+@using MonsutaPotaru.Services
+@inject NavigationManager NavigationManager
+@inject WalletState Wallet
+
+<div class="top-row ps-3 navbar navbar-dark">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="">Monsuta Potaru</a>
+    </div>
+</div>
+
+<input type="checkbox" title="Navigation menu" class="navbar-toggler" />
+
+@* Sur téléphone, un clic dans le menu le referme, sauf sur un menu parent (il déplie ses sous-menus). *@
+<div class="nav-scrollable" onclick="if (!event.target.closest('summary')) document.querySelector('.navbar-toggler').click()">
+    <nav class="nav flex-column">
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Accueil
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="transfert">
+                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Transfert
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="collection">
+                <span class="bi bi-grid-nav-menu" aria-hidden="true"></span> Ma collection
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="parc">
+                <span class="bi bi-tree-nav-menu" aria-hidden="true"></span> Parc
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="inventaire">
+                <span class="bi bi-bag-nav-menu" aria-hidden="true"></span> Inventaire
+                @if (Wallet.Balance is { } balance)
+                {
+                    <span class="nav-balance">· @InventoryService.FormatMoney(balance)</span>
+                }
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="livingdex">
+                <span class="bi bi-book-nav-menu" aria-hidden="true"></span> Living dex
+            </NavLink>
+        </div>
+        @* Menu repliable (élément HTML details : marche aussi sur les pages de compte, sans interactivité), ouvert de
+           lui-même sur l'une de ses pages. *@
+        <div class="nav-item nav-group px-3">
+            <details open="@savesOpen">
+                <summary class="nav-link">
+                    <span class="bi bi-save-nav-menu" aria-hidden="true"></span> Sauvegardes
+                </summary>
+                <div class="nav-subitems">
+                    <NavLink class="nav-link" href="sauvegardes" Match="NavLinkMatch.All">
+                        <span class="bi bi-folder-nav-menu" aria-hidden="true"></span> Mes sauvegardes
+                    </NavLink>
+                    <NavLink class="nav-link" href="sauvegardes/3ds">
+                        <span class="bi bi-controller-nav-menu" aria-hidden="true"></span> Synchronisation 3DS
+                    </NavLink>
+                </div>
+            </details>
+        </div>
+
+        <AuthorizeView>
+            <Authorized>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="Account/Manage">
+                        <span class="bi bi-person-fill-nav-menu" aria-hidden="true"></span> @context.User.Identity?.Name
+                    </NavLink>
+                </div>
+                <div class="nav-item px-3">
+                    <form action="Account/Logout" method="post">
+                        <AntiforgeryToken />
+                        <input type="hidden" name="ReturnUrl" value="@currentUrl" />
+                        <button type="submit" class="nav-link">
+                            <span class="bi bi-arrow-bar-left-nav-menu" aria-hidden="true"></span> Déconnexion
+                        </button>
+                    </form>
+                </div>
+            </Authorized>
+            <NotAuthorized>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="Account/Register">
+                        <span class="bi bi-person-nav-menu" aria-hidden="true"></span> Inscription
+                    </NavLink>
+                </div>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="Account/Login">
+                        <span class="bi bi-person-badge-nav-menu" aria-hidden="true"></span> Connexion
+                    </NavLink>
+                </div>
+            </NotAuthorized>
+        </AuthorizeView>
+    </nav>
+</div>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private string? currentUrl;
+
+    /// <summary>Menu « Sauvegardes » ouvert : sur « Mes sauvegardes » ou « Synchronisation 3DS ».</summary>
+    private bool savesOpen => currentUrl is { } url && (url == "sauvegardes" || url.StartsWith("sauvegardes/") || url.StartsWith("sauvegardes?"));
+
+    protected override async Task OnInitializedAsync()
+    {
+        currentUrl = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
+        NavigationManager.LocationChanged += OnLocationChanged;
+        Wallet.Changed += OnWalletChanged;
+
+        // Solde du porte-monnaie pour l'utilisateur connecté (rafraîchi par « Inventaire » après un retrait).
+        if (AuthState is not null && (await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier) is { } userId)
+            await Wallet.RefreshAsync(userId);
+    }
+
+    private void OnWalletChanged() => InvokeAsync(StateHasChanged);
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        currentUrl = NavigationManager.ToBaseRelativePath(e.Location);
+        StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        NavigationManager.LocationChanged -= OnLocationChanged;
+        Wallet.Changed -= OnWalletChanged;
+    }
+}
+

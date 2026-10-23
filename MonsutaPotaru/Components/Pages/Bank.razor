@@ -1,0 +1,703 @@
+@page "/transfert"
+@* Ancienne adresse de la page (« Ma banque »), gardée pour les favoris. *@
+@page "/banque"
+@attribute [Authorize]
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Authorization
+@using PKHeX.Core
+@using MonsutaPotaru.Components.Shared
+@using MonsutaPotaru.Data
+@using MonsutaPotaru.Services
+@inject SaveSession Session
+@inject BankService BankStore
+@inject StoredSaveService StoredSaves
+@inject PokemonInfo Info
+@inject IJSRuntime JS
+
+<PageTitle>Transfert et stockage interne</PageTitle>
+
+<h1 class="mb-3">Transfert et stockage interne</h1>
+
+<CollectionGauge Usage="usage" Pending="@(Session.Deposits.Count - Session.Withdrawals.Count)" OnPurchase="OnPurchase" />
+
+@if (message is not null)
+{
+    <div class="alert @messageClass alert-dismissible" role="alert">
+        @message
+        @if (messageDetails.Count > 0)
+        {
+            <ul class="mb-0 mt-1 small">
+                @foreach (var detail in messageDetails) { <li>@detail</li> }
+            </ul>
+        }
+        <button type="button" class="btn-close" aria-label="Fermer" @onclick="() => message = null"></button>
+    </div>
+}
+
+<div class="d-flex flex-wrap align-items-center gap-3 mb-3 small">
+    <div class="form-check form-switch mb-0">
+        <input class="form-check-input" type="checkbox" role="switch" id="multiSelect" @bind="multiSelect" />
+        <label class="form-check-label" for="multiSelect">Sélection multiple</label>
+    </div>
+    <span class="text-muted">ou Ctrl+clic (Cmd+clic sur Mac) pour ajouter un Pokémon, Maj+clic pour une plage.</span>
+</div>
+
+<div class="row g-4">
+    @* ---------- Sauvegarde ---------- *@
+    <section class="col-xl-5 col-lg-6">
+        <h2 class="h4">Ma sauvegarde</h2>
+
+        @if (!Session.IsLoaded)
+        {
+            <p class="text-muted">
+                Charge ta sauvegarde de jeu (par ex. un fichier <code>.sav</code> ou <code>.dsv</code> de Noir 2 / Blanc 2)
+                pour déposer ou retirer des Pokémon.
+            </p>
+            <InputFile OnChange="LoadSave" class="form-control" disabled="@busy" />
+        }
+        else
+        {
+            var sav = Session.Save!;
+            <div class="d-flex flex-wrap align-items-center gap-2 mb-2 small">
+                <span class="badge bg-secondary">@Info.GameName(sav)</span>
+                <span>Dresseur : <strong>@sav.OT</strong> (@sav.DisplayTID.ToString("00000"))</span>
+                <span class="text-muted">@Session.FileName</span>
+                <button class="btn btn-sm btn-outline-secondary ms-auto" @onclick="CloseSave" disabled="@busy">Changer de fichier</button>
+            </div>
+
+            @* Pendant un glissement depuis le stockage interne, survoler les flèches change de boîte (comme dans les jeux). *@
+            <div class="box-nav">
+                <button class="btn btn-sm btn-light" @onclick="() => ChangeBox(-1)" @ondragenter="() => DragOverArrow(-1)" aria-label="Boîte précédente">◀</button>
+                <select class="form-select form-select-sm" @bind="currentBox">
+                    @for (int b = 0; b < sav.BoxCount; b++)
+                    {
+                        <option value="@b">@BoxName(b)</option>
+                    }
+                </select>
+                <button class="btn btn-sm btn-light" @onclick="() => ChangeBox(1)" @ondragenter="() => DragOverArrow(1)" aria-label="Boîte suivante">▶</button>
+                <button class="btn btn-sm btn-link ms-auto" @onclick="SelectWholeBox">Tout sélectionner</button>
+            </div>
+
+            @* Lâcher entre deux cases : à partir de la première case libre de la boîte. *@
+            var saveDragCount = SelectedSave().Count(p => !Session.IsLocked(p.Box, p.Slot));
+            <div class="box-grid @(dragSource == DragSource.Bank ? "drop-active" : "")"
+                 @ondrop="() => DropOnSave(-1)">
+                @for (int s = 0; s < sav.BoxSlotCount; s++)
+                {
+                    var slot = s;
+                    var pk = Session.GetSlot(currentBox, slot);
+                    var locked = Session.IsLocked(currentBox, slot);
+                    <PokemonSlot Sprite="@(pk is null ? null : PokemonSprites.Url(pk))"
+                                 Title="@(pk is null ? "" : $"{SpeciesFr(pk)} N.{pk.CurrentLevel}")"
+                                 Level="@(pk?.CurrentLevel ?? 0)"
+                                 Shiny="@(pk?.IsShiny ?? false)"
+                                 Locked="@locked"
+                                 Pending="@Session.IsPendingSlot(currentBox, slot)"
+                                 Selected="@selectedSaveSlots.Contains((currentBox, slot))"
+                                 OnClick="e => ClickSaveSlot(slot, e)"
+                                 Draggable="@(!busy)"
+                                 DragCount="@(selectedSaveSlots.Contains((currentBox, slot)) ? saveDragCount : 1)"
+                                 Dragging="@(dragSource == DragSource.Save && dragSaveSlots.Contains((currentBox, slot)))"
+                                 DropTarget="@(dragSource == DragSource.Bank && !locked)"
+                                 OnDragStart="() => StartDragFromSave(slot)"
+                                 OnDragEnd="EndDrag"
+                                 OnDrop="() => DropOnSave(slot)" />
+                }
+            </div>
+            <p class="small text-muted mt-1 mb-0">Astuce : glisse un Pokémon (ou toute ta sélection) vers le stockage interne pour le déposer, ou du stockage interne vers une case pour le retirer.</p>
+
+            @if (Session.HasChanges)
+            {
+                <div class="card mt-3 border-warning">
+                    <div class="card-body">
+                        <h3 class="h6">Modifications en attente</h3>
+                        <ul class="list-unstyled small mb-2">
+                            @foreach (var d in Session.Deposits.ToList())
+                            {
+                                <li class="d-flex align-items-center gap-2">
+                                    <span>⬆ Dépôt : @SpeciesFr(d.Pokemon) N.@d.Pokemon.CurrentLevel</span>
+                                    <button class="btn btn-link btn-sm p-0 ms-auto" @onclick="() => UndoDeposit(d)">annuler</button>
+                                </li>
+                            }
+                            @foreach (var w in Session.Withdrawals.ToList())
+                            {
+                                var pk = Session.GetSlot(w.Box, w.Slot);
+                                <li class="d-flex align-items-center gap-2">
+                                    <span>⬇ Retrait : @(pk is null ? "?" : SpeciesFr(pk)) → @BoxName(w.Box)</span>
+                                    <button class="btn btn-link btn-sm p-0 ms-auto" @onclick="() => UndoWithdrawal(w)">annuler</button>
+                                </li>
+                            }
+                        </ul>
+                        <p class="small text-muted mb-2">
+                            Rien n'est enregistré tant que tu n'as pas validé. Après validation, <strong>remplace ta sauvegarde
+                            par le fichier téléchargé</strong>, sinon tu te retrouves avec des Pokémon en double ou perdus.
+                        </p>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-primary" @onclick="Commit" disabled="@busy">Valider et télécharger la sauvegarde</button>
+                            <button class="btn btn-outline-secondary" @onclick="ResetAll" disabled="@busy">Tout annuler</button>
+                        </div>
+                    </div>
+                </div>
+            }
+        }
+    </section>
+
+    @* ---------- Stockage interne ---------- *@
+    @* Toute la colonne sert de zone de dépôt quand on glisse un Pokémon de la sauvegarde. *@
+    <section class="col-xl-4 col-lg-6 bank-zone @(dragSource == DragSource.Save ? "drop-active" : "")"
+             @ondrop="DropOnBank">
+        <h2 class="h4">Stockage interne <span class="badge bg-primary">@bankEntries.Count</span></h2>
+
+        <input class="form-control form-control-sm mb-2" placeholder="Rechercher (espèce ou surnom)…"
+               @bind="search" @bind:event="oninput" @bind:after="LoadBank" />
+
+        @if (dragSource == DragSource.Save)
+        {
+            <div class="drop-hint">⬆ Lâche ici pour déposer dans le stockage interne</div>
+        }
+
+        @if (bankEntries.Count == 0)
+        {
+            <p class="text-muted">Le stockage interne est vide. Glisse ici un Pokémon de ta sauvegarde, ou sélectionne-le puis « Déposer ».</p>
+        }
+        else
+        {
+            var pageCount = (bankEntries.Count + PageSize - 1) / PageSize;
+            bankPage = Math.Clamp(bankPage, 0, pageCount - 1);
+
+            var bankDragCount = SelectedBank().Count(e => !Session.IsPendingWithdrawal(e.Id));
+            <div class="box-nav">
+                <button class="btn btn-sm btn-light" @onclick="() => bankPage--" disabled="@(bankPage == 0)" aria-label="Page précédente">◀</button>
+                <span class="small">Page @(bankPage + 1) / @pageCount</span>
+                <button class="btn btn-sm btn-light" @onclick="() => bankPage++" disabled="@(bankPage >= pageCount - 1)" aria-label="Page suivante">▶</button>
+                <button class="btn btn-sm btn-link ms-auto" @onclick="SelectWholeBankPage">Tout sélectionner</button>
+            </div>
+
+            <div class="box-grid">
+                @foreach (var entry in bankEntries.Skip(bankPage * PageSize).Take(PageSize))
+                {
+                    var e = entry;
+                    <PokemonSlot Sprite="@PokemonSprites.Url(e)"
+                                 Title="@($"{e.Nickname} ({e.SpeciesName}) N.{e.Level}")"
+                                 Level="e.Level"
+                                 Shiny="e.IsShiny"
+                                 Pending="@Session.IsPendingWithdrawal(e.Id)"
+                                 Selected="@selectedBankIds.Contains(e.Id)"
+                                 OnClick="args => ClickBank(e, args)"
+                                 Draggable="@(!busy && Session.IsLoaded && !Session.IsPendingWithdrawal(e.Id))"
+                                 DragCount="@(selectedBankIds.Contains(e.Id) ? bankDragCount : 1)"
+                                 Dragging="@(dragSource == DragSource.Bank && dragBankIds.Contains(e.Id))"
+                                 OnDragStart="() => StartDragFromBank(e)"
+                                 OnDragEnd="EndDrag" />
+                }
+            </div>
+        }
+    </section>
+
+    @* ---------- Détails ---------- *@
+    <section class="col-xl-3">
+        <h2 class="h4">Détails</h2>
+        @if (SelectedSave() is { Count: > 1 } saveSelection)
+        {
+            <div class="card">
+                <div class="card-body">
+                    <h5>@saveSelection.Count Pokémon sélectionnés</h5>
+                    <ul class="selection-list small">
+                        @foreach (var (box, slot) in saveSelection)
+                        {
+                            var pk = Session.GetSlot(box, slot)!;
+                            <li>@SpeciesFr(pk) N.@pk.CurrentLevel <span class="text-muted">— @BoxName(box), case @(slot + 1)</span></li>
+                        }
+                    </ul>
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-success" @onclick="() => DepositMany(saveSelection)" disabled="@busy">
+                            ⬆ Déposer les @saveSelection.Count dans le stockage interne
+                        </button>
+                        <button class="btn btn-outline-secondary btn-sm" @onclick="ClearSelection">Désélectionner</button>
+                    </div>
+                </div>
+            </div>
+        }
+        else if (SelectedSave() is [var sel] && Session.GetSlot(sel.Box, sel.Slot) is { } savePk)
+        {
+            <PokemonCard Pokemon="@Describe(savePk)">
+                <button class="btn btn-success w-100" @onclick="() => DepositMany([sel])" disabled="@(busy || Session.IsLocked(sel.Box, sel.Slot))">
+                    ⬆ Déposer dans le stockage interne
+                </button>
+            </PokemonCard>
+        }
+        else if (SelectedBank() is { Count: > 1 } bankSelection)
+        {
+            var available = bankSelection.Where(e => !Session.IsPendingWithdrawal(e.Id)).ToList();
+            <div class="card">
+                <div class="card-body">
+                    <h5>@bankSelection.Count Pokémon sélectionnés</h5>
+                    <ul class="selection-list small">
+                        @foreach (var e in bankSelection)
+                        {
+                            <li>@e.Nickname N.@e.Level @if (Session.IsPendingWithdrawal(e.Id)) { <span class="text-muted">— déjà retiré</span> }</li>
+                        }
+                    </ul>
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-success" @onclick="() => WithdrawMany(available)"
+                                disabled="@(busy || !Session.IsLoaded || available.Count == 0)">
+                            ⬇ Retirer les @available.Count vers la sauvegarde
+                        </button>
+                        @if (!Session.IsLoaded)
+                        {
+                            <small class="text-muted">Charge une sauvegarde pour retirer ces Pokémon.</small>
+                        }
+                        <button class="btn btn-outline-secondary btn-sm" @onclick="ClearSelection">Désélectionner</button>
+                    </div>
+                </div>
+            </div>
+        }
+        else if (SelectedBank() is [var entry] && BankView(entry) is { } view)
+        {
+            <PokemonCard Pokemon="@view">
+                <div class="d-grid gap-2">
+                    <button class="btn btn-success" @onclick="() => WithdrawMany([entry])"
+                            disabled="@(busy || !Session.IsLoaded || Session.IsPendingWithdrawal(entry.Id))">
+                        ⬇ Retirer vers la sauvegarde
+                    </button>
+                    @if (!Session.IsLoaded)
+                    {
+                        <small class="text-muted">Charge une sauvegarde pour retirer ce Pokémon.</small>
+                    }
+                    <button class="btn btn-outline-secondary btn-sm" @onclick="() => DownloadPkm(entry)">
+                        Télécharger le fichier .@entry.Extension
+                    </button>
+                    <small class="text-muted">Déposé le @entry.DepositedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</small>
+                </div>
+            </PokemonCard>
+        }
+        else
+        {
+            <p class="text-muted">Clique sur un Pokémon pour voir sa fiche.</p>
+        }
+    </section>
+</div>
+
+@code {
+    private const int PageSize = 30;
+
+    [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = default!;
+
+    private string userId = "";
+    private List<BankPokemon> bankEntries = [];
+    private readonly Dictionary<int, PokemonView?> bankViews = [];
+    private string search = "";
+    private int bankPage;
+
+    private int currentBox;
+
+    // Sélection : soit des cases de la sauvegarde, soit des Pokémon de la banque, jamais les deux.
+    private readonly HashSet<(int Box, int Slot)> selectedSaveSlots = [];
+    private readonly HashSet<int> selectedBankIds = [];
+    private (int Box, int Slot)? saveAnchor; // point de départ d'une plage (Maj+clic)
+    private int? bankAnchor;
+    private bool multiSelect;                 // un simple clic ajoute / retire (utile sur écran tactile)
+
+    private bool busy;
+    private string? message;
+    private string messageClass = "alert-success";
+    private List<string> messageDetails = [];
+
+    /// <summary>Occupation de la collection en base (hors dépôts / retraits en attente), relue après chaque validation.</summary>
+    private CollectionUsage usage = new(0, CollectionCapacity.DefaultLimit);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var user = (await AuthState).User;
+        userId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
+        await LoadBank();
+        usage = await BankStore.GetUsageAsync(userId);
+    }
+
+    private async Task LoadBank()
+    {
+        bankEntries = await BankStore.ListAsync(userId, search);
+    }
+
+    private string BoxName(int box)
+    {
+        var name = Session.Save is IBoxDetailName named ? named.GetBoxName(box) : "";
+        return string.IsNullOrWhiteSpace(name) ? $"Boîte {box + 1}" : name;
+    }
+
+    private void ChangeBox(int delta)
+    {
+        var count = Session.Save!.BoxCount;
+        currentBox = (currentBox + delta + count) % count;
+    }
+
+    private string SpeciesFr(PKM pk) => Describe(pk).SpeciesName;
+
+    private PokemonView Describe(PKM pk) => Info.Describe(pk);
+
+    private PokemonView? BankView(BankPokemon entry)
+    {
+        if (!bankViews.TryGetValue(entry.Id, out var view))
+        {
+            var pk = BankService.ToPkm(entry);
+            bankViews[entry.Id] = view = pk is null ? null : Info.Describe(pk, entry.IsLegal);
+        }
+        return view;
+    }
+
+    // ---------- Sélection ----------
+
+    private int SlotIndex((int Box, int Slot) p) => p.Box * Session.Save!.BoxSlotCount + p.Slot;
+
+    private bool IsMovable((int Box, int Slot) p) => Session.GetSlot(p.Box, p.Slot) is not null && !Session.IsLocked(p.Box, p.Slot);
+
+    /// <summary>Cases sélectionnées encore occupées, dans l'ordre des boîtes.</summary>
+    private List<(int Box, int Slot)> SelectedSave() =>
+        Session.IsLoaded
+            ? selectedSaveSlots.Where(p => Session.GetSlot(p.Box, p.Slot) is not null).OrderBy(SlotIndex).ToList()
+            : [];
+
+    /// <summary>Pokémon de la banque sélectionnés (et visibles avec la recherche en cours), dans l'ordre d'affichage.</summary>
+    private List<BankPokemon> SelectedBank() => bankEntries.Where(e => selectedBankIds.Contains(e.Id)).ToList();
+
+    private static bool AddsToSelection(MouseEventArgs e) => e.CtrlKey || e.MetaKey;
+
+    private void ClickSaveSlot(int slot, MouseEventArgs e)
+    {
+        var pos = (currentBox, slot);
+        selectedBankIds.Clear();
+        bankAnchor = null;
+
+        if (e.ShiftKey && saveAnchor is { } anchor)
+        {
+            if (!AddsToSelection(e)) selectedSaveSlots.Clear();
+            int from = Math.Min(SlotIndex(anchor), SlotIndex(pos)), to = Math.Max(SlotIndex(anchor), SlotIndex(pos));
+            int perBox = Session.Save!.BoxSlotCount;
+            for (int i = from; i <= to; i++)
+            {
+                var p = (i / perBox, i % perBox);
+                if (IsMovable(p) || p == pos) selectedSaveSlots.Add(p);
+            }
+            return;
+        }
+
+        if (AddsToSelection(e) || multiSelect)
+        {
+            if (!selectedSaveSlots.Remove(pos)) selectedSaveSlots.Add(pos);
+        }
+        else
+        {
+            selectedSaveSlots.Clear();
+            selectedSaveSlots.Add(pos);
+        }
+        saveAnchor = pos;
+    }
+
+    private void ClickBank(BankPokemon entry, MouseEventArgs e)
+    {
+        selectedSaveSlots.Clear();
+        saveAnchor = null;
+
+        var anchorIndex = bankAnchor is { } id ? bankEntries.FindIndex(x => x.Id == id) : -1;
+        if (e.ShiftKey && anchorIndex >= 0)
+        {
+            if (!AddsToSelection(e)) selectedBankIds.Clear();
+            var index = bankEntries.IndexOf(entry);
+            foreach (var x in bankEntries.Skip(Math.Min(anchorIndex, index)).Take(Math.Abs(anchorIndex - index) + 1))
+                selectedBankIds.Add(x.Id);
+            return;
+        }
+
+        if (AddsToSelection(e) || multiSelect)
+        {
+            if (!selectedBankIds.Remove(entry.Id)) selectedBankIds.Add(entry.Id);
+        }
+        else
+        {
+            selectedBankIds.Clear();
+            selectedBankIds.Add(entry.Id);
+        }
+        bankAnchor = entry.Id;
+    }
+
+    private void SelectWholeBox()
+    {
+        ClearSelection();
+        for (int s = 0; s < Session.Save!.BoxSlotCount; s++)
+            if (IsMovable((currentBox, s))) selectedSaveSlots.Add((currentBox, s));
+    }
+
+    private void SelectWholeBankPage()
+    {
+        ClearSelection();
+        foreach (var e in bankEntries.Skip(bankPage * PageSize).Take(PageSize))
+            if (!Session.IsPendingWithdrawal(e.Id)) selectedBankIds.Add(e.Id);
+    }
+
+    private void ClearSelection()
+    {
+        selectedSaveSlots.Clear();
+        selectedBankIds.Clear();
+        saveAnchor = null;
+        bankAnchor = null;
+    }
+
+    private async Task LoadSave(InputFileChangeEventArgs e)
+    {
+        busy = true;
+        try
+        {
+            await using var stream = e.File.OpenReadStream(maxAllowedSize: 32 * 1024 * 1024);
+            using var ms = new MemoryStream();
+            await stream.CopyToAsync(ms);
+
+            if (Session.TryLoad(ms.ToArray(), e.File.Name, out var error))
+            {
+                // Une sauvegarde stockée sur le serveur (par n'importe quel compte) est en lecture seule.
+                if (await StoredSaves.FindHolderAsync(SaveIdentity.Of(Session.Save!).Key) is { } holder)
+                {
+                    Session.Close();
+                    Show(StoredSaveService.AlreadyStoredMessage(holder, userId,
+                        "Supprime-la depuis « Ma collection » (elle te sera rendue) pour pouvoir l'utiliser ici."), isError: true);
+                    return;
+                }
+                // Un de ses Pokémon est déjà ailleurs dans le compte : vieille copie de la sauvegarde (clonage possible).
+                var duplicates = await BankStore.FindDuplicatesAsync(userId, StoredSaveService.ReadAllPokemon(Session.Save!).Select(p => p.Pokemon));
+                if (PokemonFingerprint.RefusalMessage(duplicates, PokemonFingerprint.TransferAdvice) is { } refusal)
+                {
+                    Session.Close();
+                    Show(refusal, isError: true);
+                    return;
+                }
+                currentBox = 0;
+                ClearSelection();
+                Show($"Sauvegarde chargée : {Info.GameName(Session.Save!)}.");
+            }
+            else
+            {
+                Show(error, isError: true);
+            }
+        }
+        catch (Exception ex)
+        {
+            Show($"Impossible de lire le fichier : {ex.Message}", isError: true);
+        }
+        finally { busy = false; }
+    }
+
+    private void CloseSave()
+    {
+        if (Session.HasChanges)
+        {
+            Show("Valide ou annule d'abord les modifications en attente.", isError: true);
+            return;
+        }
+        Session.Close();
+        ClearSelection();
+    }
+
+    /// <summary>Dépose les Pokémon de ces cases dans la banque (en attente de validation).</summary>
+    /// <summary>Fin d'un achat d'emplacements (fenêtre de la jauge).</summary>
+    private async Task OnPurchase(PurchaseResult result)
+    {
+        Show(result.Message, !result.Ok);
+        usage = await BankStore.GetUsageAsync(userId);
+    }
+
+    private void DepositMany(IReadOnlyList<(int Box, int Slot)> slots)
+    {
+        // Taille de la collection, en tenant compte de ce qui est déjà en attente : le groupe entier passe ou rien.
+        // Remettre en banque un Pokémon tout juste retiré compte aussi (il réoccupe sa place).
+        var current = usage with { Used = usage.Used + Session.Deposits.Count - Session.Withdrawals.Count };
+        if (CollectionCapacity.Exceeds(current, current.Used + slots.Count))
+        {
+            Show(CollectionCapacity.BankFullMessage(current, slots.Count), isError: true);
+            return;
+        }
+
+        var errors = new List<string>();
+        int deposited = 0, cancelled = 0;
+        foreach (var (box, slot) in slots)
+        {
+            var name = Session.GetSlot(box, slot) is { } pk ? SpeciesFr(pk) : "?";
+            var wasWithdrawn = Session.IsPendingSlot(box, slot); // le remettre en banque annule simplement le retrait
+            if (Session.TryDeposit(box, slot, out var error))
+            {
+                if (wasWithdrawn) cancelled++; else deposited++;
+                selectedSaveSlots.Remove((box, slot));
+            }
+            else errors.Add($"{name} : {error}");
+        }
+
+        var parts = new List<string>();
+        if (deposited > 0) parts.Add(deposited == 1 ? "1 dépôt ajouté aux modifications en attente" : $"{deposited} dépôts ajoutés aux modifications en attente");
+        if (cancelled > 0) parts.Add(cancelled == 1 ? "1 retrait annulé" : $"{cancelled} retraits annulés");
+        ShowResult(deposited + cancelled, string.Join(", ", parts) + ".", errors);
+    }
+
+    /// <summary>
+    /// Retire ces Pokémon de la banque vers la sauvegarde, dans les cases libres à partir de <paramref name="from"/>
+    /// (boîte puis suivantes), ou à partir de la toute première case libre si <paramref name="from"/> est nul.
+    /// </summary>
+    private void WithdrawMany(IReadOnlyList<BankPokemon> entries, (int Box, int Slot)? from = null)
+    {
+        var errors = new List<string>();
+        var placed = new List<(int Box, int Slot)>();
+        var (box, slot) = from ?? (0, 0);
+        foreach (var entry in entries)
+        {
+            if (Session.IsPendingWithdrawal(entry.Id)) continue;
+            var pk = BankService.ToPkm(entry);
+            if (pk is null) { errors.Add($"{entry.Nickname} : données illisibles."); continue; }
+
+            (box, slot) = Session.FindEmptySlot(box, slot);
+            if (box < 0) { errors.Add("Plus aucun emplacement libre dans les boîtes."); break; }
+
+            if (Session.TryWithdraw(entry.Id, pk, box, slot, out var error))
+            {
+                placed.Add((box, slot));
+                selectedBankIds.Remove(entry.Id);
+            }
+            else errors.Add($"{entry.Nickname} : {error}");
+        }
+
+        if (placed.Count > 0)
+            currentBox = placed[0].Box;
+        var where = placed.Count == 0 ? "" : $"{BoxName(placed[0].Box)}, case {placed[0].Slot + 1}";
+        ShowResult(placed.Count,
+            placed.Count == 1
+                ? $"Retrait ajouté aux modifications en attente ({where})."
+                : $"{placed.Count} retraits ajoutés aux modifications en attente (à partir de {where}).",
+            errors);
+    }
+
+    // ---------- Glisser-déposer ----------
+
+    private enum DragSource { None, Save, Bank }
+
+    private DragSource dragSource;
+    private List<(int Box, int Slot)> dragSaveSlots = [];
+    private List<int> dragBankIds = [];
+
+    /// <summary>Glisser un Pokémon sélectionné emporte toute la sélection ; sinon, lui seul (et il devient la sélection).</summary>
+    private void StartDragFromSave(int slot)
+    {
+        var pos = (currentBox, slot);
+        if (!selectedSaveSlots.Contains(pos))
+        {
+            ClearSelection();
+            selectedSaveSlots.Add(pos);
+            saveAnchor = pos;
+        }
+        dragSaveSlots = SelectedSave().Where(p => !Session.IsLocked(p.Box, p.Slot)).ToList();
+        dragSource = DragSource.Save;
+    }
+
+    private void StartDragFromBank(BankPokemon entry)
+    {
+        if (!selectedBankIds.Contains(entry.Id))
+        {
+            ClearSelection();
+            selectedBankIds.Add(entry.Id);
+            bankAnchor = entry.Id;
+        }
+        dragBankIds = SelectedBank().Where(e => !Session.IsPendingWithdrawal(e.Id)).Select(e => e.Id).ToList();
+        dragSource = DragSource.Bank;
+    }
+
+    private void EndDrag() => dragSource = DragSource.None;
+
+    private void DragOverArrow(int delta)
+    {
+        if (dragSource == DragSource.Bank)
+            ChangeBox(delta);
+    }
+
+    private void DropOnBank()
+    {
+        if (dragSource != DragSource.Save) return;
+        EndDrag();
+        DepositMany(dragSaveSlots);
+    }
+
+    /// <summary>
+    /// Lâcher sur une case vide : le premier Pokémon y va, les suivants dans les cases libres d'après.
+    /// Ailleurs dans la boîte (case occupée, bordure) : à partir de la première case libre de la boîte.
+    /// </summary>
+    private void DropOnSave(int slot)
+    {
+        if (dragSource != DragSource.Bank) return;
+        EndDrag();
+        var entries = bankEntries.Where(e => dragBankIds.Contains(e.Id)).ToList();
+        var from = slot >= 0 && Session.GetSlot(currentBox, slot) is null ? (currentBox, slot) : (currentBox, 0);
+        WithdrawMany(entries, from);
+    }
+
+    private void UndoDeposit(PendingDeposit d)
+    {
+        if (!Session.UndoDeposit(d))
+            Show("Plus de place dans les boîtes pour remettre ce Pokémon.", isError: true);
+    }
+
+    private void UndoWithdrawal(PendingWithdrawal w) => Session.UndoWithdrawal(w);
+
+    private void ResetAll()
+    {
+        Session.Reset();
+        ClearSelection();
+        Show("Modifications annulées.");
+    }
+
+    private async Task Commit()
+    {
+        busy = true;
+        try
+        {
+            var data = await BankStore.CommitAsync(userId, Session);
+            await Download(Session.FileName, data);
+            bankViews.Clear();
+            ClearSelection();
+            await LoadBank();
+            usage = await BankStore.GetUsageAsync(userId);
+            Show("Stockage interne mis à jour. Remplace maintenant ta sauvegarde par le fichier téléchargé.");
+        }
+        catch (Exception ex)
+        {
+            Show(ex.Message, isError: true);
+        }
+        finally { busy = false; }
+    }
+
+    private async Task DownloadPkm(BankPokemon entry)
+    {
+        var name = $"{entry.Species:000} - {entry.Nickname}.{entry.Extension}";
+        await Download(name, entry.Data);
+    }
+
+    private async Task Download(string fileName, byte[] data)
+    {
+        using var streamRef = new DotNetStreamReference(new MemoryStream(data));
+        await JS.InvokeVoidAsync("downloadFileFromStream", fileName, streamRef);
+    }
+
+    private void Show(string text, bool isError = false, List<string>? details = null)
+    {
+        message = text;
+        messageClass = isError ? "alert-danger" : "alert-success";
+        messageDetails = details ?? [];
+    }
+
+    /// <summary>Bilan d'une opération groupée : succès, échec, ou réussite partielle avec la liste des refus.</summary>
+    private void ShowResult(int ok, string success, List<string> errors)
+    {
+        if (errors.Count == 0)
+            Show(success);
+        else if (ok == 0)
+            Show(errors.Count == 1 ? errors[0] : "Aucun Pokémon n'a pu être déplacé :", isError: true, errors.Count == 1 ? null : errors);
+        else
+        {
+            Show($"{success} Certains ont été refusés :", details: errors);
+            messageClass = "alert-warning";
+        }
+    }
+}

@@ -1,0 +1,47 @@
+@using MonsutaPotaru.Services
+@* Fiche détaillée d'un Pokémon ; les boutons d'action sont passés via ChildContent. *@
+
+<div class="card pokemon-card">
+    <div class="card-body">
+        <div class="d-flex align-items-center gap-3">
+            <img src="@Pokemon.SpriteUrl" alt="@Pokemon.SpeciesName" width="96" height="96"
+                 onerror="if (!this.src.endsWith('/inconnu.png')) this.src = 'images/pokemon/inconnu.png'" />
+            <div>
+                <h5 class="mb-1">
+                    @Pokemon.Nickname @Pokemon.Gender
+                    @if (Pokemon.IsShiny) { <span class="text-warning" title="Chromatique">★</span> }
+                </h5>
+                <div class="text-muted small">
+                    @Pokemon.SpeciesName · N.@Pokemon.Level · @Pokemon.Format
+                </div>
+                @if (Pokemon.IsLegal)
+                {
+                    <span class="badge bg-success">Légal</span>
+                }
+                else
+                {
+                    <span class="badge bg-danger" title="Selon l'analyse de légalité de PKHeX">Illégal</span>
+                }
+            </div>
+        </div>
+
+        <dl class="row small mt-3 mb-2">
+            <dt class="col-5">Nature</dt><dd class="col-7">@Pokemon.Nature</dd>
+            <dt class="col-5">Talent</dt><dd class="col-7">@Pokemon.Ability</dd>
+            <dt class="col-5">Objet</dt><dd class="col-7">@Pokemon.HeldItem</dd>
+            <dt class="col-5">Dresseur</dt><dd class="col-7">@Pokemon.OriginalTrainer (@Pokemon.TrainerId)</dd>
+            <dt class="col-5">Jeu d'origine</dt><dd class="col-7">@Pokemon.OriginGame</dd>
+            <dt class="col-5">Attaques</dt>
+            <dd class="col-7">
+                @foreach (var move in Pokemon.Moves) { <div>@move</div> }
+            </dd>
+        </dl>
+
+        @ChildContent
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public PokemonView Pokemon { get; set; } = default!;
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

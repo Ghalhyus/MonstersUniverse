@@ -1,0 +1,222 @@
+@page "/livingdex/{Id:int}"
+@attribute [Authorize]
+@implements IAsyncDisposable
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Authorization
+@using MonsutaPotaru.Components.Shared
+@using MonsutaPotaru.Data
+@using MonsutaPotaru.Services
+@inject LivingDexService Dexes
+@inject BankService BankStore
+@inject PokemonInfo Info
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>@(view?.Game.Name ?? "Living dex")</PageTitle>
+
+@* Un living dex : les Pokémon du mode choisi dans l'ordre du Pokédex, avec les sprites du jeu ; en couleur s'il est dans
+   la sauvegarde, en silhouette noire sinon. Un clic sur un Pokémon possédé ouvre sa fiche. *@
+
+@if (notFound)
+{
+    <p class="text-muted">Ce living dex n'existe plus. <a href="livingdex">Retour aux living dex</a></p>
+}
+else if (view is not null)
+{
+    <div class="livingdex-header mb-3">
+        <img class="livingdex-cover" src="@view.Game.Cover" alt="Jaquette de @view.Game.Name" onerror="this.style.display='none'" />
+        <div class="flex-grow-1">
+            <a class="small" href="livingdex">← Living dex</a>
+            <h1 class="mb-0">@view.Game.Name</h1>
+            <div class="small text-muted mb-2">Sauvegarde : @view.SaveLabel</div>
+            @if (view.Modes.Count > 1)
+            {
+                <div class="btn-group btn-group-sm mb-2" role="group" aria-label="Mode">
+                    @foreach (var m in view.Modes)
+                    {
+                        var mode = m;
+                        <button type="button" class="btn @(view.Mode == mode ? "btn-primary" : "btn-outline-primary")" @onclick="() => SetMode(mode)">
+                            @LivingDexGames.ModeName(mode)
+                        </button>
+                    }
+                </div>
+            }
+            <div class="d-flex align-items-center gap-2">
+                <strong>@view.Owned / @view.Entries.Count</strong>
+                <div class="progress flex-grow-1" role="progressbar" aria-label="Progression" aria-valuenow="@view.Owned" aria-valuemin="0" aria-valuemax="@view.Entries.Count">
+                    <div class="progress-bar @(view.Owned == view.Entries.Count ? "bg-success" : "")" style="width: @(view.Entries.Count == 0 ? 0 : view.Owned * 100 / view.Entries.Count)%"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="d-flex flex-wrap align-items-center gap-3 mb-2">
+        <div class="form-check form-switch mb-0">
+            <input class="form-check-input" type="checkbox" role="switch" id="missingOnly" @bind="missingOnly" />
+            <label class="form-check-label" for="missingOnly">Manquants seulement (@(view.Entries.Count - view.Owned))</label>
+        </div>
+        @* Comme « Ma collection » : par défaut selon la largeur de la fenêtre, gardé dans l'adresse une fois choisi. *@
+        <label class="collection-columns small">
+            Colonnes
+            <input type="range" class="form-range" min="@GridColumns.Min" max="@GridColumns.Max"
+                   @bind="columns" @bind:event="oninput" @onchange="RememberColumns" />
+            <span class="fw-semibold">@columns</span>
+        </label>
+        <button type="button" class="btn btn-sm btn-outline-danger ms-auto" @onclick="() => confirmDelete = true">Supprimer ce living dex</button>
+    </div>
+    @if (confirmDelete)
+    {
+        <div class="alert alert-danger small">
+            Le living dex sera supprimé ; la sauvegarde et ses Pokémon restent.
+            <div class="d-flex flex-wrap gap-2 mt-2">
+                <button type="button" class="btn btn-sm btn-danger" @onclick="Delete">Supprimer</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => confirmDelete = false">Annuler</button>
+            </div>
+        </div>
+    }
+
+    @if (missingOnly && view.Owned == view.Entries.Count)
+    {
+        <p class="text-success">Complet : il ne manque aucun Pokémon !</p>
+    }
+    <div class="livingdex-grid" style="--columns: @columns">
+        @foreach (var entry in view.Entries.Where(e => !missingOnly || !e.Owned))
+        {
+            var e = entry;
+            var number = view.Mode == LivingDexMode.Regional ? $"{view.Game.Region} #{e.Number:000} {e.Name} (national #{e.Species:000})" : $"#{e.Number:000} {e.Name}";
+            var title = $"{number} — {(e.Owned ? e.Location ?? "dans la sauvegarde" : "manquant")}"
+                + (e.Note is null ? "" : e.Owned ? $" · {e.Note}" : $" : {e.Note}");
+            @if (e.Owned)
+            {
+                <button type="button" class="livingdex-slot" title="@title" aria-label="@title" @onclick="() => OpenDetail(e)">
+                    <img src="@e.Sprite" alt="" loading="lazy" onerror="@FallbackSprite(e)" />
+                    <span>#@e.Number.ToString("000")</span>
+                </button>
+            }
+            else
+            {
+                <div class="livingdex-slot missing" title="@title" aria-label="@title">
+                    <img src="@e.Sprite" alt="" loading="lazy" onerror="@FallbackSprite(e)" />
+                    <span>#@e.Number.ToString("000")</span>
+                </div>
+            }
+        }
+    </div>
+}
+
+@* ---------- Fiche du Pokémon cliqué ---------- *@
+@if (selectedView is not null)
+{
+    <div class="collection-backdrop" @onclick="CloseDetail"></div>
+    <div class="collection-dialog" role="dialog" aria-modal="true" aria-label="@selectedView.Nickname">
+        <PokemonCard Pokemon="@selectedView">
+            <div class="d-flex flex-wrap align-items-center gap-2">
+                <span class="small text-muted">@selectedLocation</span>
+                <button type="button" class="btn btn-secondary btn-sm ms-auto" @onclick="CloseDetail">Fermer</button>
+            </div>
+        </PokemonCard>
+    </div>
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+    [SupplyParameterFromQuery(Name = "mode")] private string? ModeFromQuery { get; set; }
+    /// <summary>Colonnes choisies au curseur (?colonnes=12) ; absent : selon la largeur de la fenêtre (<see cref="GridColumns"/>).</summary>
+    [SupplyParameterFromQuery(Name = GridColumns.QueryName)] private int? ColumnsFromQuery { get; set; }
+    [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = default!;
+
+    private string userId = "";
+    private LivingDexView? view;
+    private bool notFound;
+    private bool missingOnly;
+    private bool confirmDelete;
+    private PokemonView? selectedView;
+    private string? selectedLocation;
+    private int columns = GridColumns.Default;
+    private int screenColumns = GridColumns.Default; // largeur de fenêtre inconnue tant que la page n'est pas interactive
+    private DotNetObjectReference<LivingDexPage>? selfRef;
+    private IJSObjectReference? screenWatcher;
+
+    /// <summary>Modes dans l'adresse (?mode=regional, complet).</summary>
+    private static readonly Dictionary<LivingDexMode, string> ModeSlugs = new()
+    {
+        [LivingDexMode.Regional] = "regional",
+        [LivingDexMode.National] = "national",
+        [LivingDexMode.Complete] = "complet",
+    };
+
+    protected override async Task OnParametersSetAsync()
+    {
+        userId = (await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
+        // National par défaut ; un mode que le jeu ne propose pas redevient le National (GetAsync).
+        var mode = ModeSlugs.FirstOrDefault(m => m.Value == ModeFromQuery) is { Value: not null } found ? found.Key : LivingDexMode.National;
+        view = await Dexes.GetAsync(userId, Id, mode);
+        notFound = view is null;
+        columns = GridColumns.Clamp(ColumnsFromQuery ?? screenColumns);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        selfRef = DotNetObjectReference.Create(this);
+        screenWatcher = await JS.InvokeAsync<IJSObjectReference>("watchScreenSize", GridColumns.NarrowWidth, GridColumns.WindowWidths, selfRef);
+        ApplyScreenSize(await screenWatcher.InvokeAsync<int>("size"));
+    }
+
+    /// <summary>Appelé par le navigateur quand la largeur de la fenêtre change de tranche.</summary>
+    [JSInvokable]
+    public Task OnScreenSizeChanged(int size) => InvokeAsync(() => ApplyScreenSize(size));
+
+    private void ApplyScreenSize(int size)
+    {
+        screenColumns = GridColumns.ForScreen(size);
+        if (ColumnsFromQuery is not null || columns == screenColumns)
+            return; // nombre choisi au curseur : la taille de la fenêtre n'y touche pas
+        columns = screenColumns;
+        StateHasChanged();
+    }
+
+    /// <summary>Nombre choisi au curseur, gardé dans l'adresse (retiré s'il revient à celui de la fenêtre).</summary>
+    private void RememberColumns() =>
+        Navigation.NavigateTo(Navigation.GetUriWithQueryParameter(GridColumns.QueryName, columns == screenColumns ? null : columns), replace: true);
+
+    public async ValueTask DisposeAsync()
+    {
+        if (screenWatcher is not null)
+        {
+            try
+            {
+                await screenWatcher.InvokeVoidAsync("dispose");
+                await screenWatcher.DisposeAsync();
+            }
+            catch (JSDisconnectedException) { } // onglet fermé : plus rien à nettoyer côté navigateur
+        }
+        selfRef?.Dispose();
+    }
+
+    private void SetMode(LivingDexMode mode) =>
+        Navigation.NavigateTo(Navigation.GetUriWithQueryParameter("mode", mode == LivingDexMode.National ? null : ModeSlugs[mode]));
+
+    /// <summary>Sprite du jeu absent (images pas encore récupérées) : l'image de la même forme sur le site.</summary>
+    private static string FallbackSprite(LivingDexEntry e) => $"this.onerror=null;this.src='{e.Fallback}'";
+
+    private async Task OpenDetail(LivingDexEntry e)
+    {
+        if (e.BankId is not { } id || await BankStore.GetAsync(userId, id) is not { } entry || BankService.ToPkm(entry) is not { } pk)
+            return;
+        selectedView = Info.Describe(pk, entry.IsLegal);
+        selectedLocation = e.Location;
+    }
+
+    private void CloseDetail()
+    {
+        selectedView = null;
+        selectedLocation = null;
+    }
+
+    private async Task Delete()
+    {
+        await Dexes.DeleteAsync(userId, Id);
+        Navigation.NavigateTo("livingdex");
+    }
+}

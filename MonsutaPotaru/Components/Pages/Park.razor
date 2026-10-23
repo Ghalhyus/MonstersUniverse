@@ -1,0 +1,277 @@
+@page "/parc"
+@attribute [Authorize]
+@implements IAsyncDisposable
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Authorization
+@using MonsutaPotaru.Components.Shared
+@using MonsutaPotaru.Data
+@using MonsutaPotaru.Services
+@inject ParkService Parks
+@inject BankService BankStore
+@inject PokemonInfo Info
+@inject IJSRuntime JS
+
+<PageTitle>Parc</PageTitle>
+
+@* Jusqu'à 30 Pokémon de la collection se promènent dans une boîte PC au fond « Forêt » :
+   l'animation et leur comportement sont dans wwwroot/js/parc.js, la page ne gère que la liste et les fenêtres. *@
+
+<div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+    <h1 class="mb-0">Parc <span class="badge bg-primary fs-6 align-middle">@members.Count / @ParkService.Capacity</span></h1>
+    <button type="button" class="btn btn-primary ms-auto" @onclick="OpenChooser">Choisir les Pokémon</button>
+</div>
+<p class="small text-muted">
+    Tes Pokémon vivent ici : ils se promènent, se reposent, rendent visite à leur famille et dorment quand ils sont fatigués
+    (plus tôt le soir). Clique sur l'un d'eux pour voir sa fiche.
+</p>
+
+@if (message is not null)
+{
+    <div class="alert @(messageIsError ? "alert-danger" : "alert-success") alert-dismissible" role="alert">
+        @message
+        <button type="button" class="btn-close" aria-label="Fermer" @onclick="() => message = null"></button>
+    </div>
+}
+
+<div class="park">
+    <div class="park-stage" @ref="stage"></div>
+    @if (loaded && members.Count == 0)
+    {
+        <div class="park-empty">
+            <p>Le parc est vide.</p>
+            <button type="button" class="btn btn-light" @onclick="OpenChooser">Choisir des Pokémon</button>
+        </div>
+    }
+</div>
+
+@* ---------- Choix des Pokémon du parc ---------- *@
+@if (candidates is not null)
+{
+    var shown = candidates.Where(Matches).ToList();
+    <div class="dialog-backdrop" @onclick="CloseChooser"></div>
+    <div class="dialog-panel card" role="dialog" aria-modal="true" aria-label="Pokémon du parc">
+        <div class="card-body">
+            <h5>Pokémon du parc <small class="text-muted">· @chosen.Count / @ParkService.Capacity</small></h5>
+            <p class="small text-muted">
+                Tes Pokémon du stockage interne et de tes sauvegardes stockées (💾) : clique pour en ajouter ou en retirer.
+                Ceux dont les sprites n'existent pas encore (🔒) ne peuvent pas venir.
+            </p>
+            <input type="search" class="form-control form-control-sm mb-2" placeholder="Rechercher (espèce ou surnom)…"
+                   aria-label="Rechercher un Pokémon" @bind="search" @bind:event="oninput" />
+            <div class="mb-2">
+                <CollectionFilterChips Value="criteria" ValueChanged="CriteriaChanged" Abilities="abilities" />
+            </div>
+            @if (candidates.Count == 0)
+            {
+                <p class="text-muted small">@(criteria.IsEmpty ? "Ta collection n'a pas encore de Pokémon." : "Aucun Pokémon ne correspond aux filtres.")</p>
+            }
+            else if (shown.Count == 0)
+            {
+                <p class="text-muted small">Aucun Pokémon ne correspond.</p>
+            }
+            else
+            {
+                <div class="park-candidates">
+                    @foreach (var candidate in shown)
+                    {
+                        var c = candidate;
+                        <PokemonSlot Sprite="@c.SpriteUrl"
+                                     Title="@($"{c.Nickname} ({c.SpeciesName}) N.{c.Level}{(c.StoredSaveId is null ? "" : " — sauvegarde stockée")}{(c.HasSprites ? "" : " — pas encore de sprite")}")"
+                                     Level="c.Level"
+                                     Shiny="c.IsShiny"
+                                     Marker="@(c.StoredSaveId is null ? null : "💾")"
+                                     Locked="@(!c.HasSprites)"
+                                     Selected="@chosen.Contains(c.Id)"
+                                     OnClick="() => Toggle(c)" />
+                    }
+                </div>
+            }
+            @if (chooserMessage is not null)
+            {
+                <p class="small text-danger mt-2 mb-0">@chooserMessage</p>
+            }
+            <div class="d-flex justify-content-end gap-2 mt-3">
+                <button type="button" class="btn btn-outline-secondary" @onclick="CloseChooser">Annuler</button>
+                <button type="button" class="btn btn-primary" @onclick="SaveChoice" disabled="@busy">Valider</button>
+            </div>
+        </div>
+    </div>
+}
+
+@* ---------- Fiche du Pokémon cliqué ---------- *@
+@if (selected is not null && selectedView is not null)
+{
+    <div class="collection-backdrop" @onclick="CloseDetail"></div>
+    <div class="collection-dialog" role="dialog" aria-modal="true" aria-label="@selectedView.Nickname">
+        <PokemonCard Pokemon="@selectedView">
+            <div class="d-flex flex-wrap align-items-center gap-2">
+                <button type="button" class="btn btn-outline-danger btn-sm" @onclick="RemoveSelected" disabled="@busy">Retirer du parc</button>
+                <button type="button" class="btn btn-secondary btn-sm ms-auto" @onclick="CloseDetail">Fermer</button>
+            </div>
+        </PokemonCard>
+    </div>
+}
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = default!;
+
+    private string userId = "";
+    private List<ParkPokemon> members = [];
+    private bool loaded;
+    private bool busy;
+    private string? message;
+    private bool messageIsError;
+
+    private ElementReference stage;
+    private IJSObjectReference? module;
+    private IJSObjectReference? engine;
+    private DotNetObjectReference<Park>? selfRef;
+
+    private List<ParkCandidate>? candidates; // fenêtre de choix ouverte
+    private HashSet<int> chosen = [];
+    private string search = "";
+    private PokemonCriteria criteria = PokemonCriteria.None; // pastilles de la fenêtre de choix
+    private List<int> abilities = []; // talents de la collection, pour la pastille « Talent »
+    private string? chooserMessage;
+
+    private BankPokemon? selected;
+    private PokemonView? selectedView;
+
+    protected override async Task OnInitializedAsync()
+    {
+        userId = (await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
+        members = await Parks.ListAsync(userId);
+        loaded = true;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+        selfRef = DotNetObjectReference.Create(this);
+        module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/parc.js");
+        engine = await module.InvokeAsync<IJSObjectReference>("create", stage, selfRef);
+        await engine.InvokeVoidAsync("setPokemon", members);
+    }
+
+    /// <summary>Clic sur un Pokémon du parc (il s'est tourné vers toi) : sa fiche.</summary>
+    [JSInvokable]
+    public Task OnPokemonClicked(int id) => InvokeAsync(async () =>
+    {
+        var entry = await BankStore.GetAsync(userId, id);
+        if (entry is null || BankService.ToPkm(entry) is not { } pk)
+            return;
+        selected = entry;
+        selectedView = Info.Describe(pk, entry.IsLegal);
+        StateHasChanged();
+    });
+
+    private void CloseDetail()
+    {
+        selected = null;
+        selectedView = null;
+    }
+
+    private async Task RemoveSelected()
+    {
+        if (selected is null)
+            return;
+        busy = true;
+        var name = selectedView?.Nickname ?? "Le Pokémon";
+        await Parks.RemoveAsync(userId, selected.Id);
+        CloseDetail();
+        await Reload();
+        Show($"{name} a quitté le parc (il reste dans ta collection).");
+        busy = false;
+    }
+
+    // ---------- Choix des Pokémon ----------
+
+    private async Task OpenChooser()
+    {
+        search = "";
+        chooserMessage = null;
+        criteria = PokemonCriteria.None;
+        abilities = await BankStore.ListAbilitiesAsync(userId);
+        candidates = await Parks.ListCandidatesAsync(userId);
+        chosen = candidates.Where(c => c.InPark).Select(c => c.Id).ToHashSet();
+    }
+
+    /// <summary>Pastilles modifiées : nouvelle liste ; les Pokémon déjà choisis le restent, même cachés par les filtres.</summary>
+    private async Task CriteriaChanged(PokemonCriteria value)
+    {
+        criteria = value;
+        candidates = await Parks.ListCandidatesAsync(userId, value);
+    }
+
+    private void CloseChooser() => candidates = null;
+
+    private void Toggle(ParkCandidate c)
+    {
+        chooserMessage = null;
+        if (chosen.Remove(c.Id))
+            return;
+        if (!c.HasSprites)
+            chooserMessage = $"{c.SpeciesName} n'a pas encore de sprites Donjon Mystère : il ne peut pas venir au parc pour l'instant.";
+        else if (chosen.Count >= ParkService.Capacity)
+            chooserMessage = $"Le parc est plein ({ParkService.Capacity} Pokémon) : retires-en un avant d'en ajouter un autre.";
+        else
+            chosen.Add(c.Id);
+    }
+
+    private bool Matches(ParkCandidate c) =>
+        string.IsNullOrWhiteSpace(search)
+        || French.IndexOf(c.SpeciesName, search.Trim(), IgnoreCaseAndAccents) >= 0
+        || French.IndexOf(c.Nickname, search.Trim(), IgnoreCaseAndAccents) >= 0;
+
+    private static readonly System.Globalization.CompareInfo French = System.Globalization.CultureInfo.GetCultureInfo("fr-FR").CompareInfo;
+    private const System.Globalization.CompareOptions IgnoreCaseAndAccents =
+        System.Globalization.CompareOptions.IgnoreCase | System.Globalization.CompareOptions.IgnoreNonSpace;
+
+    private async Task SaveChoice()
+    {
+        busy = true;
+        var result = await Parks.SetAsync(userId, chosen);
+        busy = false;
+        if (!result.Ok)
+        {
+            chooserMessage = result.Message;
+            return;
+        }
+        candidates = null;
+        await Reload();
+        Show(result.Message);
+    }
+
+    private async Task Reload()
+    {
+        members = await Parks.ListAsync(userId);
+        if (engine is not null)
+            await engine.InvokeVoidAsync("setPokemon", members);
+    }
+
+    private void Show(string text, bool isError = false)
+    {
+        message = text;
+        messageIsError = isError;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            if (engine is not null)
+            {
+                await engine.InvokeVoidAsync("dispose");
+                await engine.DisposeAsync();
+            }
+            if (module is not null)
+                await module.DisposeAsync();
+        }
+        catch (JSDisconnectedException)
+        {
+            // onglet fermé : plus rien à nettoyer côté navigateur
+        }
+        selfRef?.Dispose();
+    }
+}

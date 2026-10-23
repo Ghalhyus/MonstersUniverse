@@ -1,0 +1,274 @@
+@page "/sauvegardes"
+@attribute [Authorize]
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Authorization
+@using MonsutaPotaru.Services
+@using MonsutaPotaru.Components.Shared
+@inject StoredSaveService StoredSaves
+@inject BankService BankStore
+@inject LivingDexService LivingDexes
+@inject IJSRuntime JS
+
+<PageTitle>Mes sauvegardes</PageTitle>
+
+@* Sauvegardes stockées sur le serveur pour consultation : leurs Pokémon apparaissent dans « Ma collection »
+   en lecture seule. Ajout, mise à jour (même partie uniquement) et suppression (qui rend le fichier). *@
+
+<h1 class="mb-2">Mes sauvegardes <span class="badge bg-primary fs-6 align-middle">@saves.Count</span></h1>
+<p class="small text-muted">
+    Les Pokémon d'une sauvegarde stockée apparaissent dans « Ma collection » en lecture seule (💾) : ils ne peuvent pas être
+    transférés, et la sauvegarde est refusée dans « Transfert » tant qu'elle est stockée. Tous les jeux lus par PKHeX sont
+    acceptés ; seuls Noir 2 / Blanc 2 ont été testés.
+</p>
+
+@* Les sauvegardes comptent dans la taille de la collection : on voit ici ce qu'il reste avant d'en ajouter une. *@
+<CollectionGauge Usage="usage" OnPurchase="OnPurchase" />
+
+<div class="d-flex justify-content-end mb-3">
+    <label class="btn btn-primary mb-0 @(busy ? "disabled" : "")">
+        + Ajouter une sauvegarde
+        <InputFile @key="fileInputVersion" class="d-none" OnChange="AddSave" disabled="@busy" />
+    </label>
+</div>
+
+@if (message is not null)
+{
+    <div class="alert @(messageIsError ? "alert-danger" : "alert-success") alert-dismissible" role="alert">
+        @message
+        <button type="button" class="btn-close" aria-label="Fermer" @onclick="() => message = null"></button>
+    </div>
+}
+
+@if (saves.Count == 0)
+{
+    <p class="text-muted">Aucune sauvegarde stockée pour l'instant.</p>
+}
+else
+{
+    <div class="list-group">
+        @foreach (var save in saves)
+        {
+            var s = save;
+            <div class="list-group-item">
+                <div class="d-flex flex-wrap align-items-center gap-2">
+                    <div>
+                        <strong>@s.Label</strong> <span class="small text-muted">(@s.TrainerId)</span>
+                        <div class="small text-muted">
+                            @s.FileName · @s.PokemonCount Pokémon · @SaveIdentity.FormatPlayTime(s.PlayTimeSeconds) de jeu ·
+                            mise à jour le @s.UpdatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
+                        </div>
+                    </div>
+                    <div class="ms-auto d-flex flex-wrap gap-2">
+                        <a class="btn btn-sm btn-outline-secondary" href="collection?source=@s.Id">Voir ses Pokémon</a>
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="() => DownloadSave(s)" disabled="@busy">Télécharger</button>
+                        @* Après une modification sur le serveur (argent, Pokéballs) : bloqué tant que la version modifiée n'a pas été téléchargée. *@
+                        <label class="btn btn-sm btn-outline-primary mb-0 @(busy || s.MustDownloadBeforeUpdate ? "disabled" : "")"
+                               title="@(s.MustDownloadBeforeUpdate ? "Télécharge d'abord la version modifiée sur le serveur" : null)">
+                            Mettre à jour
+                            <InputFile @key="fileInputVersion" class="d-none" OnChange="e => UpdateSave(s, e)" disabled="@(busy || s.MustDownloadBeforeUpdate)" />
+                        </label>
+                        <button class="btn btn-sm btn-outline-danger" @onclick="() => { confirmDeleteId = s.Id; deleteWithoutDownload = false; pendingUpdate = null; }" disabled="@busy">Supprimer</button>
+                    </div>
+                </div>
+
+                @if (s.ModifiedOnServer)
+                {
+                    <div class="alert alert-info small mt-2 mb-0">
+                        @(char.ToUpperInvariant(s.ServerChanges[0]) + s.ServerChanges[1..]) a modifié cette sauvegarde sur le serveur :
+                        la sauvegarde de ton jeu n'a pas ces changements.
+                        @if (s.MustDownloadBeforeUpdate)
+                        {
+                            <text><strong>Télécharge-la et remplace celle de ton jeu</strong> ; la mise à jour est bloquée en attendant.</text>
+                        }
+                        else
+                        {
+                            <text>Remplace celle de ton jeu par la version téléchargée ; la prochaine mise à jour devra avoir plus de temps de jeu.</text>
+                        }
+                    </div>
+                }
+                @if (pendingUpdate is { } pending && pending.Save.Id == s.Id)
+                {
+                    <div class="alert alert-warning small mt-2 mb-0">
+                        @pending.Warning
+                        <div class="d-flex gap-2 mt-2">
+                            <button class="btn btn-sm btn-warning" @onclick="ConfirmOlderUpdate" disabled="@busy">Remplacer quand même</button>
+                            <button class="btn btn-sm btn-outline-secondary" @onclick="() => pendingUpdate = null">Annuler</button>
+                        </div>
+                    </div>
+                }
+                @if (confirmDeleteId == s.Id && !deleteWithoutDownload)
+                {
+                    <div class="alert alert-danger small mt-2 mb-0">
+                        La sauvegarde va être <strong>téléchargée sur ton appareil</strong>, puis retirée du serveur avec ses
+                        @s.PokemonCount Pokémon. Tu pourras ensuite l'utiliser dans « Transfert ».
+                        @if (livingDexBySave.TryGetValue(s.Id, out var dexName))
+                        {
+                            <strong>Son living dex @dexName sera supprimé aussi.</strong>
+                        }
+                        <div class="d-flex flex-wrap gap-2 mt-2">
+                            <button class="btn btn-sm btn-danger" @onclick="() => DeleteSave(s)" disabled="@busy">Télécharger et supprimer</button>
+                            @* Modifiée sur le serveur et pas encore téléchargée : ces changements seraient perdus (même règle que « Mettre à jour »). *@
+                            <span title="@(s.MustDownloadBeforeUpdate ? "Télécharge d'abord la version modifiée sur le serveur" : null)">
+                                <button class="btn btn-sm btn-outline-danger" @onclick="() => deleteWithoutDownload = true"
+                                        disabled="@(busy || s.MustDownloadBeforeUpdate)">Supprimer sans télécharger</button>
+                            </span>
+                            <button class="btn btn-sm btn-outline-secondary" @onclick="() => confirmDeleteId = null">Annuler</button>
+                        </div>
+                    </div>
+                }
+                @if (confirmDeleteId == s.Id && deleteWithoutDownload)
+                {
+                    <div class="alert alert-danger small mt-2 mb-0">
+                        <strong>Le fichier ne te sera pas rendu</strong> : la sauvegarde et ses @s.PokemonCount Pokémon seront retirés du
+                        serveur. Garde bien la sauvegarde de ton jeu.
+                        @if (livingDexBySave.TryGetValue(s.Id, out var dexName))
+                        {
+                            <strong>Son living dex @dexName sera supprimé aussi.</strong>
+                        }
+                        <div class="d-flex flex-wrap gap-2 mt-2">
+                            <button class="btn btn-sm btn-danger" @onclick="() => DeleteWithoutDownload(s)" disabled="@busy">Oui, supprimer sans télécharger</button>
+                            <button class="btn btn-sm btn-outline-secondary" @onclick="() => confirmDeleteId = null">Annuler</button>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = default!;
+
+    private string userId = "";
+    private List<StoredSaveInfo> saves = [];
+    private Dictionary<int, string> livingDexBySave = []; // nom du jeu de son living dex, supprimé avec elle
+    private CollectionUsage usage = new(0, CollectionCapacity.DefaultLimit);
+    private bool busy;
+    private int fileInputVersion; // recrée les champs fichier : renvoyer le même fichier redéclenche l'envoi
+    private int? confirmDeleteId;
+    private bool deleteWithoutDownload; // deuxième étape de « Supprimer » : confirmation de la suppression sans téléchargement
+    private PendingUpdate? pendingUpdate;
+    private string? message;
+    private bool messageIsError;
+
+    /// <summary>Mise à jour en attente de confirmation (le fichier a moins de temps de jeu que la version stockée).</summary>
+    private sealed record PendingUpdate(StoredSaveInfo Save, string FileName, byte[] Data, string Warning);
+
+    protected override async Task OnInitializedAsync()
+    {
+        userId = (await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
+        await RefreshAsync();
+    }
+
+    private Task AddSave(InputFileChangeEventArgs e) =>
+        RunBusy(async () =>
+        {
+            var result = await StoredSaves.AddAsync(userId, e.File.Name, await ReadFile(e));
+            Show(result.Message, !result.Ok);
+            if (result.Ok) await RefreshAsync();
+        });
+
+    private Task UpdateSave(StoredSaveInfo save, InputFileChangeEventArgs e) =>
+        RunBusy(async () =>
+        {
+            confirmDeleteId = null;
+            await RunUpdate(save, e.File.Name, await ReadFile(e), acceptOlder: false);
+        });
+
+    private Task ConfirmOlderUpdate() =>
+        pendingUpdate is { } p ? RunBusy(() => RunUpdate(p.Save, p.FileName, p.Data, acceptOlder: true)) : Task.CompletedTask;
+
+    private async Task RunUpdate(StoredSaveInfo save, string fileName, byte[] data, bool acceptOlder)
+    {
+        var result = await StoredSaves.UpdateAsync(userId, save.Id, fileName, data, acceptOlder);
+        if (result.Status == StoreStatus.OlderPlayTime)
+        {
+            pendingUpdate = new PendingUpdate(save, fileName, data, result.Message);
+            return;
+        }
+        pendingUpdate = null;
+        Show(result.Message, !result.Ok);
+        if (result.Ok) await RefreshAsync();
+    }
+
+    /// <summary>« Supprimer » rend d'abord le fichier à l'utilisateur, pour qu'il ne perde pas sa sauvegarde.</summary>
+    private Task DeleteSave(StoredSaveInfo save) =>
+        RunBusy(async () =>
+        {
+            confirmDeleteId = null;
+            if (await StoredSaves.DeleteAsync(userId, save.Id) is { } file)
+            {
+                using var streamRef = new DotNetStreamReference(new MemoryStream(file.Data));
+                await JS.InvokeVoidAsync("downloadFileFromStream", file.FileName, streamRef);
+                Show($"Sauvegarde « {file.FileName} » téléchargée et retirée du serveur ({save.PokemonCount} Pokémon).");
+            }
+            else Show("Cette sauvegarde n'existe plus.", isError: true);
+            await RefreshAsync();
+        });
+
+    /// <summary>Supprime sans rendre le fichier, après confirmation (refusé par le serveur si une version modifiée attend d'être téléchargée).</summary>
+    private Task DeleteWithoutDownload(StoredSaveInfo save) =>
+        RunBusy(async () =>
+        {
+            confirmDeleteId = null;
+            var result = await StoredSaves.DeleteWithoutDownloadAsync(userId, save.Id);
+            Show(result.Message, !result.Ok);
+            await RefreshAsync();
+        });
+
+    /// <summary>Récupère le fichier actuel (avec les modifications du serveur) sans supprimer la sauvegarde.</summary>
+    private Task DownloadSave(StoredSaveInfo save) =>
+        RunBusy(async () =>
+        {
+            if (await StoredSaves.DownloadAsync(userId, save.Id) is { } file)
+            {
+                using var streamRef = new DotNetStreamReference(new MemoryStream(file.Data));
+                await JS.InvokeVoidAsync("downloadFileFromStream", file.FileName, streamRef);
+                if (save.MustDownloadBeforeUpdate)
+                    Show("Sauvegarde téléchargée : remplace celle de ton jeu par ce fichier. La mise à jour est de nouveau possible.");
+            }
+            else Show("Cette sauvegarde n'existe plus.", isError: true);
+            await RefreshAsync();
+        });
+
+    /// <summary>Fin d'un achat d'emplacements (fenêtre de la jauge).</summary>
+    private async Task OnPurchase(PurchaseResult result)
+    {
+        Show(result.Message, !result.Ok);
+        await RefreshAsync();
+    }
+
+    /// <summary>Liste des sauvegardes et occupation de la collection, relues après chaque opération.</summary>
+    private async Task RefreshAsync()
+    {
+        saves = await StoredSaves.ListAsync(userId);
+        usage = await BankStore.GetUsageAsync(userId);
+        livingDexBySave = await LivingDexes.NamesBySaveAsync(userId);
+    }
+
+    private async Task RunBusy(Func<Task> action)
+    {
+        busy = true;
+        try { await action(); }
+        catch (Exception ex) { Show($"Opération impossible : {ex.Message}", isError: true); }
+        finally
+        {
+            busy = false;
+            fileInputVersion++;
+        }
+    }
+
+    private static async Task<byte[]> ReadFile(InputFileChangeEventArgs e)
+    {
+        await using var stream = e.File.OpenReadStream(maxAllowedSize: 32 * 1024 * 1024);
+        using var ms = new MemoryStream();
+        await stream.CopyToAsync(ms);
+        return ms.ToArray();
+    }
+
+    private void Show(string text, bool isError = false)
+    {
+        message = text;
+        messageIsError = isError;
+    }
+}

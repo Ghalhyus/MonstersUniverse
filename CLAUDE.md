@@ -1,6 +1,9 @@
 # Notes pour Claude
 
-PokeBank : banque Pokémon privée (ASP.NET Core 9, Blazor Server, EF Core + SQLite, Identity, PKHeX.Core, xUnit).
+Monsuta Potaru (anciennement PokeBank) : banque Pokémon privée (ASP.NET Core 9, Blazor Server, EF Core + SQLite, Identity,
+PKHeX.Core, xUnit). Noms : « Monsuta Potaru » affiché, `MonsutaPotaru` dans le code, `monsuta-potaru` sur le serveur
+(dossiers, service et volumes Docker). Restent « PokeBank » exprès : le homebrew 3DS **PokeBank Sync** (autre dépôt, à
+renommer plus tard) et `SetApplicationName("PokeBank")` (clés de connexion : le changer déconnecte tout le monde).
 Le fonctionnement, les règles métier et l'organisation du code sont dans le `README.md` : le lire en premier.
 Ce fichier ne garde que ce que le README ne dit pas.
 
@@ -27,7 +30,7 @@ Ce fichier ne garde que ce que le README ne dit pas.
   `SaveModification` : règle anti-copie, voir le README).
 - Tests : xUnit, base SQLite temporaire via `TestDatabase` ; sauvegardes fabriquées en mémoire (`SaveSessionTests.CreateBw2Save`,
   `CreatePlatinumSave`, `GiveItems`).
-- Vraies sauvegardes de l'utilisateur dans `PokeBank.Tests/Sauvegardes/` (versionnées, exception à `*.sav` dans `.gitignore`) :
+- Vraies sauvegardes de l'utilisateur dans `MonsutaPotaru.Tests/Sauvegardes/` (versionnées, exception à `*.sav` dans `.gitignore`) :
   `RealSavesTests` les passe toutes. Quand il en ajoute (fichiers bruts d'un émulateur, souvent sans extension), les y
   ranger sous un nom clair en `.sav` (`rubis-omega.sav`), les inspecter, lancer les tests et s'en servir pour les essais
   dans le navigateur ; mettre à jour la liste du README.
@@ -43,17 +46,17 @@ workflow).
 
 ## Compiler et tester pendant que l'appli tourne
 
-L'appli lancée par l'utilisateur verrouille `PokeBank/bin` : compiler et tester dans un dossier à part.
+L'appli lancée par l'utilisateur verrouille `MonsutaPotaru/bin` : compiler et tester dans un dossier à part.
 
 ```bash
-dotnet build PokeBank/PokeBank.csproj --artifacts-path <dossier temporaire>/build
-dotnet test PokeBank.Tests/PokeBank.Tests.csproj --artifacts-path <dossier temporaire>/build
+dotnet build MonsutaPotaru/MonsutaPotaru.csproj --artifacts-path <dossier temporaire>/build
+dotnet test MonsutaPotaru.Tests/MonsutaPotaru.Tests.csproj --artifacts-path <dossier temporaire>/build
 ```
 
-Migration EF : la générer dans une **copie** du projet (`PokeBank` copié dans un dossier temporaire, `dotnet ef migrations add
+Migration EF : la générer dans une **copie** du projet (`MonsutaPotaru` copié dans un dossier temporaire, `dotnet ef migrations add
 <Nom>` dessus), puis recopier les fichiers de `Data/Migrations` (migration, designer, snapshot). La base se met à jour
 toute seule au démarrage (`Database.Migrate()`). Le code doit compiler avant de générer la migration.
-La copie génère l'espace de noms `PokeBank.Data.Migrations` : le remettre à `PokeBank.Migrations` comme les autres. Une
+La copie génère l'espace de noms `MonsutaPotaru.Data.Migrations` : le remettre à `MonsutaPotaru.Migrations` comme les autres. Une
 migration qui modifie des données (SQL seul, sans changement de modèle : `GameNames`, `JournalFileNames`, `GameGroupNames`) se teste dans
 `MigrationsTests` (base migrée jusqu'à la précédente, lignes ajoutées, puis migration complète et retour) : les autres
 tests créent la base avec `EnsureCreated`, sans passer par les migrations.
@@ -62,7 +65,7 @@ tests créent la base avec `EnsureCreated`, sans passer par les migrations.
 
 - Instance de test sur un autre port, avec sa propre base, ses copies et ses clés (dans un dossier temporaire), en lançant
   la DLL compilée plus haut :
-  `dotnet <build>/bin/PokeBank/debug/PokeBank.dll --contentRoot <dépôt>/PokeBank --environment Development --urls http://localhost:5299
+  `dotnet <build>/bin/MonsutaPotaru/debug/MonsutaPotaru.dll --contentRoot <dépôt>/MonsutaPotaru --environment Development --urls http://localhost:5299
   --ConnectionStrings:DefaultConnection="DataSource=<tmp>/test.db;Cache=Shared" --Bank:BackupPath=<tmp>/backups --Bank:KeysPath=<tmp>/keys`.
   Le `.claude/launch.json` correspondant est temporaire (dossier ignoré par Git) : le supprimer après les tests.
 - Compte de test : en créer un sur l'instance de test (code d'invitation de développement : `pokeamis`), noter ses
@@ -71,8 +74,8 @@ tests créent la base avec `EnsureCreated`, sans passer par les migrations.
   `fetch` du fichier → `DataTransfer` → `input.files`, et déclencher l'événement `change`.
 - Règle anti-copie : une sauvegarde modifiée sur le serveur n'accepte une mise à jour qu'après téléchargement, et avec plus
   de temps de jeu. En test : passer `DownloadedSinceModification` à 1 dans la base de test, et ajouter du temps de jeu au
-  fichier (`POKEBANK_ADD_PLAYTIME`, voir le README).
-- Sauvegardes d'exemple (ignorées par Git) : `POKEBANK_SAMPLE_OUT` (Noir 2), `POKEBANK_SAMPLE_PT_OUT` (Platine). Après une
+  fichier (`MONSUTA_POTARU_ADD_PLAYTIME`, voir le README).
+- Sauvegardes d'exemple (ignorées par Git) : `MONSUTA_POTARU_SAMPLE_OUT` (Noir 2), `MONSUTA_POTARU_SAMPLE_PT_OUT` (Platine). Après une
   régénération de `exemple-platine.sav`, lui ajouter des heures de jeu pour qu'elle dépasse la version déjà stockée chez
   l'utilisateur.
 
@@ -101,7 +104,7 @@ tests créent la base avec `EnsureCreated`, sans passer par les migrations.
 
 ## Images des Pokémon et des objets
 
-**Hors du dépôt Git et de la publication** : stockées sur le VPS (`~/pokebank-images`, monté sur `wwwroot/images`,
+**Hors du dépôt Git et de la publication** : stockées sur le VPS (`~/monsuta-potaru-images`, monté sur `wwwroot/images`,
 rempli à chaque déploiement de la CI/CD et par `deploy\images-serveur.cmd`), copiées en local par `outils\recuperer-images.cmd` (SSH), servies depuis le disque
 par `UseStaticFiles` (`Program.cs` ; `MapStaticAssets` ne connaît que les fichiers de la compilation, d'où aussi
 `Content Remove` dans le `.csproj`). Ne jamais les remettre dans Git. Un nouveau type d'image : l'ajouter à

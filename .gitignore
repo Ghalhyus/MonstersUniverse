@@ -2,8 +2,8 @@ bin/
 obj/
 .vs/
 *.user
-PokeBank/Data/app.db*
-PokeBank/Data/backups/
+MonsutaPotaru/Data/app.db*
+MonsutaPotaru/Data/backups/
 
 .claude/
 *.zip
@@ -11,14 +11,14 @@ PokeBank/Data/backups/
 
 # Déploiement : réglages du serveur (code d'invitation) et clés de connexion locales
 .env
-PokeBank/Data/keys/
+MonsutaPotaru/Data/keys/
 
-# Images du site (Pokémon, objets, sprites Donjon Mystère, ~90 Mo) : stockées sur le serveur (~/pokebank-images), récupérées
+# Images du site (Pokémon, objets, sprites Donjon Mystère, ~90 Mo) : stockées sur le serveur (~/monsuta-potaru-images), récupérées
 # en local par outils\recuperer-images.cmd (ou reconstruites par python outils/images.py)
-/PokeBank/wwwroot/images/
+/MonsutaPotaru/wwwroot/images/
 
 # Archives des données du serveur rapatriées sur le PC (comptes et Pokémon de tout le monde)
 /Backups/
 
 # Vraies sauvegardes de jeu pour les tests : versionnées malgré la règle *.sav, pour les avoir sur chaque poste
-!/PokeBank.Tests/Sauvegardes/**
+!/MonsutaPotaru.Tests/Sauvegardes/**

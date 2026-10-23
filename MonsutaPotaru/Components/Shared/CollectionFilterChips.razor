@@ -1,0 +1,338 @@
+@using PKHeX.Core
+@using MonsutaPotaru.Services
+@inject PokemonInfo Info
+
+@* Filtres de « Ma collection » en pastilles (à la iTop) : « Type : Feu, Eau ▾ × ». Un clic sur la pastille ouvre ses
+   valeurs, la croix retire le filtre, « + Filtre » en ajoute un. Chaque changement s'applique tout de suite. *@
+<div class="filter-chips">
+    @foreach (var criterion in Visible)
+    {
+        var c = criterion;
+        <div class="filter-chip @(open == c ? "open" : "") @(IsActive(c) ? "active" : "")">
+            <button type="button" class="filter-chip-label" aria-expanded="@(open == c ? "true" : "false")" @onclick="() => Toggle(c)">
+                @Label(c) : <strong>@Summary(c)</strong> <span class="filter-chip-caret" aria-hidden="true">▾</span>
+            </button>
+            <button type="button" class="filter-chip-remove" aria-label="@($"Retirer le filtre {Label(c)}")" @onclick="() => Remove(c)">×</button>
+            @if (open == c)
+            {
+                <div class="filter-popover" role="dialog" aria-label="@Label(c)">
+                    @switch (c)
+                    {
+                        case Criterion.Generation:
+                            @for (byte generation = 1; generation <= 9; generation++)
+                            {
+                                var g = generation;
+                                <label class="form-check"><input type="checkbox" class="form-check-input" checked="@Value.Generations.Contains(g)"
+                                       @onchange="e => Set(Value with { Generations = Toggled(Value.Generations, g, e) })" /> @GenerationName(g)</label>
+                            }
+                            break;
+                        case Criterion.Type:
+                            @foreach (var (id, _) in PokemonCriteria.TypeSlugs)
+                            {
+                                var t = id;
+                                <label class="form-check"><input type="checkbox" class="form-check-input" checked="@Value.Types.Contains(t)"
+                                       @onchange="e => Set(Value with { Types = Toggled(Value.Types, t, e) })" /> @Info.TypeName(t)</label>
+                            }
+                            break;
+                        case Criterion.Gender:
+                            @foreach (var (id, _) in PokemonCriteria.GenderSlugs)
+                            {
+                                var g = id;
+                                <label class="form-check"><input type="checkbox" class="form-check-input" checked="@Value.Genders.Contains(g)"
+                                       @onchange="e => Set(Value with { Genders = Toggled(Value.Genders, g, e) })" /> @GenderName(g)</label>
+                            }
+                            break;
+                        case Criterion.Nature:
+                            @foreach (var (id, _) in PokemonCriteria.NatureSlugs.OrderBy(n => Info.NatureName(n.Id), FrenchOrder))
+                            {
+                                var n = id;
+                                <label class="form-check"><input type="checkbox" class="form-check-input" checked="@Value.Natures.Contains(n)"
+                                       @onchange="e => Set(Value with { Natures = Toggled(Value.Natures, n, e) })" /> @Info.NatureName(n)</label>
+                            }
+                            break;
+                        case Criterion.Ability:
+                            <input type="search" class="form-control form-control-sm mb-2" placeholder="Chercher un talent…"
+                                   aria-label="Chercher un talent" @bind="abilitySearch" @bind:event="oninput" />
+                            @foreach (var ability in AbilityChoices)
+                            {
+                                var a = ability;
+                                <label class="form-check"><input type="checkbox" class="form-check-input" checked="@Value.Abilities.Contains(a)"
+                                       @onchange="e => Set(Value with { Abilities = Toggled(Value.Abilities, a, e) })" /> @Info.AbilityName(a)</label>
+                            }
+                            @if (!AbilityChoices.Any())
+                            {
+                                <p class="small text-muted mb-0">Aucun talent ne correspond.</p>
+                            }
+                            break;
+                        case Criterion.Iv:
+                            <p class="small text-muted mb-2">Valeur minimale (0 à 31) ; 0 : peu importe.</p>
+                            @for (int i = 0; i < PokemonTraits.StatNames.Length; i++)
+                            {
+                                var stat = i;
+                                <label class="filter-iv">
+                                    <span>@PokemonTraits.StatNames[stat] ≥</span>
+                                    <input type="number" class="form-control form-control-sm" min="0" max="31" value="@Value.MinIvs[stat]"
+                                           @onchange="e => SetIv(stat, e)" />
+                                </label>
+                            }
+                            break;
+                        case Criterion.Level:
+                            <p class="small text-muted mb-2">Bornes comprises (1 à 100) ; vide : peu importe.</p>
+                            <label class="filter-iv">
+                                <span>De</span>
+                                <input type="number" class="form-control form-control-sm" min="1" max="100" value="@Value.MinLevel"
+                                       aria-label="Niveau minimal" @onchange="e => Set(Value.WithLevels(Number(e), Value.MaxLevel))" />
+                            </label>
+                            <label class="filter-iv">
+                                <span>À</span>
+                                <input type="number" class="form-control form-control-sm" min="1" max="100" value="@Value.MaxLevel"
+                                       aria-label="Niveau maximal" @onchange="e => Set(Value.WithLevels(Value.MinLevel, Number(e)))" />
+                            </label>
+                            break;
+                        case Criterion.Form:
+                            @foreach (var (kind, _) in PokemonCriteria.FormSlugs)
+                            {
+                                var k = kind;
+                                <label class="form-check"><input type="checkbox" class="form-check-input" checked="@Value.Forms.Contains(k)"
+                                       @onchange="e => Set(Value with { Forms = Toggled(Value.Forms, k, e) })" /> @FormName(k)</label>
+                            }
+                            break;
+                        default:
+                            @foreach (var choice in new bool?[] { null, true, false })
+                            {
+                                var v = choice;
+                                <label class="form-check"><input type="radio" class="form-check-input" name="@c" checked="@(YesNo(c) == v)"
+                                       @onchange="() => SetYesNo(c, v)" /> @(v switch { true => "Oui", false => "Non", null => "Peu importe" })</label>
+                            }
+                            break;
+                    }
+                </div>
+            }
+        </div>
+    }
+    @if (Hidden.Any())
+    {
+        <div class="filter-chip-add">
+            <button type="button" class="btn btn-sm btn-outline-secondary" aria-expanded="@(adding ? "true" : "false")"
+                    @onclick="() => { adding = !adding; open = null; }">+ Filtre</button>
+            @if (adding)
+            {
+                <div class="filter-popover" role="menu">
+                    @foreach (var criterion in Hidden)
+                    {
+                        var c = criterion;
+                        <button type="button" class="dropdown-item" role="menuitem" @onclick="() => Add(c)">@Label(c)</button>
+                    }
+                </div>
+            }
+        </div>
+    }
+    @if (!Value.IsEmpty)
+    {
+        <button type="button" class="btn btn-sm btn-link" @onclick="Clear">Tout effacer</button>
+    }
+</div>
+@if (open is not null || adding)
+{
+    @* Clic à côté : ferme la pastille ouverte (ou le menu « + Filtre »). *@
+    <div class="filter-backdrop" @onclick="CloseAll"></div>
+}
+
+@code {
+    [Parameter, EditorRequired] public PokemonCriteria Value { get; set; } = PokemonCriteria.None;
+    [Parameter] public EventCallback<PokemonCriteria> ValueChanged { get; set; }
+
+    /// <summary>Talents présents dans la collection : les seuls proposés (près de 300 existent).</summary>
+    [Parameter] public IReadOnlyCollection<int> Abilities { get; set; } = [];
+
+    /// <summary>Filtres, dans l'ordre des pastilles.</summary>
+    private enum Criterion { Generation, Type, Gender, Nature, Ability, Iv, Level, Form, Mega, Shiny, Nickname, Egg }
+
+    private readonly HashSet<Criterion> added = []; // pastilles ajoutées, même sans valeur choisie (« Tous »)
+    private Criterion? open;
+    private bool adding;
+    private string abilitySearch = "";
+
+    private static readonly System.Globalization.CompareInfo French = System.Globalization.CultureInfo.GetCultureInfo("fr-FR").CompareInfo;
+    private static readonly StringComparer FrenchOrder = StringComparer.Create(System.Globalization.CultureInfo.GetCultureInfo("fr-FR"), ignoreCase: true);
+
+    private IEnumerable<Criterion> Visible => Enum.GetValues<Criterion>().Where(c => added.Contains(c) || IsActive(c));
+    private IEnumerable<Criterion> Hidden => Enum.GetValues<Criterion>().Except(Visible);
+
+    private bool IsActive(Criterion c) => c switch
+    {
+        Criterion.Generation => Value.Generations.Count > 0,
+        Criterion.Type => Value.Types.Count > 0,
+        Criterion.Gender => Value.Genders.Count > 0,
+        Criterion.Nature => Value.Natures.Count > 0,
+        Criterion.Ability => Value.Abilities.Count > 0,
+        Criterion.Iv => Value.MinIvs.Any(iv => iv > 0),
+        Criterion.Level => Value.MinLevel is not null || Value.MaxLevel is not null,
+        Criterion.Form => Value.Forms.Count > 0,
+        _ => YesNo(c) is not null,
+    };
+
+    private static string Label(Criterion c) => c switch
+    {
+        Criterion.Generation => "Génération",
+        Criterion.Type => "Type",
+        Criterion.Gender => "Sexe",
+        Criterion.Nature => "Nature",
+        Criterion.Ability => "Talent",
+        Criterion.Iv => "IV",
+        Criterion.Level => "Niveau",
+        Criterion.Form => "Forme",
+        Criterion.Mega => "Méga-Évolution",
+        Criterion.Shiny => "Chromatique",
+        Criterion.Nickname => "Surnom",
+        _ => "Œuf",
+    };
+
+    /// <summary>Valeurs choisies, en clair (« Feu, Eau +2 ») ; « Tous » quand le filtre n'en a pas.</summary>
+    private string Summary(Criterion c)
+    {
+        IEnumerable<string> names = c switch
+        {
+            Criterion.Generation => Value.Generations.Order().Select(g => g.ToString()),
+            Criterion.Type => PokemonCriteria.TypeSlugs.Where(t => Value.Types.Contains(t.Id)).Select(t => Info.TypeName(t.Id)),
+            Criterion.Gender => PokemonCriteria.GenderSlugs.Where(g => Value.Genders.Contains(g.Id)).Select(g => GenderName(g.Id)),
+            Criterion.Nature => Value.Natures.Select(Info.NatureName).Order(FrenchOrder),
+            Criterion.Ability => Value.Abilities.Select(Info.AbilityName).Order(FrenchOrder),
+            Criterion.Iv => Value.MinIvs.Select((v, i) => v > 0 ? $"{ShortStat(i)} ≥ {v}" : null).OfType<string>(),
+            Criterion.Level => (Value.MinLevel, Value.MaxLevel) switch
+            {
+                (null, null) => [],
+                ({ } min, null) => [$"≥ {min}"],
+                (null, { } max) => [$"≤ {max}"],
+                ({ } min, { } max) => [min == max ? $"{min}" : $"{min} à {max}"],
+            },
+            Criterion.Form => PokemonCriteria.FormSlugs.Where(f => Value.Forms.Contains(f.Kind)).Select(f => FormName(f.Kind)),
+            _ => YesNo(c) switch { true => ["Oui"], false => ["Non"], null => [] },
+        };
+        var list = names.ToList();
+        return list.Count switch
+        {
+            0 => "Tous",
+            <= 3 => string.Join(", ", list),
+            _ => $"{string.Join(", ", list.Take(2))} +{list.Count - 2}",
+        };
+    }
+
+    /// <summary>« 1re (Bulbizarre à Mew) », « 2e (Germignon à Celebi) »...</summary>
+    private static string GenerationName(byte generation)
+    {
+        var (first, last) = PokemonCriteria.GenerationRanges[generation - 1];
+        var french = GameInfo.GetStrings("fr").specieslist;
+        return $"{generation}{(generation == 1 ? "re" : "e")} ({french[first]} à {french[last]})";
+    }
+
+    private static string GenderName(byte gender) => gender switch { 0 => "Mâle", 1 => "Femelle", _ => "Asexué" };
+
+    private static string FormName(FormKind kind) => kind switch
+    {
+        FormKind.Standard => "Standard",
+        FormKind.Alola => "Alola",
+        FormKind.Galar => "Galar",
+        FormKind.Hisui => "Hisui",
+        FormKind.Paldea => "Paldea",
+        _ => "Autre forme",
+    };
+
+    private static string ShortStat(int stat) => new[] { "PV", "Atq", "Déf", "Atq Spé", "Déf Spé", "Vit" }[stat];
+
+    private bool? YesNo(Criterion c) => c switch
+    {
+        Criterion.Mega => Value.Mega,
+        Criterion.Shiny => Value.Shiny,
+        Criterion.Nickname => Value.Nicknamed,
+        Criterion.Egg => Value.Egg,
+        _ => null,
+    };
+
+    /// <summary>Talents proposés : ceux de la collection (et ceux déjà choisis), filtrés par la recherche, par nom.</summary>
+    private IEnumerable<int> AbilityChoices => Abilities.Union(Value.Abilities)
+        .Where(a => string.IsNullOrWhiteSpace(abilitySearch)
+                    || French.IndexOf(Info.AbilityName(a), abilitySearch.Trim(), System.Globalization.CompareOptions.IgnoreCase | System.Globalization.CompareOptions.IgnoreNonSpace) >= 0)
+        .OrderBy(Info.AbilityName, FrenchOrder);
+
+    private static HashSet<T> Toggled<T>(IReadOnlySet<T> values, T value, ChangeEventArgs e)
+    {
+        var set = values.ToHashSet();
+        if (e.Value is true)
+            set.Add(value);
+        else
+            set.Remove(value);
+        return set;
+    }
+
+    private Task SetIv(int stat, ChangeEventArgs e)
+    {
+        var ivs = Value.MinIvs.ToArray();
+        ivs[stat] = int.TryParse(e.Value?.ToString(), out var v) ? (byte)Math.Clamp(v, 0, 31) : (byte)0;
+        return Set(Value with { MinIvs = ivs });
+    }
+
+    /// <summary>Nombre tapé dans une case (vide ou illisible : null).</summary>
+    private static int? Number(ChangeEventArgs e) => int.TryParse(e.Value?.ToString(), out var v) ? v : null;
+
+    private Task SetYesNo(Criterion c, bool? value) => Set(c switch
+    {
+        Criterion.Mega => Value with { Mega = value },
+        Criterion.Shiny => Value with { Shiny = value },
+        Criterion.Nickname => Value with { Nicknamed = value },
+        _ => Value with { Egg = value },
+    });
+
+    private Task Set(PokemonCriteria value) => ValueChanged.InvokeAsync(value);
+
+    private void Toggle(Criterion c)
+    {
+        open = open == c ? null : c;
+        adding = false;
+        abilitySearch = "";
+    }
+
+    /// <summary>Nouvelle pastille, ouverte pour choisir ses valeurs.</summary>
+    private void Add(Criterion c)
+    {
+        added.Add(c);
+        adding = false;
+        open = c;
+        abilitySearch = "";
+    }
+
+    private async Task Remove(Criterion c)
+    {
+        added.Remove(c);
+        if (open == c)
+            open = null;
+        await Set(c switch
+        {
+            Criterion.Generation => Value with { Generations = new HashSet<byte>() },
+            Criterion.Type => Value with { Types = new HashSet<byte>() },
+            Criterion.Gender => Value with { Genders = new HashSet<byte>() },
+            Criterion.Nature => Value with { Natures = new HashSet<byte>() },
+            Criterion.Ability => Value with { Abilities = new HashSet<int>() },
+            Criterion.Iv => Value with { MinIvs = new byte[6] },
+            Criterion.Level => Value with { MinLevel = null, MaxLevel = null },
+            Criterion.Form => Value with { Forms = new HashSet<FormKind>() },
+            Criterion.Mega => Value with { Mega = null },
+            Criterion.Shiny => Value with { Shiny = null },
+            Criterion.Nickname => Value with { Nicknamed = null },
+            _ => Value with { Egg = null },
+        });
+    }
+
+    private async Task Clear()
+    {
+        added.Clear();
+        CloseAll();
+        await Set(PokemonCriteria.None);
+    }
+
+    private void CloseAll()
+    {
+        open = null;
+        adding = false;
+    }
+}

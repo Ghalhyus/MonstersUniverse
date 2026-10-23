@@ -4,10 +4,10 @@
 .claude/
 .git/
 .env
-PokeBank/Data/app.db*
-PokeBank/Data/backups/
-PokeBank/Data/keys/
-PokeBank/wwwroot/images/
-PokeBank.Tests/
+MonsutaPotaru/Data/app.db*
+MonsutaPotaru/Data/backups/
+MonsutaPotaru/Data/keys/
+MonsutaPotaru/wwwroot/images/
+MonsutaPotaru.Tests/
 deploy/
 *.sav

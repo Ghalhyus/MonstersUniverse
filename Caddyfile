@@ -1,6 +1,6 @@
 # Caddy reçoit les visiteurs (ports 80 et 443), obtient et renouvelle tout seul le certificat HTTPS,
-# puis transmet chaque requête à l'application (service « pokebank » de docker-compose.yml, port 8080).
+# puis transmet chaque requête à l'application (service « monsuta-potaru » de docker-compose.yml, port 8080).
 # Le nom de domaine vient du fichier .env (DOMAIN=...) : rien à modifier ici.
 {$DOMAIN} {
-	reverse_proxy pokebank:8080
+	reverse_proxy monsuta-potaru:8080
 }

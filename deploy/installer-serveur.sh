@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Première installation de PokeBank sur un VPS Ubuntu / Debian vide.
-# À lancer une seule fois, sur le VPS, après le premier envoi :  bash ~/pokebank/deploy/installer-serveur.sh
+# Première installation de Monsuta Potaru sur un VPS Ubuntu / Debian vide.
+# À lancer une seule fois, sur le VPS, après le premier envoi :  bash ~/monsuta-potaru/deploy/installer-serveur.sh
 # Le relancer ne casse rien (chaque étape vérifie ce qui existe déjà).
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -24,7 +24,7 @@ sudo usermod -aG docker "$USER" # docker sans sudo, à partir de la prochaine co
 
 echo "== 4/6 Réglages (.env)"
 if [ ! -f .env ]; then
-    read -rp "Nom de domaine (ex. pokebank.mondomaine.fr ; vide = test en HTTP sur l'adresse IP) : " domain
+    read -rp "Nom de domaine (ex. monsuta-potaru.mondomaine.fr ; vide = test en HTTP sur l'adresse IP) : " domain
     code=$(openssl rand -base64 18 | tr -d '/+=')
     printf 'DOMAIN=%s\nINVITE_CODE=%s\n' "$domain" "$code" > .env
     chmod 600 .env
@@ -41,7 +41,7 @@ sudo docker compose up -d --build
 
 domain=$(grep '^DOMAIN=' .env | cut -d= -f2-)
 echo
-echo "PokeBank est lancé."
+echo "Monsuta Potaru est lancé."
 if [ -n "$domain" ]; then
     echo "  Adresse : https://$domain  (le certificat HTTPS est obtenu à la première visite)"
 else

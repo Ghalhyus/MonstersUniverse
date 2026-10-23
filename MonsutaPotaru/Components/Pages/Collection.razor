@@ -1,0 +1,380 @@
+@page "/collection"
+@attribute [Authorize]
+@implements IAsyncDisposable
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.WebUtilities
+@using MonsutaPotaru.Components.Shared
+@using MonsutaPotaru.Data
+@using MonsutaPotaru.Services
+@inject BankService BankStore
+@inject StoredSaveService Saves
+@inject PokemonInfo Info
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<PageTitle>Ma collection</PageTitle>
+
+@* Tous les Pokémon de l'utilisateur sur une seule page, sans boîtes : ceux du stockage interne et ceux des sauvegardes
+   stockées (lecture seule, gérées dans « Mes sauvegardes »). Seules les lignes visibles à l'écran (plus une petite marge) sont rendues et lues
+   en base : les autres arrivent au fil du défilement. *@
+
+<h1 class="mb-3">Ma collection <span class="badge bg-primary fs-6 align-middle">@total</span></h1>
+
+@if (message is not null)
+{
+    <div class="alert @(messageIsError ? "alert-danger" : "alert-success") alert-dismissible" role="alert">
+        @message
+        <button type="button" class="btn-close" aria-label="Fermer" @onclick="() => message = null"></button>
+    </div>
+}
+
+@* ---------- Taille de la collection (stockage interne + sauvegardes stockées) ---------- *@
+<CollectionGauge Usage="usage" OnPurchase="OnPurchase" />
+
+<div class="collection-toolbar">
+    <input class="form-control form-control-sm" placeholder="Rechercher (espèce ou surnom)…"
+           @bind="search" @bind:event="oninput" @bind:after="Reload" />
+    <select class="form-select form-select-sm collection-filter" aria-label="Origine des Pokémon"
+            @bind="source" @bind:after="SourceChanged">
+        <option value="">Tout</option>
+        <option value="@BankSource">Stockage interne</option>
+        @foreach (var s in saves)
+        {
+            <option value="@s.Id">💾 @s.LabelAndFile</option>
+        }
+    </select>
+    @* Tri : critère, puis sens (les œufs restent à la fin). *@
+    <div class="collection-sort">
+        <select class="form-select form-select-sm" aria-label="Trier par" value="@SortChoices.First(c => c.By == sort.By).Slug" @onchange="SortChanged">
+            @foreach (var choice in SortChoices)
+            {
+                <option value="@choice.Slug">Tri : @choice.Label</option>
+            }
+        </select>
+        <button type="button" class="btn btn-sm btn-outline-secondary text-nowrap" title="Inverser l'ordre" @onclick="ReverseSort">@OrderLabel</button>
+    </div>
+    <a class="small" href="sauvegardes">Gérer mes sauvegardes</a>
+    <label class="collection-columns small">
+        Colonnes
+        <input type="range" class="form-range" min="@GridColumns.Min" max="@GridColumns.Max"
+               @bind="columns" @bind:event="oninput" @bind:after="ColumnsChanged" @onchange="RememberColumns" />
+        <span class="fw-semibold">@columns</span>
+    </label>
+    @* Filtres en pastilles (type, sexe, nature, talent, IV, forme, Méga, chromatique, œuf), gardés dans l'adresse. *@
+    <CollectionFilterChips Value="criteria" ValueChanged="CriteriaChanged" Abilities="abilities" />
+</div>
+
+@if (total == 0)
+{
+    <p class="text-muted">
+        @(string.IsNullOrWhiteSpace(search) && source == "" && criteria.IsEmpty ? "Ta collection est vide pour l'instant. Dépose des Pokémon depuis « Transfert » ou ajoute une sauvegarde dans « Mes sauvegardes »." : "Aucun Pokémon ne correspond.")
+    </p>
+}
+else
+{
+    <div class="collection" style="--columns: @columns">
+        @* Changer de recherche, d'origine ou de nombre de colonnes recrée la liste (et remonte en haut). *@
+        <Virtualize @key="listVersion" TItem="BankListItem[]" ItemsProvider="LoadRows" Context="row" ItemSize="60" OverscanCount="4">
+            <ItemContent>
+                <div class="collection-row">
+                    @foreach (var p in row)
+                    {
+                        var item = p;
+                        var stored = item.StoredSaveId is { } sid ? saves.FirstOrDefault(x => x.Id == sid) : null;
+                        <PokemonSlot Sprite="@item.SpriteUrl"
+                                     Title="@($"{item.Nickname} ({item.SpeciesName}) N.{item.Level}{(stored is null ? "" : $" — sauvegarde {stored.LabelAndFile}")}")"
+                                     Level="item.Level"
+                                     Shiny="item.IsShiny"
+                                     Marker="@(item.StoredSaveId is null ? null : "💾")"
+                                     Selected="@(selected?.Id == item.Id)"
+                                     OnClick="() => Open(item)" />
+                    }
+                </div>
+            </ItemContent>
+            <Placeholder>
+                <div class="collection-row">
+                    @for (int i = 0; i < columns; i++)
+                    {
+                        <div class="slot empty"></div>
+                    }
+                </div>
+            </Placeholder>
+        </Virtualize>
+    </div>
+}
+
+@* ---------- Fiche du Pokémon cliqué ---------- *@
+@if (selected is not null && selectedView is not null)
+{
+    <div class="collection-backdrop" @onclick="Close"></div>
+    <div class="collection-dialog" role="dialog" aria-modal="true" aria-label="@selectedView.Nickname">
+        <PokemonCard Pokemon="@selectedView">
+            <div class="d-flex flex-wrap align-items-center gap-2">
+                @if (selected.StoredSaveId is { } sid)
+                {
+                    @* Sauvegarde stockée : lecture seule, pas de fichier .pkX à télécharger. *@
+                    var save = saves.FirstOrDefault(s => s.Id == sid);
+                    <small class="text-muted">
+                        💾 @(save?.Label ?? "Sauvegarde stockée") · @selected.Location
+                        @if (save is not null)
+                        {
+                            <span class="d-block">@save.FileName</span>
+                        }
+                    </small>
+                }
+                else
+                {
+                    <small class="text-muted">Déposé le @selected.DepositedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</small>
+                    <button class="btn btn-outline-secondary btn-sm ms-auto" @onclick="DownloadPkm">Télécharger le fichier .@selected.Extension</button>
+                }
+                <button class="btn btn-secondary btn-sm @(selected.StoredSaveId is null ? "" : "ms-auto")" @onclick="Close">Fermer</button>
+            </div>
+        </PokemonCard>
+    </div>
+}
+
+@code {
+    private const string BankSource = "banque";
+
+    [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = default!;
+
+    /// <summary>
+    /// Nombre de colonnes choisi au curseur, gardé dans l'adresse (?colonnes=12) pour survivre à un rechargement.
+    /// Absent : il suit la largeur de la fenêtre (<see cref="screenColumns"/>, réglages dans <see cref="GridColumns"/>).
+    /// </summary>
+    [SupplyParameterFromQuery(Name = GridColumns.QueryName)] private int? ColumnsFromQuery { get; set; }
+    /// <summary>Origine affichée, gardée dans l'adresse : vide (tout), « banque » ou l'identifiant d'une sauvegarde stockée.</summary>
+    [SupplyParameterFromQuery(Name = "source")] private string? SourceFromQuery { get; set; }
+    /// <summary>Tri gardé dans l'adresse : « arrivee » (absent), « nom » ou « pokedex ».</summary>
+    [SupplyParameterFromQuery(Name = "tri")] private string? SortFromQuery { get; set; }
+    /// <summary>Sens gardé dans l'adresse (« asc », « desc ») quand il n'est pas celui du critère (récents d'abord, ou croissant).</summary>
+    [SupplyParameterFromQuery(Name = "ordre")] private string? OrderFromQuery { get; set; }
+
+    /// <summary>Nom de chaque critère dans l'adresse et dans la liste.</summary>
+    private static readonly (CollectionSortBy By, string Slug, string Label)[] SortChoices =
+    [
+        (CollectionSortBy.Arrival, "arrivee", "Arrivée"),
+        (CollectionSortBy.Name, "nom", "Nom"),
+        (CollectionSortBy.Dex, "pokedex", "N° Pokédex"),
+    ];
+
+    private CollectionSort sort;
+
+    private string userId = "";
+    private string search = "";
+    private string source = "";
+    private bool sourceInitialized;
+    private int columns = GridColumns.Default;
+    private int screenColumns = GridColumns.Default; // largeur de fenêtre inconnue tant que la page n'est pas interactive
+    private DotNetObjectReference<Collection>? selfRef;
+    private IJSObjectReference? screenWatcher;
+    private int total;
+    private int listVersion;   // clé de Virtualize : l'incrémenter recrée la liste
+    private int reloadRequest;
+
+    private List<StoredSaveInfo> saves = []; // pour le filtre et l'origine affichée des Pokémon stockés
+    private PokemonCriteria criteria = PokemonCriteria.None; // filtres des pastilles, gardés dans l'adresse
+    private List<int> abilities = []; // talents de la collection, proposés par le filtre « Talent »
+
+    private CollectionUsage usage = new(0, CollectionCapacity.DefaultLimit);
+
+    private string? message;
+    private bool messageIsError;
+
+    private BankPokemon? selected;
+    private PokemonView? selectedView;
+
+    private CollectionFilter Filter =>
+        (source == BankSource ? CollectionFilter.Bank
+        : int.TryParse(source, out var id) ? CollectionFilter.Save(id)
+        : CollectionFilter.All) with { Criteria = criteria };
+
+    protected override async Task OnInitializedAsync()
+    {
+        userId = (await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
+        saves = await Saves.ListAsync(userId);
+        usage = await BankStore.GetUsageAsync(userId);
+        abilities = await BankStore.ListAbilitiesAsync(userId);
+    }
+
+    // Les paramètres d'adresse sont lus ici (et non dans OnInitialized) pour suivre aussi les navigations ultérieures.
+    protected override async Task OnParametersSetAsync()
+    {
+        columns = GridColumns.Clamp(ColumnsFromQuery ?? screenColumns);
+        var fromQuery = SourceFromQuery ?? "";
+        var sortFromQuery = SortFromAddress();
+        var query = QueryHelpers.ParseQuery(Nav.ToAbsoluteUri(Nav.Uri).Query);
+        var criteriaFromQuery = PokemonCriteria.FromQuery(name => query.TryGetValue(name, out var value) ? value.ToString() : null);
+        if (!sourceInitialized || fromQuery != source || sortFromQuery != sort || criteriaFromQuery.Key != criteria.Key)
+        {
+            sourceInitialized = true;
+            source = fromQuery;
+            sort = sortFromQuery;
+            criteria = criteriaFromQuery;
+            await Reload();
+        }
+    }
+
+    /// <summary>Tri lu dans l'adresse : sens par défaut du critère, sauf « ordre » contraire.</summary>
+    private CollectionSort SortFromAddress()
+    {
+        var by = SortChoices.FirstOrDefault(c => c.Slug == SortFromQuery, SortChoices[0]).By;
+        var descending = OrderFromQuery is "asc" or "desc" ? OrderFromQuery == "desc" : DescendingByDefault(by);
+        return new(by, descending != DescendingByDefault(by));
+    }
+
+    /// <summary>L'arrivée montre les plus récents d'abord ; le nom et le numéro sont croissants.</summary>
+    private static bool DescendingByDefault(CollectionSortBy by) => by == CollectionSortBy.Arrival;
+
+    private bool Descending => DescendingByDefault(sort.By) != sort.Reversed;
+
+    /// <summary>Texte du bouton de sens : l'ordre affiché (cliquer l'inverse).</summary>
+    private string OrderLabel => (sort.By, Descending) switch
+    {
+        (CollectionSortBy.Arrival, true) => "↓ Récents d'abord",
+        (CollectionSortBy.Arrival, false) => "↑ Anciens d'abord",
+        (CollectionSortBy.Name, false) => "↑ A → Z",
+        (CollectionSortBy.Name, true) => "↓ Z → A",
+        (_, false) => "↑ Croissant",
+        (_, true) => "↓ Décroissant",
+    };
+
+    private async Task SortChanged(ChangeEventArgs e)
+    {
+        var by = SortChoices.FirstOrDefault(c => c.Slug == e.Value?.ToString(), SortChoices[0]).By;
+        sort = new(by); // nouveau critère : son sens par défaut
+        await ApplySort();
+    }
+
+    private async Task ReverseSort()
+    {
+        sort = sort with { Reversed = !sort.Reversed };
+        await ApplySort();
+    }
+
+    private async Task ApplySort()
+    {
+        var slug = SortChoices.First(c => c.By == sort.By).Slug;
+        Nav.NavigateTo(Nav.GetUriWithQueryParameters(new Dictionary<string, object?>
+        {
+            ["tri"] = sort.By == CollectionSortBy.Arrival ? null : slug,
+            ["ordre"] = sort.Reversed ? (Descending ? "desc" : "asc") : null,
+        }), replace: true);
+        await Reload();
+    }
+
+    /// <summary>Appelé par Virtualize pour les lignes à afficher : on ne lit que ces Pokémon-là en base.</summary>
+    private async ValueTask<ItemsProviderResult<BankListItem[]>> LoadRows(ItemsProviderRequest request)
+    {
+        var cols = columns;
+        var items = await BankStore.GetRangeAsync(userId, search, request.StartIndex * cols, request.Count * cols, Filter, sort, request.CancellationToken);
+        var rowCount = (total + cols - 1) / cols;
+        return new ItemsProviderResult<BankListItem[]>(items.Chunk(cols), rowCount);
+    }
+
+    /// <summary>Nouvelle recherche ou origine : recompte, puis recrée la liste.</summary>
+    private async Task Reload()
+    {
+        var request = ++reloadRequest;
+        var count = await BankStore.CountAsync(userId, search, Filter);
+        if (request != reloadRequest) return; // une demande plus récente a déjà relancé le chargement
+        total = count;
+        listVersion++;
+    }
+
+    private async Task SourceChanged()
+    {
+        Nav.NavigateTo(Nav.GetUriWithQueryParameter("source", source == "" ? null : source), replace: true);
+        await Reload();
+    }
+
+    /// <summary>Pastilles modifiées : nouvelle adresse (sans ajout à l'historique), puis rechargement.</summary>
+    private async Task CriteriaChanged(PokemonCriteria value)
+    {
+        criteria = value;
+        Nav.NavigateTo(Nav.GetUriWithQueryParameters(value.ToQuery()), replace: true);
+        await Reload();
+    }
+
+    private void ColumnsChanged() => listVersion++;
+
+    /// <summary>Choix au curseur ; revenir à la valeur de la fenêtre rend la main à sa largeur.</summary>
+    private void RememberColumns() =>
+        Nav.NavigateTo(Nav.GetUriWithQueryParameter(GridColumns.QueryName, columns == screenColumns ? null : columns), replace: true);
+
+    // ---------- Largeur de la fenêtre ----------
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        selfRef = DotNetObjectReference.Create(this);
+        screenWatcher = await JS.InvokeAsync<IJSObjectReference>("watchScreenSize", GridColumns.NarrowWidth, GridColumns.WindowWidths, selfRef);
+        ApplyScreenSize(await screenWatcher.InvokeAsync<int>("size"));
+    }
+
+    /// <summary>Appelé par le navigateur quand la largeur de la fenêtre change de tranche (redimensionnée, déplacée sur un autre écran).</summary>
+    [JSInvokable]
+    public Task OnScreenSizeChanged(int size) => InvokeAsync(() => ApplyScreenSize(size));
+
+    private void ApplyScreenSize(int size)
+    {
+        screenColumns = GridColumns.ForScreen(size);
+        if (ColumnsFromQuery is not null || columns == screenColumns)
+            return; // nombre choisi au curseur : la taille de la fenêtre n'y touche pas
+        columns = screenColumns;
+        listVersion++;
+        StateHasChanged();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (screenWatcher is not null)
+        {
+            try
+            {
+                await screenWatcher.InvokeVoidAsync("dispose");
+                await screenWatcher.DisposeAsync();
+            }
+            catch (JSDisconnectedException) { } // onglet fermé : plus rien à nettoyer côté navigateur
+        }
+        selfRef?.Dispose();
+    }
+
+    /// <summary>Fin d'un achat d'emplacements (fenêtre de la jauge).</summary>
+    private async Task OnPurchase(PurchaseResult result)
+    {
+        message = result.Message;
+        messageIsError = !result.Ok;
+        usage = await BankStore.GetUsageAsync(userId);
+    }
+
+    // ---------- Fiche ----------
+
+    private async Task Open(BankListItem item)
+    {
+        var entry = await BankStore.GetAsync(userId, item.Id);
+        var pk = entry is null ? null : BankService.ToPkm(entry);
+        if (entry is null || pk is null) return;
+        selected = entry;
+        selectedView = Info.Describe(pk, entry.IsLegal);
+    }
+
+    private void Close()
+    {
+        selected = null;
+        selectedView = null;
+    }
+
+    private async Task DownloadPkm()
+    {
+        if (selected is null || selected.StoredSaveId is not null) return; // lecture seule pour les sauvegardes stockées
+        await Download($"{selected.Species:000} - {selected.Nickname}.{selected.Extension}", selected.Data);
+    }
+
+    private async Task Download(string fileName, byte[] data)
+    {
+        using var streamRef = new DotNetStreamReference(new MemoryStream(data));
+        await JS.InvokeVoidAsync("downloadFileFromStream", fileName, streamRef);
+    }
+}
