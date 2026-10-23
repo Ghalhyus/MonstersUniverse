@@ -289,8 +289,16 @@ chaque Pokémon du Pokédex d'un jeu. Pour l'instant les jeux de 1re génératio
 Colosseum ni XD), de 4e (**Pokémon Diamant, Perle, Platine, Or HeartGold et Argent SoulSilver**, noms français de PKHeX)
 et de 5e (**Pokémon Noire, Blanche, Noire 2 et Blanche 2**).
 
-- **Création** : « + Créer un living dex », d'abord le **jeu** (jaquettes groupées par génération ; un jeu qui a déjà son
-  living dex est grisé), puis une de ses **sauvegardes** stockées pas encore liées. PKHeX reconnaît Jaune, Cristal,
+- **Vue générale** (`/livingdex`) : une carte par living dex (jaquette, sauvegarde, barre de progression, « x / y »).
+  Boutons **Régional / National / Complet** pour la progression de toutes les cartes (`?mode=regional`, `?mode=complet`) :
+  une carte dont le jeu n'a pas ce mode compte en National et l'indique (« National seul », 1re génération) ; un clic
+  sur une carte ouvre le living dex dans le mode affiché. Même comptage que sur sa page (`LivingDexService.EntriesAsync`).
+- **Barres de progression** (cartes et page d'un living dex, `Shared/LivingDexProgress.razor`) : pourcentage au centre
+  de la barre, avec une décimale **arrondie vers le bas** (« 5,6 % » ; 100 % seulement quand tout y est),
+  `LivingDexGames.Percent`.
+- **Création** : « + Créer un living dex », d'abord le **jeu** (jaquettes groupées par génération, **repliées** au
+  départ : le titre de chaque génération, « ▸ 4e génération (5 jeux) », la déplie ou la replie ; repliée, celle du jeu
+  choisi le montre encore ; un jeu qui a déjà son living dex est grisé), puis une de ses **sauvegardes** stockées pas encore liées. PKHeX reconnaît Jaune, Cristal,
   Émeraude et Platine, mais pas Rouge de Bleu, Or d'Argent, Rubis de Saphir, Rouge Feu de Vert Feuille, Diamant de Perle
   ni HeartGold de SoulSilver (même format) : une sauvegarde Rouge / Bleu est proposée pour Rouge comme pour Bleu, de même
   pour les autres paires (pour Rouge Feu / Vert Feuille, PKHeX répond toujours « Rouge Feu » faute de mieux). En 5e
@@ -336,8 +344,9 @@ et de 5e (**Pokémon Noire, Blanche, Noire 2 et Blanche 2**).
     saison du jeu (au chargement) : en boîte, ils gardent la leur ; l'infobulle d'une saison manquante le rappelle (« à
     garder en boîte »). **Genesect** n'a qu'une case, quel que soit son Module (comme Arceus) ; Darumacho Transe et
     Meloetta Danse n'existent qu'en combat.
-- **Page d'un living dex** (`/livingdex/{id}`) : jaquette officielle, compteur et barre de progression, « Manquants
-  seulement », grille dans l'ordre du Pokédex avec les **sprites du jeu** (Rouge / Bleu : couleurs du Super Game Boy, Jaune :
+- **Page d'un living dex** (`/livingdex/{id}`) : jaquette officielle, compteur et barre de progression, filtre
+  **Tous / Manquants / Possédés** avec le nombre de chacun (`?filtre=manquants`, `?filtre=possedes`, gardé en changeant
+  de mode), grille dans l'ordre du Pokédex avec les **sprites du jeu** (Rouge / Bleu : couleurs du Super Game Boy, Jaune :
   Game Boy Color ; Or, Argent et Cristal ont chacun les leurs ; Rubis / Saphir, Émeraude, Rouge Feu / Vert Feuille,
   Diamant / Perle, Platine et HeartGold / SoulSilver aussi ; ceux, fixes, de Noire / Blanche pour toute la 5e génération :
   PokéAPI n'a pas ceux de Noire 2 / Blanche 2),
@@ -384,7 +393,8 @@ est incompatible (espèce, attaques ou objets inexistants dans le jeu, conversio
 | `MonsutaPotaru/wwwroot/js/parc.js` | Animation et comportement des Pokémon du parc (énergie, intentions, famille, nuit, curiosité) ; `simulate` pour les essais |
 | `MonsutaPotaru/Services/ParkService.cs` | Pokémon du parc : liste, choix (30 au plus, avec des sprites Donjon Mystère), retrait, famille d'évolution |
 | `MonsutaPotaru/Data/ParkMember.cs` | Table des Pokémon au parc (supprimée avec le Pokémon) |
-| `MonsutaPotaru/Components/Pages/LivingDexes.razor` | Page « Living dex » : cartes des living dex du compte, création (jeu, puis sauvegarde) |
+| `MonsutaPotaru/Components/Pages/LivingDexes.razor` | Page « Living dex » : cartes des living dex du compte (progression dans le mode choisi), création (jeu, générations repliables, puis sauvegarde) |
+| `MonsutaPotaru/Components/Shared/LivingDexProgress.razor` | Barre de progression d'un living dex, pourcentage au centre |
 | `MonsutaPotaru/Components/Pages/LivingDexPage.razor` | Page d'un living dex : grille des sprites du jeu (silhouettes des manquants), progression, fiche au clic |
 | `MonsutaPotaru/Services/LivingDexService.cs` | Living dex : jeux (`LivingDexGames` : jaquette, sprites, Pokémon de chaque mode, modes cachés), comptage dans la sauvegarde, création, suppression |
 | `MonsutaPotaru/Data/LivingDex.cs` | Table des living dex (un par jeu et par compte, supprimé avec sa sauvegarde) |

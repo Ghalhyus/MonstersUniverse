@@ -234,6 +234,19 @@ h1:focus {
 .livingdex-game.selected { border-color: var(--bs-primary); box-shadow: 0 0 0 .2rem rgba(13, 110, 253, .25); }
 .livingdex-game.taken { opacity: .45; cursor: not-allowed; }
 .livingdex-game:has(input:focus-visible) { outline: 2px solid var(--bs-primary); outline-offset: 2px; }
+/* Titre d'une génération dans le choix du jeu : bouton qui la déplie ou la replie. */
+.livingdex-generation-toggle { padding: 0; border: 0; background: none; color: var(--bs-secondary-color); font-size: .875rem; }
+.livingdex-generation-toggle:hover { color: var(--bs-body-color); }
+.livingdex-generation-toggle .chevron { display: inline-block; width: 1em; transition: transform .15s; }
+.livingdex-generation-toggle[aria-expanded="true"] .chevron { transform: rotate(90deg); }
+/* Boutons de mode et de filtre : pas de cadre bleu de focus après un clic (le bouton choisi est déjà coloré). */
+.livingdex-choice .btn:focus, .livingdex-choice .btn:focus-visible, .livingdex-choice .btn:active { box-shadow: none; }
+/* Barre de progression avec le pourcentage au centre : halo clair pour rester lisible sur la partie remplie. */
+.livingdex-progress { position: relative; height: 1.25rem; }
+.livingdex-progress-label {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: .75rem;
+    font-weight: 600; color: var(--bs-body-color); text-shadow: 0 0 2px #fff, 0 0 2px #fff, 0 0 3px #fff;
+}
 .livingdex-header { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; }
 .livingdex-cover { width: 7rem; height: 7rem; object-fit: contain; }
 .livingdex-grid { display: grid; grid-template-columns: repeat(var(--columns, 10), minmax(0, 1fr)); gap: .4rem; }

@@ -499,6 +499,45 @@ public sealed class LivingDexServiceTests : IDisposable
         Assert.Equal((300, (ushort)649), (unova.Entries[^1].Number, unova.Entries[^1].Species));
     }
 
+    [Theory]
+    [InlineData(0, 151, "0,0 %")]
+    [InlineData(28, 493, "5,6 %")] // 5,679... : arrondi vers le bas
+    [InlineData(999, 1000, "99,9 %")] // 100 % seulement quand tout y est
+    [InlineData(151, 151, "100,0 %")]
+    [InlineData(0, 0, "0,0 %")]
+    public void Percent_HasOneDecimal_RoundedDown(int owned, int total, string expected) =>
+        Assert.Equal(expected, LivingDexGames.Percent(owned, total));
+
+    [Theory]
+    [InlineData(null, LivingDexMode.National)]
+    [InlineData("regional", LivingDexMode.Regional)]
+    [InlineData("complet", LivingDexMode.Complete)]
+    [InlineData("n-importe-quoi", LivingDexMode.National)]
+    public void Mode_InTheAddress(string? slug, LivingDexMode mode)
+    {
+        Assert.Equal(mode, LivingDexGames.ModeFromSlug(slug));
+        Assert.Equal(slug is "regional" or "complet" ? slug : null, LivingDexGames.ModeSlug(mode));
+    }
+
+    [Fact]
+    public async Task List_CountsInTheChosenMode_NationalWhenTheGameHasNotIt()
+    {
+        var red = await Store("sacha", "rouge.sav");
+        var silver = await Store("sacha", "argent.sav");
+        await _dex.CreateAsync("sacha", red, LivingDexGame.Red);
+        var silverId = (await _dex.CreateAsync("sacha", silver, LivingDexGame.Silver)).Id!.Value;
+
+        foreach (var mode in new[] { LivingDexMode.Regional, LivingDexMode.National, LivingDexMode.Complete })
+        {
+            var cards = await _dex.ListAsync("sacha", mode);
+            // Rouge n'a que le National ; Argent compte comme sa page dans ce mode.
+            Assert.Equal((LivingDexMode.National, 151), (cards[0].Mode, cards[0].Total));
+            var page = (await _dex.GetAsync("sacha", silverId, mode))!;
+            Assert.Equal((mode, page.Owned, page.Entries.Count), (cards[1].Mode, cards[1].Owned, cards[1].Total));
+        }
+        Assert.Equal(276, (await _dex.ListAsync("sacha", LivingDexMode.Complete))[1].Total); // 251 + 25 lettres de Zarbi
+    }
+
     [Fact]
     public async Task LivingDex_LeavesWithItsSave()
     {

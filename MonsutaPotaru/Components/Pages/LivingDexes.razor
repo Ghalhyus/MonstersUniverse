@@ -2,6 +2,7 @@
 @attribute [Authorize]
 @using System.Security.Claims
 @using Microsoft.AspNetCore.Authorization
+@using MonsutaPotaru.Components.Shared
 @using MonsutaPotaru.Data
 @using MonsutaPotaru.Services
 @inject LivingDexService Dexes
@@ -35,12 +36,23 @@
             <h2 class="h5">Nouveau living dex</h2>
             @* D'abord le jeu (un living dex par jeu), puis les sauvegardes stockées qui peuvent être une partie de ce jeu
                (Rouge / Bleu : PKHeX ne distingue pas les deux, une sauvegarde Rouge / Bleu va avec l'un comme l'autre). *@
+            @* Générations repliées au départ, dépliées une à une par leur titre ; repliée, celle du jeu choisi le montre encore. *@
             <div class="form-label">Jeu</div>
             @foreach (var generation in LivingDexGames.All.GroupBy(g => g.Generation))
             {
-            <div class="small text-muted mb-1">@(generation.Key == 1 ? "1re" : $"{generation.Key}e") génération</div>
+            var number = generation.Key;
+            var open = openGenerations.Contains(number);
+            var shownGames = open ? generation.ToList() : generation.Where(g => g.Game == game).ToList();
+            <div class="mb-2">
+                <button type="button" class="livingdex-generation-toggle" aria-expanded="@(open ? "true" : "false")"
+                        @onclick="() => ToggleGeneration(number)">
+                    <span class="chevron" aria-hidden="true">▸</span>@(number == 1 ? "1re" : $"{number}e") génération (@generation.Count() jeux)
+                </button>
+            </div>
+            @if (shownGames.Count > 0)
+            {
             <div class="livingdex-games mb-3">
-                @foreach (var info in generation)
+                @foreach (var info in shownGames)
                 {
                     var value = info.Game;
                     var taken = dexes?.Any(d => d.Game.Game == value) == true;
@@ -51,6 +63,7 @@
                     </label>
                 }
             </div>
+            }
             }
             @if (game is { } chosenGame)
             {
@@ -98,18 +111,32 @@ else if (dexes.Count == 0)
 }
 else
 {
+    @* Progression de toutes les cartes dans un mode, gardé dans l'adresse (?mode=regional) ; une carte s'ouvre dans ce mode. *@
+    <div class="btn-group btn-group-sm mb-3 livingdex-choice" role="group" aria-label="Progression affichée">
+        @foreach (var m in AllModes)
+        {
+            var value = m;
+            <button type="button" class="btn @(mode == value ? "btn-primary" : "btn-outline-primary")" @onclick="() => SetMode(value)">
+                @LivingDexGames.ModeName(value)
+            </button>
+        }
+    </div>
     <div class="livingdex-cards">
         @foreach (var d in dexes)
         {
-            <a class="livingdex-card" href="@($"livingdex/{d.Id}")">
+            <a class="livingdex-card" href="@CardLink(d)">
                 <img src="@d.Game.Cover" alt="Jaquette de @d.Game.Name" loading="lazy" onerror="this.style.visibility='hidden'" />
                 <div class="livingdex-card-body">
                     <strong>@d.Game.Name</strong>
                     <div class="small text-muted">@d.SaveLabel</div>
-                    <div class="progress mt-2" role="progressbar" aria-label="Progression" aria-valuenow="@d.Owned" aria-valuemin="0" aria-valuemax="@d.Total">
-                        <div class="progress-bar @(d.Owned == d.Total ? "bg-success" : "")" style="width: @Percent(d.Owned, d.Total)%"></div>
+                    <LivingDexProgress Owned="d.Owned" Total="d.Total" Class="mt-2" />
+                    <div class="small mt-1">
+                        @d.Owned / @d.Total
+                        @if (d.Mode != mode)
+                        {
+                            <span class="text-muted ms-1" title="Ce jeu n'a pas le mode @LivingDexGames.ModeName(mode)">· @LivingDexGames.ModeName(d.Mode) seul</span>
+                        }
                     </div>
-                    <div class="small mt-1">@d.Owned / @d.Total</div>
                 </div>
             </a>
         }
@@ -118,8 +145,13 @@ else
 
 @code {
     [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = default!;
+    [SupplyParameterFromQuery(Name = "mode")] private string? ModeFromQuery { get; set; }
+
+    private static readonly LivingDexMode[] AllModes = [LivingDexMode.Regional, LivingDexMode.National, LivingDexMode.Complete];
 
     private string userId = "";
+    private LivingDexMode mode = LivingDexMode.National;
+    private readonly HashSet<byte> openGenerations = [];
     private List<LivingDexSummary>? dexes;
     private List<LivingDexCandidate> candidates = [];
     private bool creating;
@@ -132,10 +164,24 @@ else
     /// <summary>Sauvegardes qui peuvent recevoir le living dex du jeu choisi.</summary>
     private List<LivingDexCandidate> Saves => game is { } g ? candidates.Where(c => c.Games.Contains(g)).ToList() : [];
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnParametersSetAsync()
     {
         userId = (await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
-        dexes = await Dexes.ListAsync(userId);
+        mode = LivingDexGames.ModeFromSlug(ModeFromQuery);
+        dexes = await Dexes.ListAsync(userId, mode);
+    }
+
+    private void SetMode(LivingDexMode value) =>
+        Navigation.NavigateTo(Navigation.GetUriWithQueryParameter("mode", LivingDexGames.ModeSlug(value)), replace: true);
+
+    /// <summary>Page du living dex, dans le mode de la vue générale s'il le propose (le National n'est pas écrit).</summary>
+    private static string CardLink(LivingDexSummary d) =>
+        LivingDexGames.ModeSlug(d.Mode) is { } slug ? $"livingdex/{d.Id}?mode={slug}" : $"livingdex/{d.Id}";
+
+    private void ToggleGeneration(byte generation)
+    {
+        if (!openGenerations.Remove(generation))
+            openGenerations.Add(generation);
     }
 
     private async Task OpenCreation()
@@ -144,6 +190,7 @@ else
         candidates = await Dexes.ListCandidatesAsync(userId);
         game = null;
         saveId = 0;
+        openGenerations.Clear(); // toutes repliées au départ
         creating = true;
     }
 
@@ -171,6 +218,4 @@ else
         message = result.Message;
         messageIsError = true;
     }
-
-    private static int Percent(int owned, int total) => total == 0 ? 0 : owned * 100 / total;
 }

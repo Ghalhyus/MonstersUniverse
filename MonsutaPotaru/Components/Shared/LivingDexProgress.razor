@@ -1,0 +1,18 @@
+@using MonsutaPotaru.Services
+
+@* Barre de progression d'un living dex, le pourcentage écrit au centre de toute la barre (lisible même presque vide) ;
+   verte quand tout y est. *@
+<div class="progress livingdex-progress @Class" role="progressbar" aria-label="Progression" aria-valuenow="@Owned"
+     aria-valuemin="0" aria-valuemax="@Total" aria-valuetext="@($"{Owned} sur {Total}, {LivingDexGames.Percent(Owned, Total)}")">
+    <div class="progress-bar @(Total > 0 && Owned == Total ? "bg-success" : "")" style="width: @Width%"></div>
+    <span class="livingdex-progress-label">@LivingDexGames.Percent(Owned, Total)</span>
+</div>
+
+@code {
+    [Parameter] public int Owned { get; set; }
+    [Parameter] public int Total { get; set; }
+    [Parameter] public string? Class { get; set; }
+
+    /// <summary>Largeur remplie, en pour cent (point décimal : CSS).</summary>
+    private string Width => (Total == 0 ? 0 : Owned * 100.0 / Total).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+}

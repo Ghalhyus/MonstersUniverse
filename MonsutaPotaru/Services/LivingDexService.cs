@@ -63,7 +63,10 @@ public sealed record LivingDexEntry(int Number, ushort Species, byte Form, strin
     public bool Owned => BankId is not null;
 }
 
-public sealed record LivingDexSummary(int Id, LivingDexGameInfo Game, string SaveLabel, int Owned, int Total);
+/// <summary>Carte de la vue générale : progression dans un mode.</summary>
+/// <param name="Mode">Mode compté : celui demandé, ou le National si le jeu ne le propose pas (1re génération).</param>
+public sealed record LivingDexSummary(int Id, LivingDexGameInfo Game, string SaveLabel, int Owned, int Total,
+    LivingDexMode Mode = LivingDexMode.National);
 
 public sealed record LivingDexView(int Id, LivingDexGameInfo Game, string SaveLabel, IReadOnlyList<LivingDexMode> Modes,
     LivingDexMode Mode, IReadOnlyList<LivingDexEntry> Entries)
@@ -487,6 +490,32 @@ public static class LivingDexGames
         LivingDexMode.National => "National",
         _ => "Complet",
     };
+
+    /// <summary>Mode dans l'adresse (?mode=regional, complet) ; le National n'y figure pas (null), c'est le mode par défaut.</summary>
+    public static string? ModeSlug(LivingDexMode mode) => mode switch
+    {
+        LivingDexMode.Regional => "regional",
+        LivingDexMode.Complete => "complet",
+        _ => null,
+    };
+
+    /// <summary>Mode lu dans l'adresse ; absent ou inconnu : le National.</summary>
+    public static LivingDexMode ModeFromSlug(string? slug) => slug switch
+    {
+        "regional" => LivingDexMode.Regional,
+        "complet" => LivingDexMode.Complete,
+        _ => LivingDexMode.National,
+    };
+
+    /// <summary>
+    /// Progression affichée dans les barres, avec une décimale arrondie vers le bas : « 57,3 % » ; 100 % seulement quand
+    /// tout y est (999 sur 1 000 donne 99,9 %).
+    /// </summary>
+    public static string Percent(int owned, int total)
+    {
+        var tenths = total == 0 ? 0 : (int)((long)owned * 1000 / total);
+        return $"{tenths / 10},{tenths % 10} %";
+    }
 }
 
 /// <summary>
@@ -497,7 +526,11 @@ public sealed class LivingDexService(
     IDbContextFactory<ApplicationDbContext> dbFactory,
     ILogger<LivingDexService> logger)
 {
-    public async Task<List<LivingDexSummary>> ListAsync(string ownerId)
+    /// <summary>
+    /// Living dex du compte, progression comptée dans un mode (vue générale) : le National pour un jeu qui ne propose pas
+    /// ce mode (<see cref="LivingDexSummary.Mode"/>), comme sur sa page.
+    /// </summary>
+    public async Task<List<LivingDexSummary>> ListAsync(string ownerId, LivingDexMode mode = LivingDexMode.National)
     {
         await using var db = await dbFactory.CreateDbContextAsync();
         var dexes = await db.LivingDexes.AsNoTracking().Where(d => d.OwnerId == ownerId)
@@ -507,10 +540,9 @@ public sealed class LivingDexService(
         foreach (var d in dexes.OrderBy(d => d.Game))
         {
             var game = LivingDexGames.Get(d.Game);
-            var slots = LivingDexGames.Slots(game, LivingDexMode.National);
-            var owned = await OwnedAsync(db, d.StoredSaveId);
-            summaries.Add(new(d.Id, game, SaveLabel(d.TrainerName, d.FileName),
-                slots.Count(s => Find(owned, s, LivingDexMode.National) is not null), slots.Count));
+            var shown = LivingDexGames.Modes(game).Contains(mode) ? mode : LivingDexMode.National;
+            var entries = await EntriesAsync(db, game, d.StoredSaveId, shown);
+            summaries.Add(new(d.Id, game, SaveLabel(d.TrainerName, d.FileName), entries.Count(e => e.Owned), entries.Count, shown));
         }
         return summaries;
     }
@@ -580,10 +612,17 @@ public sealed class LivingDexService(
         var modes = LivingDexGames.Modes(game);
         if (!modes.Contains(mode))
             mode = LivingDexMode.National;
-        var owned = await OwnedAsync(db, dex.StoredSaveId);
+        var entries = await EntriesAsync(db, game, dex.StoredSaveId, mode);
+        return new(dex.Id, game, SaveLabel(dex.TrainerName, dex.FileName), modes, mode, entries);
+    }
+
+    /// <summary>Cases d'un mode avec le Pokémon de la sauvegarde qui remplit chacune : le même comptage partout (page, vue générale).</summary>
+    private static async Task<List<LivingDexEntry>> EntriesAsync(ApplicationDbContext db, LivingDexGameInfo game, int saveId, LivingDexMode mode)
+    {
+        var owned = await OwnedAsync(db, saveId);
         var slots = LivingDexGames.Slots(game, mode);
-        var bag = slots.Any(s => s.KeyItem != 0) ? await BagItemsAsync(db, dex.StoredSaveId) : new HashSet<int>();
-        var entries = slots.Select((slot, index) =>
+        var bag = slots.Any(s => s.KeyItem != 0) ? await BagItemsAsync(db, saveId) : new HashSet<int>();
+        return slots.Select((slot, index) =>
         {
             var (copy, note) = slot.KeyItem == 0 ? (Find(owned, slot, mode), null) : FindWithItem(owned, slot, mode, bag);
             if (copy is null && slot.Hint is not null)
@@ -592,7 +631,6 @@ public sealed class LivingDexService(
                 LivingDexGames.Name(game, slot, mode), LivingDexGames.Sprite(game, slot), copy?.Id, copy?.Location,
                 LivingDexGames.Fallback(game, slot), note);
         }).ToList();
-        return new(dex.Id, game, SaveLabel(dex.TrainerName, dex.FileName), modes, mode, entries);
     }
 
     public async Task<bool> DeleteAsync(string ownerId, int id)
