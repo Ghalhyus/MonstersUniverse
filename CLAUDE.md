@@ -194,6 +194,12 @@ suivante), sans lister les dossiers des dépôts.
   (`LivingDexGameInfo.National`). Une sauvegarde Let's Go vide de PKHeX n'est pas reconnue par `SaveUtil` : écrire le pied
   « BEEF » et le numéro de bloc 0x13 (`LivingDexServiceTests.LetsGoWith`). Bulbagarden refuse Python sur ce PC
   (403) ; `curl` avec l'agent « PokeBank (outils/images.py) » passe.
+- 8e génération : ce que le jeu peut contenir vient de `PersonalTable.IsPresentInGame` (`LivingDexGames.Present`), pas
+  de `FormCount` seul (Épée / Bouclier n'ont que 664 espèces ; Légendes Arceus n'a que les Caninos de Hisui :
+  `FirstForm`). Formes régionales par leur nom anglais chez PKHeX (« Alola », « Galar », « Hisui ») ; attention, la
+  casquette d'Alola de Pikachu s'appelle aussi « Alola ». Gigamax : case `Gigamax`, un exemplaire de plus avec le facteur
+  (`IGigantamax`, lu dans les octets des seules espèces de `GigamaxSpecies`). Une sauvegarde Légendes Arceus vide n'est
+  pas reconnue par `SaveUtil` (pas de test du service pour ce jeu) ; Diamant Étincelant vide, oui.
 - Les tests ne doivent **pas** exiger ces images : la CI les copie depuis le VPS, qui ne les reçoit qu'au déploiement,
   après les tests. Une nouvelle image : tester son chemin, pas sa présence.
 - Jaquettes : Bulbagarden Archives (API MediaWiki, version réduite `iiurlwidth=480`). Sur ce PC, Python refuse son

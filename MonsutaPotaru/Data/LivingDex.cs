@@ -33,6 +33,11 @@ public enum LivingDexGame
     UltraMoon = 28,
     LetsGoPikachu = 29,
     LetsGoEevee = 30,
+    Sword = 31,
+    Shield = 32,
+    BrilliantDiamond = 33,
+    ShiningPearl = 34,
+    LegendsArceus = 35,
 }
 
 /// <summary>

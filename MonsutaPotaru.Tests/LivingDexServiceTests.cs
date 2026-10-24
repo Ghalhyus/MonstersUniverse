@@ -11,9 +11,10 @@ namespace MonsutaPotaru.Tests;
 /// Living dex : un exemplaire de chaque Pokémon du Pokédex d'un jeu, compté dans une sauvegarde stockée (1re génération :
 /// Rouge, Bleu, Jaune ; 2e : Or, Argent, Cristal ; 3e : Rubis, Saphir, Émeraude, Rouge Feu, Vert Feuille ; 4e : Diamant,
 /// Perle, Platine, HeartGold, SoulSilver ; 5e : Noire, Blanche, Noire 2, Blanche 2 ; 6e : X, Y, Rubis Oméga, Saphir
-/// Alpha ; 7e : Soleil, Lune, Ultra-Soleil, Ultra-Lune, Let's Go Pikachu, Let's Go Évoli). Vraies sauvegardes de Rouge,
-/// Bleu, Argent, SoulSilver, Noire, Noire 2, Rubis Oméga et Ultra-Soleil (MonsutaPotaru.Tests/Sauvegardes) ; Let's Go
-/// fabriquée en mémoire.
+/// Alpha ; 7e : Soleil, Lune, Ultra-Soleil, Ultra-Lune, Let's Go Pikachu, Let's Go Évoli ; 8e : Épée, Bouclier, Diamant
+/// Étincelant, Perle Scintillante, Légendes Arceus). Vraies sauvegardes de Rouge, Bleu, Argent, SoulSilver, Noire, Noire 2,
+/// Rubis Oméga, Ultra-Soleil et Épée (MonsutaPotaru.Tests/Sauvegardes) ; Let's Go et Diamant Étincelant fabriquées en
+/// mémoire.
 /// </summary>
 public sealed class LivingDexServiceTests : IDisposable
 {
@@ -115,7 +116,7 @@ public sealed class LivingDexServiceTests : IDisposable
         Assert.Equal([LivingDexGame.X, LivingDexGame.Y], LivingDexGames.For(new SAV6XY()));
         Assert.Equal([LivingDexGame.OmegaRuby, LivingDexGame.AlphaSapphire], LivingDexGames.For(new SAV6AO()));
 
-        // 7e génération : chaque sauvegarde dit son jeu, Let's Go compris ; rien pour la 8e.
+        // 7e et 8e génération : chaque sauvegarde dit son jeu, Let's Go et Légendes Arceus compris ; rien pour la 9e.
         Assert.True(SaveUtil.TryGetSaveFile(RealSave("ultra-soleil.sav"), out var ultraSun, "ultra-soleil.sav"));
         Assert.Equal([LivingDexGame.UltraSun], LivingDexGames.For(ultraSun!));
         Assert.Equal([LivingDexGame.Sun, LivingDexGame.Moon], LivingDexGames.For(new SAV7SM()));
@@ -123,7 +124,11 @@ public sealed class LivingDexServiceTests : IDisposable
         Assert.Equal([LivingDexGame.LetsGoPikachu, LivingDexGame.LetsGoEevee], LivingDexGames.For(new SAV7b()));
         Assert.Equal([LivingDexGame.LetsGoEevee], LivingDexGames.For(new SAV7b { Version = GameVersion.GE }));
         Assert.True(SaveUtil.TryGetSaveFile(RealSave("epee.sav"), out var sword, "epee.sav"));
-        Assert.Empty(LivingDexGames.For(sword!));
+        Assert.Equal([LivingDexGame.Sword], LivingDexGames.For(sword!));
+        Assert.Equal([LivingDexGame.Sword, LivingDexGame.Shield], LivingDexGames.For(new SAV8SWSH()));
+        Assert.Equal([LivingDexGame.BrilliantDiamond], LivingDexGames.For(new SAV8BS())); // une sauvegarde vide est Diamant Étincelant
+        Assert.Equal([LivingDexGame.LegendsArceus], LivingDexGames.For(new SAV8LA()));
+        Assert.Empty(LivingDexGames.For(new SAV9SV()));
     }
 
     [Theory]
@@ -268,6 +273,96 @@ public sealed class LivingDexServiceTests : IDisposable
             Assert.Equal("Méga-Mewtwo X", LivingDexGames.Name(game, slots.Single(s => s.Species == 150 && s.Form == 1), LivingDexMode.Complete));
         }
         Assert.Equal("images/livingdex/jaquettes/lets-go-evoli.png", LivingDexGames.Get(LivingDexGame.LetsGoEevee).Cover);
+    }
+
+    [Theory]
+    [InlineData(LivingDexGame.Sword, 584, 664, 764, 32)] // Galar et les extensions ; formes d'Alola, de Galar..., 32 Gigamax
+    [InlineData(LivingDexGame.Shield, 584, 664, 764, 32)]
+    [InlineData(LivingDexGame.BrilliantDiamond, 151, 493, 536, 0)] // les formes de Diamant / Perle (Shaymin Céleste en boîte)
+    [InlineData(LivingDexGame.ShiningPearl, 151, 493, 536, 0)]
+    [InlineData(LivingDexGame.LegendsArceus, 242, 242, 291, 0)] // Hisui : tout le jeu ; formes de Hisui, Originels, Zarbi...
+    public void EighthGeneration_HasItsRegion_National_FormsAndGigamax(LivingDexGame value, int regional, int national, int complete, int gigamax)
+    {
+        var game = LivingDexGames.Get(value);
+        Assert.Equal([LivingDexMode.Regional, LivingDexMode.National, LivingDexMode.Complete], LivingDexGames.Modes(game));
+        Assert.Equal(regional, LivingDexGames.Slots(game, LivingDexMode.Regional).Count);
+        Assert.Equal(national, LivingDexGames.Slots(game, LivingDexMode.National).Count);
+        var slots = LivingDexGames.Slots(game, LivingDexMode.Complete);
+        Assert.Equal(complete, slots.Count);
+        Assert.Equal(gigamax, slots.Count(s => s.Gigamax));
+        Assert.All(slots, s => Assert.True(s.MegaItem == 0 && s.MegaMove == 0)); // pas de Méga en 8e
+        Assert.Equal(slots.Count, slots.Distinct().Count());
+        Assert.Equal(slots.Count, slots.Select(s => LivingDexGames.Name(game, s, LivingDexMode.Complete)).Distinct().Count());
+        Assert.Null(game.SpriteFolder);
+    }
+
+    [Fact]
+    public void SwordShield_Galar_Forms_AndGigamax()
+    {
+        var sword = LivingDexGames.Get(LivingDexGame.Sword);
+        // Galar, puis ce que l'Isolarmure et la Couronneige ajoutent, avec leurs numéros (sans les Pokémon déjà vus).
+        Assert.Equal([("Galar", 1), ("Galar", 400)], new[] { 0, 399 }.Select(i => LivingDexGames.RegionalNumber(sword, i)));
+        Assert.Equal("Isolarmure", LivingDexGames.RegionalNumber(sword, 400).Section);
+        Assert.Equal("Couronneige", LivingDexGames.RegionalNumber(sword, 583).Section);
+        Assert.Equal(584, sword.Regional.Distinct().Count());
+        Assert.Equal([810, 811, 812], sword.Regional.Take(3).Select(s => (int)s)); // Ouistempo, Badabouin, Gorythmic
+        Assert.Equal(["Galar", "Isolarmure", "Couronneige"], sword.Sections!.Select(s => s.Name));
+
+        var slots = LivingDexGames.Slots(sword, LivingDexMode.Complete);
+        LivingDexSlot Slot(ushort species, byte form, bool gigamax = false) => slots.Single(s => s.Species == species && s.Form == form && s.Gigamax == gigamax);
+        string Name(LivingDexSlot s) => LivingDexGames.Name(sword, s, LivingDexMode.Complete);
+        int Forms(ushort species) => slots.Count(s => s.Species == species && !s.Gigamax);
+
+        Assert.Equal(["Miaouss", "Miaouss d'Alola", "Miaouss de Galar", "Miaouss Gigamax"], slots.Where(s => s.Species == 52).Select(Name));
+        Assert.Equal(["Darumacho", "Darumacho de Galar"], slots.Where(s => s.Species == 555).Select(Name)); // pas la Transe
+        Assert.Equal(("Shifours Gigamax (style Poing Final)", "Shifours Gigamax (style Mille Poings)"), (Name(Slot(892, 0, true)), Name(Slot(892, 1, true))));
+        Assert.Equal(("Charmilly (Lait Ruby)", "Charmilly (Mélange Ruby)", "Charmilly Gigamax"), (Name(Slot(869, 1)), Name(Slot(869, 6)), Name(Slot(869, 0, true))));
+        Assert.Equal(("Salarsen (forme Grave)", "Sylveroy du Froid", "Flagadoss de Galar"), (Name(Slot(849, 1)), Name(Slot(898, 1)), Name(Slot(80, 2))));
+        Assert.Equal((9, 1, 1, 1), (Forms(869), slots.Count(s => s.Species == 869 && s.Gigamax), slots.Count(s => s.Species == 849 && s.Gigamax), Forms(25)));
+        Assert.Equal((1, 1, 1, 1), (Forms(893), Forms(801), Forms(855), Forms(773))); // Zarude, Magearna, Polthégeist, Silvallié
+        Assert.Equal((1, 2), (Forms(888), Forms(745) - 1)); // Zacian Suprême : en combat ; Lougaroc : 3 formes
+        Assert.True(Slot(869, 0, true).AnyForm); // un seul Charmilly Gigamax, de n'importe quelle crème
+        Assert.False(LivingDexGames.Fills(Slot(52, 0, true), 52, 2, LivingDexMode.Complete)); // Miaouss de Galar : pas de Gigamax
+        // Seulement les Pokémon du jeu : Dracaufeu oui, Germignon non.
+        Assert.Contains(slots, s => s.Species == 6);
+        Assert.DoesNotContain(slots, s => s.Species == 152);
+        Assert.Equal("images/livingdex/jaquettes/epee.png", sword.Cover);
+    }
+
+    [Fact]
+    public void LegendsArceus_HisuiForms_AndBrilliantDiamond()
+    {
+        var arceus = LivingDexGames.Get(LivingDexGame.LegendsArceus);
+        string Name(LivingDexGameInfo g, LivingDexSlot s, LivingDexMode m = LivingDexMode.Complete) => LivingDexGames.Name(g, s, m);
+        // Hisui : son Pokédex a tout le jeu, dans son ordre (Brindibou n° 1) ; le National, les mêmes dans l'ordre national.
+        var hisui = LivingDexGames.Slots(arceus, LivingDexMode.Regional);
+        Assert.Equal([722, 723, 724], hisui.Take(3).Select(s => (int)s.Species));
+        Assert.Equal(hisui.Select(s => s.Species).Order(), LivingDexGames.Slots(arceus, LivingDexMode.National).Select(s => s.Species));
+
+        // Caninos n'existe qu'en forme de Hisui : une case, à cette forme, même en National ; Farfuret a les deux.
+        var national = LivingDexGames.Slots(arceus, LivingDexMode.National);
+        Assert.Equal("Caninos de Hisui", Name(arceus, national.Single(s => s.Species == 58), LivingDexMode.National));
+        var slots = LivingDexGames.Slots(arceus, LivingDexMode.Complete);
+        Assert.Equal(["Caninos de Hisui"], slots.Where(s => s.Species == 58).Select(s => Name(arceus, s)));
+        Assert.Equal(["Arcanin de Hisui"], slots.Where(s => s.Species == 59).Select(s => Name(arceus, s))); // pas le Roi
+        Assert.Equal(["Farfuret", "Farfuret de Hisui"], slots.Where(s => s.Species == 215).Select(s => Name(arceus, s)));
+        Assert.Equal(["Goupix", "Goupix d'Alola"], slots.Where(s => s.Species == 37).Select(s => Name(arceus, s)));
+        Assert.Equal(["Dialga", "Dialga (forme Originelle)"], slots.Where(s => s.Species == 483).Select(s => Name(arceus, s)));
+        Assert.Equal(["Amovénus", "Amovénus (forme Totémique)"], slots.Where(s => s.Species == 905).Select(s => Name(arceus, s)));
+        Assert.Equal(["Bargantua (motif Blanc)"], slots.Where(s => s.Species == 550).Select(s => Name(arceus, s)));
+        Assert.Single(slots, s => s.Species == 900); // Hachécateur : pas le Roi
+        Assert.Single(slots, s => s.Species == 493); // Arceus : une case
+        Assert.Equal(28, slots.Count(s => s.Species == 201));
+        Assert.True(LivingDexGames.Fills(national.Single(s => s.Species == 58), 58, 1, LivingDexMode.National));
+
+        // Diamant Étincelant : Shaymin Céleste tient en boîte, case ordinaire ; Papilord, une seule case.
+        var diamond = LivingDexGames.Get(LivingDexGame.BrilliantDiamond);
+        var dSlots = LivingDexGames.Slots(diamond, LivingDexMode.Complete);
+        Assert.All(dSlots.Where(s => s.Species == 492), s => Assert.Equal(0, s.KeyItem));
+        Assert.Equal((2, 1, 4, 6, 28), (dSlots.Count(s => s.Species == 492), dSlots.Count(s => s.Species == 414),
+            dSlots.Count(s => s.Species == 386), dSlots.Count(s => s.Species == 479), dSlots.Count(s => s.Species == 201)));
+        Assert.Equal([387, 388, 389], diamond.Regional.Take(3).Select(s => (int)s)); // Tortipouss : le Pokédex de Diamant / Perle
+        Assert.Equal("images/livingdex/jaquettes/legendes-arceus.png", arceus.Cover);
     }
 
     [Theory]
@@ -469,7 +564,9 @@ public sealed class LivingDexServiceTests : IDisposable
     public async Task Create_OnePerGame_OneSaveForOne()
     {
         var red = await Store("sacha", "rouge.sav");
-        await Store("sacha", "epee.sav"); // 8e génération : pas de living dex
+        await Store("sacha", "epee.sav");
+        Assert.Equal(2, (await _dex.ListCandidatesAsync("sacha")).Count);
+        Assert.True((await _dex.CreateAsync("sacha", (await _saves.ListAsync("sacha")).Single(s => s.FileName == "epee.sav").Id, LivingDexGame.Sword)).Ok);
 
         var candidate = Assert.Single(await _dex.ListCandidatesAsync("sacha"));
         Assert.Equal(red, candidate.SaveId);
@@ -489,7 +586,7 @@ public sealed class LivingDexServiceTests : IDisposable
             (await _dex.CreateAsync("sacha", blue, LivingDexGame.Red)).Message);
         Assert.True((await _dex.CreateAsync("sacha", blue, LivingDexGame.Blue)).Ok);
 
-        Assert.Equal(["Pokémon Rouge", "Pokémon Bleu"], (await _dex.ListAsync("sacha")).Select(d => d.Game.Name));
+        Assert.Equal(["Pokémon Rouge", "Pokémon Bleu", "Pokémon Épée"], (await _dex.ListAsync("sacha")).Select(d => d.Game.Name));
         Assert.Empty(await _dex.ListAsync("ondine"));
         Assert.False(await _dex.DeleteAsync("ondine", created.Id!.Value));
         Assert.True(await _dex.DeleteAsync("sacha", created.Id!.Value));
@@ -803,6 +900,84 @@ public sealed class LivingDexServiceTests : IDisposable
         var national = (await _dex.GetAsync("sacha", id))!;
         Assert.Equal((153, 1), (national.Entries.Count, national.Owned));
         Assert.Equal((809, (ushort)809), (national.Entries[^1].Number, national.Entries[^1].Species)); // Melmetal
+    }
+
+    /// <summary>Épée de l'utilisateur, avec des Dracaufeu en boîte (PID propre au dresseur), avec ou sans facteur Gigamax.</summary>
+    private static byte[] SwordWith(string owner, params bool[] gigamax)
+    {
+        Assert.True(SaveUtil.TryGetSaveFile(RealSave("epee.sav"), out var sav, "epee.sav"));
+        var free = Enumerable.Range(0, sav!.SlotCount).Where(i => sav.GetBoxSlotAtIndex(i).Species == 0).ToList();
+        for (var n = 0; n < gigamax.Length; n++)
+        {
+            var pk = new PK8
+            {
+                Species = 6, Version = GameVersion.SW, Language = (int)LanguageID.French, OriginalTrainerName = "Celestia",
+                TID16 = 4242, PID = (uint)(0x60600000 + owner.Length * 16 + n), MetLevel = 50, Move1 = 33, CanGigantamax = gigamax[n],
+            };
+            pk.CurrentLevel = 50;
+            pk.ClearNickname();
+            pk.RefreshChecksum();
+            sav.SetBoxSlotAtIndex(pk, free[n]);
+        }
+        return sav.Write().ToArray();
+    }
+
+    [Theory]
+    [InlineData(new[] { false }, true, false, "il faut un Dracaufeu de plus avec le facteur Gigamax")]
+    [InlineData(new[] { true }, false, true, "avec le facteur Gigamax")] // le seul Dracaufeu va à la case Gigamax
+    [InlineData(new[] { false, true }, true, true, "avec le facteur Gigamax")]
+    public async Task Sword_GigamaxNeedsOneMoreCopyWithTheFactor(bool[] charizards, bool normal, bool gigamax, string note)
+    {
+        var result = await _saves.AddAsync("sacha", "epee.sav", SwordWith("sacha", charizards));
+        Assert.True(result.Ok, result.Message);
+        var candidate = Assert.Single(await _dex.ListCandidatesAsync("sacha"));
+        Assert.Equal([LivingDexGame.Sword], candidate.Games);
+        var id = (await _dex.CreateAsync("sacha", candidate.SaveId, LivingDexGame.Sword)).Id!.Value;
+
+        var complete = (await _dex.GetAsync("sacha", id, LivingDexMode.Complete))!;
+        var charizard = complete.Entries.Where(e => e.Species == 6).ToList();
+        Assert.Equal(["Dracaufeu", "Dracaufeu Gigamax"], charizard.Select(e => e.Name));
+        Assert.Equal((normal, gigamax, note), (charizard[0].Owned, charizard[1].Owned, charizard[1].Note));
+
+        // Galar : les numéros du jeu, avec la section de chaque Pokémon ; en National, un Dracaufeu suffit.
+        var galar = (await _dex.GetAsync("sacha", id, LivingDexMode.Regional))!;
+        Assert.Equal((584, 1, "Galar", (ushort)810), (galar.Entries.Count, galar.Entries[0].Number, galar.Entries[0].Section, galar.Entries[0].Species));
+        Assert.Equal("Couronneige", galar.Entries[^1].Section);
+        var national = (await _dex.GetAsync("sacha", id))!;
+        Assert.Equal(664, national.Entries.Count);
+        Assert.Equal(139, national.Owned); // 138 espèces dans la sauvegarde, et le Dracaufeu
+        Assert.True(complete.Owned > 0);
+    }
+
+    [Fact]
+    public async Task BrilliantDiamond_CountsItsPokemon_ShayminSkyInTheBox()
+    {
+        var sav = new SAV8BS { OT = "Lucas", Language = (int)LanguageID.French };
+        foreach (var (form, index) in new byte[] { 0, 1 }.Select((f, i) => (f, i)))
+        {
+            var pk = new PB8
+            {
+                Species = 492, Form = form, Version = GameVersion.BD, Language = (int)LanguageID.French, OriginalTrainerName = "Lucas",
+                TID16 = 4242, PID = (uint)(0x49200000 + index), MetLevel = 30, Move1 = 33,
+            };
+            pk.CurrentLevel = 30;
+            pk.ClearNickname();
+            pk.RefreshChecksum();
+            sav.SetBoxSlotAtIndex(pk, index);
+        }
+        var result = await _saves.AddAsync("sacha", "diamant-etincelant.sav", sav.Write().ToArray());
+        Assert.True(result.Ok, result.Message);
+        var candidate = Assert.Single(await _dex.ListCandidatesAsync("sacha"));
+        Assert.Equal([LivingDexGame.BrilliantDiamond], candidate.Games);
+        var id = (await _dex.CreateAsync("sacha", candidate.SaveId, LivingDexGame.BrilliantDiamond)).Id!.Value;
+
+        var complete = (await _dex.GetAsync("sacha", id, LivingDexMode.Complete))!;
+        Assert.Equal(536, complete.Entries.Count);
+        var shaymin = complete.Entries.Where(e => e.Species == 492).ToList();
+        Assert.Equal([("Shaymin", true), ("Shaymin (forme Céleste)", true)], shaymin.Select(e => (e.Name, e.Owned)));
+        Assert.All(shaymin, e => Assert.Null(e.Note)); // ni deuxième Shaymin ni Gracidée : il tient en boîte
+        var sinnoh = (await _dex.GetAsync("sacha", id, LivingDexMode.Regional))!;
+        Assert.Equal((151, 0), (sinnoh.Entries.Count, sinnoh.Owned)); // Shaymin n'est pas dans le Pokédex de Sinnoh
     }
 
     [Fact]

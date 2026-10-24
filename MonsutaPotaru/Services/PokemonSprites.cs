@@ -117,6 +117,20 @@ public static partial class PokemonSprites
         return $"images/pokemon/{folder}{species}.png";
     }
 
+    /// <summary>
+    /// Image Gigamax d'une forme (« 892-rapid-strike-gmax.png », Shifours Mille Poings), sinon celle de l'espèce
+    /// (« 6-gmax.png ») ; sans image Gigamax, celle de la forme.
+    /// </summary>
+    public static string GigamaxUrl(ushort species, byte form, EntityContext context)
+    {
+        if (FormName(species, form, context) is { } name)
+            foreach (var slug in Candidates(name))
+                if (_files.Contains($"{species}-{slug}-gmax.png"))
+                    return $"images/pokemon/{species}-{slug}-gmax.png";
+        return _files.Contains($"{species}-gmax.png") ? $"images/pokemon/{species}-gmax.png"
+            : Url(species, form, context, female: false, heldItem: 0, shiny: false);
+    }
+
     /// <summary>Jeu dont PKHeX donne toutes les Méga-Évolutions (Légendes Z-A, qui ajoute les siennes à celles de X/Y).</summary>
     private const EntityContext MegaContext = EntityContext.Gen9a;
 
