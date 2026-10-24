@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using PKHeX.Core;
@@ -9,8 +10,10 @@ namespace MonsutaPotaru.Tests;
 /// <summary>
 /// Living dex : un exemplaire de chaque Pokémon du Pokédex d'un jeu, compté dans une sauvegarde stockée (1re génération :
 /// Rouge, Bleu, Jaune ; 2e : Or, Argent, Cristal ; 3e : Rubis, Saphir, Émeraude, Rouge Feu, Vert Feuille ; 4e : Diamant,
-/// Perle, Platine, HeartGold, SoulSilver ; 5e : Noire, Blanche, Noire 2, Blanche 2). Vraies sauvegardes de Rouge, Bleu,
-/// Argent, SoulSilver, Noire et Noire 2 (MonsutaPotaru.Tests/Sauvegardes).
+/// Perle, Platine, HeartGold, SoulSilver ; 5e : Noire, Blanche, Noire 2, Blanche 2 ; 6e : X, Y, Rubis Oméga, Saphir
+/// Alpha ; 7e : Soleil, Lune, Ultra-Soleil, Ultra-Lune, Let's Go Pikachu, Let's Go Évoli). Vraies sauvegardes de Rouge,
+/// Bleu, Argent, SoulSilver, Noire, Noire 2, Rubis Oméga et Ultra-Soleil (MonsutaPotaru.Tests/Sauvegardes) ; Let's Go
+/// fabriquée en mémoire.
 /// </summary>
 public sealed class LivingDexServiceTests : IDisposable
 {
@@ -111,7 +114,16 @@ public sealed class LivingDexServiceTests : IDisposable
         Assert.Equal([LivingDexGame.OmegaRuby], LivingDexGames.For(omegaRuby!));
         Assert.Equal([LivingDexGame.X, LivingDexGame.Y], LivingDexGames.For(new SAV6XY()));
         Assert.Equal([LivingDexGame.OmegaRuby, LivingDexGame.AlphaSapphire], LivingDexGames.For(new SAV6AO()));
-        Assert.Empty(LivingDexGames.For(new SAV7SM()));
+
+        // 7e génération : chaque sauvegarde dit son jeu, Let's Go compris ; rien pour la 8e.
+        Assert.True(SaveUtil.TryGetSaveFile(RealSave("ultra-soleil.sav"), out var ultraSun, "ultra-soleil.sav"));
+        Assert.Equal([LivingDexGame.UltraSun], LivingDexGames.For(ultraSun!));
+        Assert.Equal([LivingDexGame.Sun, LivingDexGame.Moon], LivingDexGames.For(new SAV7SM()));
+        Assert.Equal([LivingDexGame.UltraSun, LivingDexGame.UltraMoon], LivingDexGames.For(new SAV7USUM()));
+        Assert.Equal([LivingDexGame.LetsGoPikachu, LivingDexGame.LetsGoEevee], LivingDexGames.For(new SAV7b()));
+        Assert.Equal([LivingDexGame.LetsGoEevee], LivingDexGames.For(new SAV7b { Version = GameVersion.GE }));
+        Assert.True(SaveUtil.TryGetSaveFile(RealSave("epee.sav"), out var sword, "epee.sav"));
+        Assert.Empty(LivingDexGames.For(sword!));
     }
 
     [Theory]
@@ -177,6 +189,85 @@ public sealed class LivingDexServiceTests : IDisposable
         Assert.Single(xSlots, s => s.Species == 720);
         Assert.Single(xSlots, s => s.Species == 25);
         Assert.Single(xSlots, s => s.Species == 254);
+    }
+
+    [Theory]
+    [InlineData(LivingDexGame.Sun, 302, 802, 956, 50)] // + 18 formes d'Alola, 7 noyaux de Météno, styles, Zygarde 10 %...
+    [InlineData(LivingDexGame.Moon, 302, 802, 956, 50)]
+    [InlineData(LivingDexGame.UltraSun, 403, 807, 964, 50)] // + Lougaroc Crépusculaire, les deux Necrozma fusionnés
+    [InlineData(LivingDexGame.UltraMoon, 403, 807, 964, 50)]
+    public void SeventhGeneration_HasAlola_National_FormsAndMegas(LivingDexGame value, int regional, int national, int complete, int megas)
+    {
+        var game = LivingDexGames.Get(value);
+        Assert.Equal([LivingDexMode.Regional, LivingDexMode.National, LivingDexMode.Complete], LivingDexGames.Modes(game));
+        var alola = LivingDexGames.Slots(game, LivingDexMode.Regional);
+        Assert.Equal(regional, alola.Count);
+        Assert.Equal([722, 723, 724], alola.Take(3).Select(s => (int)s.Species)); // Brindibou, Efflèche, Archéduc
+        Assert.Equal(national, LivingDexGames.Slots(game, LivingDexMode.National).Count);
+        var slots = LivingDexGames.Slots(game, LivingDexMode.Complete);
+        Assert.Equal(complete, slots.Count);
+        Assert.Equal(megas, slots.Count(s => s.MegaItem != 0 || s.MegaMove != 0));
+        Assert.All(slots, s => Assert.False(s.MegaInBag)); // les gemmes se tiennent
+        int Forms(ushort species) => slots.Count(s => s.Species == species);
+        var ultra = value is LivingDexGame.UltraSun or LivingDexGame.UltraMoon;
+        Assert.Equal((2, 2, 2, 2), (Forms(19), Forms(26), Forms(105), Forms(20))); // forme d'Alola ; pas de Dominant
+        Assert.Equal((7, 4, 2), (Forms(774), Forms(741), Forms(718))); // noyaux de Météno, styles, Zygarde 10 % et 50 %
+        Assert.Equal((ultra ? 3 : 2, ultra ? 3 : 1), (Forms(745), Forms(800))); // Lougaroc, Necrozma
+        Assert.Equal((1, 1, 1, 1, 1), (Forms(773), Forms(25), Forms(658), Forms(778), Forms(746))); // Silvallié, Pikachu, Amphinobi...
+        Assert.Equal(new byte[] { 7, 8, 9, 10, 11, 12, 13 }, slots.Where(s => s.Species == 774).Select(s => s.Form)); // pas Météore
+        Assert.All(slots.Where(s => s.Species is 492 or 720), s => Assert.Equal(0, s.KeyItem)); // en boîte en 7e
+        Assert.Null(game.SpriteFolder);
+    }
+
+    [Fact]
+    public void SeventhGeneration_FormNames_TotemsAndZygarde()
+    {
+        var ultraSun = LivingDexGames.Get(LivingDexGame.UltraSun);
+        var slots = LivingDexGames.Slots(ultraSun, LivingDexMode.Complete);
+        LivingDexSlot Slot(ushort species, byte form) => slots.Single(s => s.Species == species && s.Form == form);
+        string Name(LivingDexSlot s) => LivingDexGames.Name(ultraSun, s, LivingDexMode.Complete);
+
+        Assert.Equal(["Rattata", "Rattata d'Alola"], slots.Where(s => s.Species == 19).Select(Name));
+        Assert.Equal(["Plumeline (style Flamenco)", "Plumeline (style Pom-Pom)", "Plumeline (style Hula)", "Plumeline (style Buyō)"],
+            slots.Where(s => s.Species == 741).Select(Name));
+        Assert.Equal(["Lougaroc (forme Diurne)", "Lougaroc (forme Nocturne)", "Lougaroc (forme Crépusculaire)"],
+            slots.Where(s => s.Species == 745).Select(Name));
+        Assert.Equal(["Zygarde (forme 50 %)", "Zygarde (forme 10 %)"], slots.Where(s => s.Species == 718).Select(Name));
+        Assert.Equal(("Météno (noyau Rouge)", "Météno (noyau Violet)"), (Name(Slot(774, 7)), Name(Slot(774, 13))));
+        Assert.Equal(("Necrozma Crinière du Couchant", "Shaymin (forme Céleste)", "Hoopa Déchaîné"),
+            (Name(Slot(800, 1)), Name(Slot(492, 1)), Name(Slot(720, 1))));
+        Assert.Equal("Méga-Dracaufeu Y", Name(Slot(6, 2)));
+        Assert.Equal(PokemonSprites.Url(19, 1, EntityContext.Gen7, false, 0, false), LivingDexGames.Sprite(ultraSun, Slot(19, 1)));
+
+        // Un Dominant remplit la case de sa forme ordinaire ; Zygarde avec Rassemblement, celle de son pourcentage.
+        Assert.True(LivingDexGames.Fills(Slot(20, 1), 20, 2, LivingDexMode.Complete)); // Rattatac Dominant : d'Alola
+        Assert.False(LivingDexGames.Fills(Slot(20, 0), 20, 2, LivingDexMode.Complete));
+        Assert.True(LivingDexGames.Fills(Slot(718, 1), 718, 2, LivingDexMode.Complete)); // 10 %-C
+        Assert.True(LivingDexGames.Fills(Slot(718, 0), 718, 3, LivingDexMode.Complete)); // 50 %-C
+        Assert.True(LivingDexGames.Fills(Slot(25, 0), 25, 3, LivingDexMode.Complete)); // un Pikachu à casquette reste un Pikachu
+        Assert.False(LivingDexGames.Fills(Slot(774, 7), 774, 8, LivingDexMode.Complete)); // chaque noyau compte
+        Assert.Equal("images/livingdex/jaquettes/ultra-soleil.png", ultraSun.Cover);
+    }
+
+    [Fact]
+    public void LetsGo_OnlyKanto_MeltanAndMelmetal_AlolaFormsAndMegasInTheBag()
+    {
+        foreach (var game in LivingDexGames.All.Where(LivingDexGames.IsLetsGo))
+        {
+            // Son Pokédex est tout ce qu'il peut contenir : National et Complet.
+            Assert.Equal([LivingDexMode.National, LivingDexMode.Complete], LivingDexGames.Modes(game));
+            var national = LivingDexGames.Slots(game, LivingDexMode.National);
+            Assert.Equal([.. Enumerable.Range(1, 151), 808, 809], national.Select(s => (int)s.Species));
+            var slots = LivingDexGames.Slots(game, LivingDexMode.Complete);
+            Assert.Equal(153 + 18 + 15, slots.Count); // 18 formes d'Alola, 15 Méga
+            var megas = slots.Where(s => s.MegaItem != 0).ToList();
+            Assert.Equal(15, megas.Count);
+            Assert.All(megas, s => Assert.True(s.MegaInBag));
+            Assert.Single(slots, s => s.Species == 25); // ni casquette ni Partenaire
+            Assert.Single(slots, s => s.Species == 133);
+            Assert.Equal("Méga-Mewtwo X", LivingDexGames.Name(game, slots.Single(s => s.Species == 150 && s.Form == 1), LivingDexMode.Complete));
+        }
+        Assert.Equal("images/livingdex/jaquettes/lets-go-evoli.png", LivingDexGames.Get(LivingDexGame.LetsGoEevee).Cover);
     }
 
     [Theory]
@@ -378,7 +469,7 @@ public sealed class LivingDexServiceTests : IDisposable
     public async Task Create_OnePerGame_OneSaveForOne()
     {
         var red = await Store("sacha", "rouge.sav");
-        await Store("sacha", "ultra-soleil.sav"); // 7e génération : pas de living dex
+        await Store("sacha", "epee.sav"); // 8e génération : pas de living dex
 
         var candidate = Assert.Single(await _dex.ListCandidatesAsync("sacha"));
         Assert.Equal(red, candidate.SaveId);
@@ -638,6 +729,80 @@ public sealed class LivingDexServiceTests : IDisposable
         Assert.Equal((true, "qui connaît Draco-Ascension"), (megaRayquaza.Owned, megaRayquaza.Note));
         Assert.True(complete.Entries.Single(e => e.Name == "Pikachu Cosplayeur").Owned);
         Assert.Equal("il faut un deuxième Hoopa et le Vase Scellé dans le sac", complete.Entries.Single(e => e.Name == "Hoopa Déchaîné").Note);
+    }
+
+    [Fact]
+    public async Task UltraSun_CountsItsPokemon()
+    {
+        var save = await Store("sacha", "ultra-soleil.sav");
+        var candidate = Assert.Single(await _dex.ListCandidatesAsync("sacha"));
+        Assert.Equal([LivingDexGame.UltraSun], candidate.Games);
+        var id = (await _dex.CreateAsync("sacha", save, LivingDexGame.UltraSun)).Id!.Value;
+
+        var alola = (await _dex.GetAsync("sacha", id, LivingDexMode.Regional))!;
+        Assert.Equal((403, 1, (ushort)722, "Brindibou"), (alola.Entries.Count, alola.Entries[0].Number, alola.Entries[0].Species, alola.Entries[0].Name));
+        Assert.Equal((403, (ushort)807), (alola.Entries[^1].Number, alola.Entries[^1].Species)); // Zeraora
+        var national = (await _dex.GetAsync("sacha", id))!;
+        Assert.Equal(807, national.Entries.Count);
+        Assert.True(national.Owned > 0);
+        var complete = (await _dex.GetAsync("sacha", id, LivingDexMode.Complete))!;
+        Assert.Equal(964, complete.Entries.Count); // 960 places en boîte + 6 dans l'équipe : ça tient
+        Assert.True(complete.Owned > 0);
+    }
+
+    /// <summary>
+    /// Sauvegarde Let's Go Pikachu fabriquée en mémoire, avec des Dracaufeu en boîte (PID propre au dresseur) et des
+    /// gemmes dans le sac. Une sauvegarde vide de PKHeX n'a pas les repères que SaveUtil cherche (pied « BEEF », numéro
+    /// de bloc 0x13) : on les écrit.
+    /// </summary>
+    private static byte[] LetsGoWith(string owner, int charizards, params ushort[] stones)
+    {
+        var data = new SAV7b { Version = GameVersion.GP, OT = "Chen", Language = (int)LanguageID.French }.Write().ToArray();
+        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(0xB8800 - 0x1F0), 0x42454546);
+        BinaryPrimitives.WriteUInt16LittleEndian(data.AsSpan(0xB8800 - 0x200 + 0xB0), 0x13);
+        Assert.True(SaveUtil.TryGetSaveFile(data, out var sav, "lets-go.sav"));
+        for (var n = 0; n < charizards; n++)
+        {
+            var pk = new PB7
+            {
+                Species = 6, Version = GameVersion.GP, Language = (int)LanguageID.French, OriginalTrainerName = "Chen",
+                TID16 = 4242, PID = (uint)(0x60000000 + owner.Length * 16 + n), MetLevel = 36, Move1 = 33,
+            };
+            pk.CurrentLevel = 36;
+            pk.ClearNickname();
+            pk.RefreshChecksum();
+            sav!.SetBoxSlotAtIndex(pk, n);
+        }
+        SaveSessionTests.GiveItems(sav!, stones.Select(s => ((int)s, 1)).ToArray());
+        return sav!.Write().ToArray();
+    }
+
+    [Theory]
+    [InlineData(1, new ushort[] { 660, 678 }, false, "il faut un Dracaufeu de plus", false, "il faut un Dracaufeu de plus")]
+    [InlineData(2, new ushort[] { 660 }, true, "Dracaufite X dans le sac", false, "il faut un Dracaufeu de plus et la Dracaufite Y dans le sac")]
+    [InlineData(2, new ushort[] { 678 }, false, "il faut la Dracaufite X dans le sac", true, "Dracaufite Y dans le sac")]
+    [InlineData(3, new ushort[] { 660, 678 }, true, "Dracaufite X dans le sac", true, "Dracaufite Y dans le sac")]
+    public async Task LetsGo_MegaNeedsOneMoreCopy_AndItsStoneInTheBag(int charizards, ushort[] stones, bool x, string xNote, bool y, string yNote)
+    {
+        var result = await _saves.AddAsync("sacha", "lets-go.sav", LetsGoWith("sacha", charizards, stones));
+        Assert.True(result.Ok, result.Message);
+        var candidate = Assert.Single(await _dex.ListCandidatesAsync("sacha"));
+        Assert.Equal([LivingDexGame.LetsGoPikachu], candidate.Games);
+        var id = (await _dex.CreateAsync("sacha", candidate.SaveId, LivingDexGame.LetsGoPikachu)).Id!.Value;
+
+        var complete = (await _dex.GetAsync("sacha", id, LivingDexMode.Complete))!;
+        Assert.Equal(186, complete.Entries.Count);
+        var charizard = complete.Entries.Where(e => e.Species == 6).ToList();
+        Assert.Equal(["Dracaufeu", "Méga-Dracaufeu X", "Méga-Dracaufeu Y"], charizard.Select(e => e.Name));
+        Assert.True(charizard[0].Owned); // le premier Dracaufeu reste à sa case
+        Assert.Equal((x, xNote, y, yNote), (charizard[1].Owned, charizard[1].Note, charizard[2].Owned, charizard[2].Note));
+        Assert.Equal(1 + (x ? 1 : 0) + (y ? 1 : 0), charizard.Select(e => e.BankId).Where(b => b is not null).Distinct().Count());
+        Assert.Equal("il faut un Alakazam de plus et l'Alakazamite dans le sac", complete.Entries.Single(e => e.Name == "Méga-Alakazam").Note);
+
+        // En National, un Dracaufeu suffit.
+        var national = (await _dex.GetAsync("sacha", id))!;
+        Assert.Equal((153, 1), (national.Entries.Count, national.Owned));
+        Assert.Equal((809, (ushort)809), (national.Entries[^1].Number, national.Entries[^1].Species)); // Melmetal
     }
 
     [Fact]

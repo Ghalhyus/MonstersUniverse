@@ -23,8 +23,9 @@ Rassemble les images servies par le site, dans MonsutaPotaru/wwwroot/images/ :
   492-sky.png... ; 5e : 550-blue-striped.png, 585-summer.png, 641-therian.png, 646-black.png, 647-resolute.png...), et
   jaquettes officielles (livingdex/jaquettes/rouge.png, bleu.png, jaune.png, or.png, argent.png, cristal.png, rubis.png,
   saphir.png, emeraude.png, rouge-feu.png, vert-feuille.png, diamant.png, perle.png, platine.png, heartgold.png,
-  soulsilver.png, noire.png, blanche.png, noire-2.png, blanche-2.png, x.png, y.png, rubis-omega.png, saphir-alpha.png :
-  Bulbagarden Archives, versions anglaises, faute de françaises).
+  soulsilver.png, noire.png, blanche.png, noire-2.png, blanche-2.png, x.png, y.png, rubis-omega.png, saphir-alpha.png,
+  soleil.png, lune.png, ultra-soleil.png, ultra-lune.png, lets-go-pikachu.png, lets-go-evoli.png : Bulbagarden Archives,
+  versions anglaises, faute de françaises).
 
 Sources des objets, dans l'ordre :
   1. PokéAPI, par nom anglais (l'apparence d'origine du site), sauf quand ce nom est porté par plusieurs objets ;
@@ -279,7 +280,10 @@ LIVINGDEX_COVERS = {"rouge": "File:Red EN boxart.png", "bleu": "File:Blue EN box
                     "noire": "File:Black EN boxart.png", "blanche": "File:White EN boxart.png",
                     "noire-2": "File:Black 2 EN boxart.png", "blanche-2": "File:White 2 EN boxart.png",
                     "x": "File:X EN boxart.png", "y": "File:Y EN boxart.png",
-                    "rubis-omega": "File:Omega Ruby EN boxart.png", "saphir-alpha": "File:Alpha Sapphire EN boxart.png"}
+                    "rubis-omega": "File:Omega Ruby EN boxart.png", "saphir-alpha": "File:Alpha Sapphire EN boxart.png",
+                    "soleil": "File:Sun EN boxart.png", "lune": "File:Moon EN boxart.png",
+                    "ultra-soleil": "File:Ultra Sun EN boxart.png", "ultra-lune": "File:Ultra Moon EN boxart.png",
+                    "lets-go-pikachu": "File:Lets Go Pikachu EN boxart.png", "lets-go-evoli": "File:Lets Go Eevee EN boxart.png"}
 
 
 def livingdex_jobs():

@@ -186,7 +186,14 @@ suivante), sans lister les dossiers des dépôts.
   `FormCount` : PKHeX connaît aussi les Méga de Légendes Z-A). Méga-Rayquaza n'a pas de gemme : Draco-Ascension, lue
   dans les octets des seuls Rayquaza. Sous-Pokédex (Kalos) : `LivingDexGameInfo.Sections`, `RegionalNumber`.
 - L'utilisateur trouve certaines formes trop longues à rassembler : une seule case pour Prismillon (motifs), comme
-  Arceus et Genesect. Lui poser la question pour une espèce à beaucoup de formes avant de toutes les compter.
+  Arceus et Genesect. Lui poser la question pour une espèce à beaucoup de formes avant de toutes les compter (il a
+  pourtant voulu les 7 noyaux de Météno, et retiré les casquettes de Pikachu et les Dominants). Vérifier aussi que le
+  mode Complet tient dans la sauvegarde : 964 cases pour 966 places en Ultra-Soleil / Ultra-Lune.
+- 7e génération : Shaymin Céleste et Hoopa Déchaîné tiennent en boîte (`FormVerifier` : `Format <= 6`), cases
+  ordinaires. Let's Go : ni objet tenu, Méga par la gemme du sac (`MegaInBag`), son Pokédex = son national
+  (`LivingDexGameInfo.National`). Une sauvegarde Let's Go vide de PKHeX n'est pas reconnue par `SaveUtil` : écrire le pied
+  « BEEF » et le numéro de bloc 0x13 (`LivingDexServiceTests.LetsGoWith`). Bulbagarden refuse Python sur ce PC
+  (403) ; `curl` avec l'agent « PokeBank (outils/images.py) » passe.
 - Les tests ne doivent **pas** exiger ces images : la CI les copie depuis le VPS, qui ne les reçoit qu'au déploiement,
   après les tests. Une nouvelle image : tester son chemin, pas sa présence.
 - Jaquettes : Bulbagarden Archives (API MediaWiki, version réduite `iiurlwidth=480`). Sur ce PC, Python refuse son

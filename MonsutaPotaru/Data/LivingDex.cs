@@ -27,6 +27,12 @@ public enum LivingDexGame
     Y = 22,
     OmegaRuby = 23,
     AlphaSapphire = 24,
+    Sun = 25,
+    Moon = 26,
+    UltraSun = 27,
+    UltraMoon = 28,
+    LetsGoPikachu = 29,
+    LetsGoEevee = 30,
 }
 
 /// <summary>

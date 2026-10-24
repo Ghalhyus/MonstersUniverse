@@ -287,7 +287,8 @@ Le menu « Living dex » (`/livingdex`, entre « Inventaire » et « Sauvegardes
 chaque Pokémon du Pokédex d'un jeu. Pour l'instant les jeux de 1re génération (**Pokémon Rouge, Bleu et Jaune**), de 2e
 (**Pokémon Or, Argent et Cristal**), de 3e (**Pokémon Rubis, Saphir, Émeraude, Rouge Feu et Vert Feuille** ; pas
 Colosseum ni XD), de 4e (**Pokémon Diamant, Perle, Platine, Or HeartGold et Argent SoulSilver**, noms français de PKHeX)
-de 5e (**Pokémon Noire, Blanche, Noire 2 et Blanche 2**) et de 6e (**Pokémon X, Y, Rubis Oméga et Saphir Alpha**).
+de 5e (**Pokémon Noire, Blanche, Noire 2 et Blanche 2**), de 6e (**Pokémon X, Y, Rubis Oméga et Saphir Alpha**) et de
+7e (**Pokémon Soleil, Lune, Ultra-Soleil, Ultra-Lune, Let's Go Pikachu et Let's Go Évoli**).
 
 - **Vue générale** (`/livingdex`) : une carte par living dex (jaquette, sauvegarde, barre de progression, « x / y »).
   Boutons **Régional / National / Complet** pour la progression de toutes les cartes (`?mode=regional`, `?mode=complet`) :
@@ -301,8 +302,8 @@ de 5e (**Pokémon Noire, Blanche, Noire 2 et Blanche 2**) et de 6e (**Pokémon X
   choisi le montre encore ; un jeu qui a déjà son living dex est grisé), puis une de ses **sauvegardes** stockées pas encore liées. PKHeX reconnaît Jaune, Cristal,
   Émeraude et Platine, mais pas Rouge de Bleu, Or d'Argent, Rubis de Saphir, Rouge Feu de Vert Feuille, Diamant de Perle
   ni HeartGold de SoulSilver (même format) : une sauvegarde Rouge / Bleu est proposée pour Rouge comme pour Bleu, de même
-  pour les autres paires (pour Rouge Feu / Vert Feuille, PKHeX répond toujours « Rouge Feu » faute de mieux). En 5e
-  et 6e génération, chaque sauvegarde dit son jeu. **Un living dex par jeu** et par compte, une
+  pour les autres paires (pour Rouge Feu / Vert Feuille, PKHeX répond toujours « Rouge Feu » faute de mieux). À partir
+  de la 5e génération, chaque sauvegarde dit son jeu (Let's Go compris). **Un living dex par jeu** et par compte, une
   sauvegarde pour un seul living dex (index uniques).
 - **Comptage** : un Pokémon est enregistré s'il est dans l'**équipe ou les boîtes** de la sauvegarde liée (pas les œufs) ;
   le living dex suit donc chaque mise à jour de la sauvegarde (site ou 3DS). Le premier exemplaire (équipe, puis boîtes)
@@ -357,7 +358,25 @@ de 5e (**Pokémon Noire, Blanche, Noire 2 et Blanche 2**) et de 6e (**Pokémon X
     seulement : **Hoopa Déchaîné** comme Shaymin Céleste (deuxième Hoopa et Vase Scellé dans le sac) et une case **Pikachu
     Cosplayeur**, remplie par n'importe quel costume (un seul par partie). Une seule case, quelle que soit la forme :
     Prismillon (et Lépidonille, Pérégrain : trop de motifs à rassembler), Couafarel (les coupes ne tiennent qu'en équipe),
-    Mistigrix (sa forme est le sexe), Arceus, Genesect ; Exagide Assaut et Xerneas Déchaîné n'existent qu'en combat.
+    Mistigrix (sa forme est le sexe), Arceus, Genesect ; Exagide Assaut et Xerneas Déchaîné n'existent qu'en combat ;
+  - 7e génération : **Régional** (Alola de Soleil / Lune : 302, Brindibou n° 1, Marshadow n° 302 ; d'Ultra-Soleil /
+    Ultra-Lune : 403, Zeraora n° 403 ; une seule liste, les Pokédex des îles se recoupent), **National** (802 ; 807 en
+    Ultra) et **Complet** (956 en Soleil / Lune, **964** en Ultra : ça tient, de justesse, dans les 960 places des boîtes
+    et les 6 de l'équipe) : les formes de la 6e (Méga comprises, les 50 : PKHeX dit que chaque gemme peut se tenir en 7e,
+    `ItemStorage7SM.GetAllHeld`), les **18 formes d'Alola** (« Rattata d'Alola »), les 4 styles de Plumeline, Lougaroc
+    Diurne, Nocturne et Crépusculaire (Ultra seulement), Zygarde **50 % et 10 %** (avec ou sans Rassemblement : la même
+    case), les **7 noyaux de Météno**, Necrozma Crinière du Couchant et Ailes de l'Aurore (Ultra). **Shaymin Céleste et
+    Hoopa Déchaîné** tiennent en boîte à partir de la 7e (règles de légalité de PKHeX) : cases ordinaires, sans deuxième
+    exemplaire ni objet. Une seule case : **Silvallié** (comme Arceus), Pikachu (les **casquettes** ne comptent pas :
+    distributions terminées), Amphinobi ; un **Pokémon Dominant** (Ultra : seule la taille change) remplit la case de sa
+    forme ordinaire (Rattatac Dominant : Rattatac d'Alola). Formes de combat exclues : Météno Météore, Ultra-Necrozma,
+    Zygarde Parfait, Froussardine en banc, Mimiqui démasqué, Amphinobi Sacha ;
+  - **Let's Go Pikachu / Évoli** : seulement les 151 de Kanto, **Meltan et Melmetal** (n° 808 et 809) : son Pokédex est
+    tout ce que le jeu peut contenir, donc **National** (153) et **Complet** (186 : les 18 formes d'Alola et 15 Méga ; ni
+    casquette, ni Pikachu / Évoli Partenaire). Les Pokémon n'y tiennent **pas d'objet** : une case Méga se remplit avec un
+    **exemplaire de plus** de l'espèce **et sa gemme dans le sac** (`LivingDexSlot.MegaInBag` ; Dracaufeu : trois pour les
+    deux Méga) ; infobulle « il faut un Dracaufeu de plus et la Dracaufite X dans le sac ». Le Parc GO (Pokémon venus
+    de Pokémon GO, hors des boîtes) ne compte pas.
 - **Page d'un living dex** (`/livingdex/{id}`) : jaquette officielle, compteur et barre de progression, filtre
   **Tous / Manquants / Possédés** avec le nombre de chacun (`?filtre=manquants`, `?filtre=possedes`, gardé en changeant
   de mode), grille dans l'ordre du Pokédex avec les **sprites du jeu** (Rouge / Bleu : couleurs du Super Game Boy, Jaune :
@@ -365,7 +384,7 @@ de 5e (**Pokémon Noire, Blanche, Noire 2 et Blanche 2**) et de 6e (**Pokémon X
   Diamant / Perle, Platine et HeartGold / SoulSilver aussi ; ceux, fixes, de Noire / Blanche pour toute la 5e génération :
   PokéAPI n'a pas ceux de Noire 2 / Blanche 2 ; **à partir de la 6e génération, les images de « Ma collection »**, les
   sprites 3D de ces jeux n'ayant pas plu : `SpriteFolder` null, `LivingDexGames.Sprite` → `PokemonSprites.Url`, la Méga
-  par sa gemme comme un Pokémon qui la tient),
+  par sa gemme comme un Pokémon qui la tient ; 7e génération aussi),
   **une image par forme** (Zarbi B, Deoxys Vitesse...), en couleur si le Pokémon est dans la sauvegarde, en **silhouette
   noire** sinon. Infobulle : numéro, nom (« Zarbi B » en Complet, « Deoxys (forme Vitesse) »)
   et place (« Boîte 2, case 8 ») ou « manquant » ; un clic sur un Pokémon possédé ouvre sa fiche. Nombre de colonnes au
@@ -559,7 +578,7 @@ Monsuta Potaru s'appuie sur le travail d'autres projets :
 |---|---|---|
 | [PKHeX](https://github.com/kwsch/PKHeX) (Kaphotics et contributeurs), paquet `PKHeX.Core` | Lecture et écriture des sauvegardes, Pokémon, sacs, noms français, légalité ; images d'objets « Big Items » et « Artwork Items », fond de boîte « Forêt » de Diamant Étincelant du parc (`outils/images.py`) | GPL-3.0 |
 | [PokéAPI sprites](https://github.com/PokeAPI/sprites) | Images des Pokémon (normales et chromatiques, formes, femelles, Méga-Évolutions, Gigamax), de la plupart des objets et des CT (`wwwroot/images`) ; sprites de Rouge / Bleu, Jaune, Or, Argent, Cristal, Rubis / Saphir, Émeraude, Rouge Feu / Vert Feuille, Diamant / Perle, Platine, HeartGold / SoulSilver et Noire / Blanche des living dex, formes comprises (`versions/generation-i` à `generation-v`, `wwwroot/images/livingdex`) | CC0 1.0 pour le dépôt ; images © The Pokémon Company |
-| [PokéAPI](https://github.com/PokeAPI/pokeapi) (données) | Liste des formes de chaque espèce et des espèces dont la femelle est différente (tables `pokemon`, `pokemon_forms`, `pokemon_species`, lues par `outils/images.py`) ; ordre des Pokédex régionaux des living dex (`pokemon_dex_numbers`, Pokédex « original-johto », « hoenn », « original-sinnoh », « extended-sinnoh », « updated-johto », « original-unova », « updated-unova », « kalos-central », « kalos-coastal », « kalos-mountain » et « updated-hoenn », repris dans `LivingDexGames` ; noms des Méga de la table `pokemon`) | BSD-3-Clause |
+| [PokéAPI](https://github.com/PokeAPI/pokeapi) (données) | Liste des formes de chaque espèce et des espèces dont la femelle est différente (tables `pokemon`, `pokemon_forms`, `pokemon_species`, lues par `outils/images.py`) ; ordre des Pokédex régionaux des living dex (`pokemon_dex_numbers`, Pokédex « original-johto », « hoenn », « original-sinnoh », « extended-sinnoh », « updated-johto », « original-unova », « updated-unova », « kalos-central », « kalos-coastal », « kalos-mountain », « updated-hoenn », « original-alola », « updated-alola » et « letsgo-kanto », repris dans `LivingDexGames`) | BSD-3-Clause |
 | [PokéSprite](https://github.com/msikma/pokesprite) (msikma) | Images d'objets absentes de PokéAPI, retrouvées par numéro d'objet (`data/item-map.json`) | MIT ; images © Nintendo / Creatures Inc. / GAME FREAK Inc. |
 | [SpriteCollab](https://github.com/PMDCollab/SpriteCollab) (PMD Collab, [sprites.pmdcollab.org](https://sprites.pmdcollab.org)) | Sprites animés façon Donjon Mystère du « Parc », animations Idle, Walk et Sleep (`wwwroot/images/donjon`, par `outils/images.py donjon`) ; auteurs de chaque sprite dans `wwwroot/images/donjon/credits.txt` | CC BY-NC 4.0 (usage non commercial, auteurs à citer) |
 | [Bootstrap](https://getbootstrap.com) | Mise en page et composants de l'interface (`wwwroot/lib/bootstrap`) | MIT |
@@ -569,7 +588,7 @@ Monsuta Potaru s'appuie sur le travail d'autres projets :
 | [Caddy](https://caddyserver.com), [Docker](https://www.docker.com) | Mise en ligne (HTTPS, conteneurs) | Apache-2.0 |
 | [GitHub Actions](https://github.com/features/actions) : [actions/checkout](https://github.com/actions/checkout), [actions/setup-dotnet](https://github.com/actions/setup-dotnet) | Tests et déploiement (`.github/workflows/ci-cd.yml`) | MIT |
 | [Bulbapedia](https://bulbapedia.bulbagarden.net) | Référence consultée pour vérifier l'ordre des Noigrumes d'Or/Argent/Cristal | — |
-| [Bulbagarden Archives](https://archives.bulbagarden.net) | Jaquettes officielles de Pokémon Rouge, Bleu, Jaune, Or, Argent, Cristal, Rubis, Saphir, Émeraude, Rouge Feu, Vert Feuille, Diamant, Perle, Platine, HeartGold, SoulSilver, Noire, Blanche, Noire 2, Blanche 2, X, Y, Rubis Oméga et Saphir Alpha (versions anglaises réduites, « Red/Blue/Yellow/Gold/Silver/Crystal/Ruby/Sapphire/Emerald/FireRed/LeafGreen/Diamond/Pearl/Platinum/HeartGold/SoulSilver/Black/White/Black 2/White 2/X/Y/Omega Ruby/Alpha Sapphire EN boxart », Émeraude, Diamant, Perle, HeartGold et SoulSilver en JPEG), images des living dex (`wwwroot/images/livingdex/jaquettes`, par `outils/images.py livingdex`) | Images © Nintendo / Creatures Inc. / GAME FREAK Inc. ; usage de fan, non commercial |
+| [Bulbagarden Archives](https://archives.bulbagarden.net) | Jaquettes officielles de Pokémon Rouge, Bleu, Jaune, Or, Argent, Cristal, Rubis, Saphir, Émeraude, Rouge Feu, Vert Feuille, Diamant, Perle, Platine, HeartGold, SoulSilver, Noire, Blanche, Noire 2, Blanche 2, X, Y, Rubis Oméga, Saphir Alpha, Soleil, Lune, Ultra-Soleil, Ultra-Lune, Let's Go Pikachu et Let's Go Évoli (versions anglaises réduites, « Red/Blue/Yellow/Gold/Silver/Crystal/Ruby/Sapphire/Emerald/FireRed/LeafGreen/Diamond/Pearl/Platinum/HeartGold/SoulSilver/Black/White/Black 2/White 2/X/Y/Omega Ruby/Alpha Sapphire/Sun/Moon/Ultra Sun/Ultra Moon/Lets Go Pikachu/Lets Go Eevee EN boxart », Émeraude, Diamant, Perle, HeartGold et SoulSilver en JPEG), images des living dex (`wwwroot/images/livingdex/jaquettes`, par `outils/images.py livingdex`) | Images © Nintendo / Creatures Inc. / GAME FREAK Inc. ; usage de fan, non commercial |
 
 Pokémon et tous les noms et images associés sont des marques et créations de Nintendo, Creatures Inc., GAME FREAK Inc. et
 The Pokémon Company. Monsuta Potaru est un projet de fan privé, sans lien avec eux.
