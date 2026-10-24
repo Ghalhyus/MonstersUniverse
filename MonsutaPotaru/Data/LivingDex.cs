@@ -40,11 +40,14 @@ public enum LivingDexGame
     LegendsArceus = 35,
     Scarlet = 36,
     Violet = 37,
+    /// <summary>Living dex global : sans jeu ni sauvegarde, compté sur le stockage interne (<see cref="Services.GlobalLivingDex"/>).</summary>
+    Global = 100,
 }
 
 /// <summary>
 /// Living dex d'un compte : un exemplaire de chaque Pokémon du Pokédex d'un jeu, compté dans une sauvegarde stockée
 /// (équipe et boîtes). Au plus un par jeu et par compte, une sauvegarde ne sert qu'à un ; supprimé avec la sauvegarde.
+/// Le living dex global (<see cref="LivingDexGame.Global"/>) n'a pas de sauvegarde : il compte le stockage interne.
 /// </summary>
 public class LivingDex
 {
@@ -55,8 +58,8 @@ public class LivingDex
 
     public LivingDexGame Game { get; set; }
 
-    /// <summary>Sauvegarde stockée où sont comptés les Pokémon.</summary>
-    public int StoredSaveId { get; set; }
+    /// <summary>Sauvegarde stockée où sont comptés les Pokémon ; null pour le living dex global (stockage interne).</summary>
+    public int? StoredSaveId { get; set; }
     public StoredSave? StoredSave { get; set; }
 
     public DateTime CreatedAt { get; set; }

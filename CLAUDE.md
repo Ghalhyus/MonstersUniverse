@@ -201,6 +201,14 @@ suivante), sans lister les dossiers des dépôts.
   casquette d'Alola de Pikachu s'appelle aussi « Alola ». Gigamax : case `Gigamax`, un exemplaire de plus avec le facteur
   (`IGigantamax`, lu dans les octets des seules espèces de `GigamaxSpecies`). Une sauvegarde Légendes Arceus vide n'est
   pas reconnue par `SaveUtil` (pas de test du service pour ce jeu) ; Diamant Étincelant vide, oui.
+- Living dex global (`GlobalLivingDex`) : sur le stockage interne (`BankPokemon.StoredSaveId` null), sans les chromatiques
+  (ignorés, voulu par l'utilisateur), image : la Poké Ball (`CoverItem`) ; une forme reconnue
+  par son nom anglais chez PKHeX (`FormKey`, « Normal » pour la base, que PKHeX laisse vide dans un jeu où l'espèce
+  n'a qu'une forme), chaque exemplaire pour une seule case (`Assign`). Le Complet réunit les cases Complet des jeux ;
+  l'Ultime y ajoute tout ce que les tables de PKHeX donnent par jeu, moins `Excluded`. L'utilisateur a voulu : toutes
+  les formes, même au même aspect et de couleur (pas les chromatiques), mâle / femelle, Spinda seul ; pas les formes de
+  combat sans objet tenu ; pas Légendes Z-A (pas pris en charge par le site). Un nouveau jeu : son Complet entre tout
+  seul dans le global ; ajouter sa table à `GlobalLivingDex.Games` pour l'Ultime.
 - 9e génération : Écarlate / Violet seulement (`For` : `SAV9SV`) ; Légendes Z-A est aussi en 9e chez PKHeX, sans living
   dex pour l'instant. Une sauvegarde Écarlate / Violet vide n'est pas reconnue par `SaveUtil`, et l'utilisateur n'en a
   pas déposé : les images ont été vérifiées par un test temporaire (`PokemonSprites.Load(RealSavesTests.WebRootWithImages())`,

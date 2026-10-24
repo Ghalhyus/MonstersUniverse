@@ -355,7 +355,7 @@ namespace MonsutaPotaru.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<int>("StoredSaveId")
+                    b.Property<int?>("StoredSaveId")
                         .HasColumnType("INTEGER");
 
                     b.HasKey("Id");
@@ -686,8 +686,7 @@ namespace MonsutaPotaru.Migrations
                     b.HasOne("MonsutaPotaru.Data.StoredSave", "StoredSave")
                         .WithMany()
                         .HasForeignKey("StoredSaveId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Cascade);
 
                     b.Navigation("Owner");
 

@@ -11,7 +11,7 @@
 <PageTitle>Living dex</PageTitle>
 
 @* Living dex du compte : une carte par jeu (jaquette, sauvegarde, progression), et la création d'un nouveau sur une
-   sauvegarde stockée de 1re à 9e génération. *@
+   sauvegarde stockée de 1re à 9e génération ; ou le living dex global, sur le stockage interne, toujours en tête. *@
 
 <h1 class="mb-2">Living dex</h1>
 <p class="small text-muted">
@@ -20,7 +20,9 @@
     l'instant les jeux de 1re à 9e génération (Rouge, Bleu, Jaune, Or, Argent, Cristal, Rubis, Saphir, Émeraude, Rouge Feu,
     Vert Feuille, Diamant, Perle, Platine, Or HeartGold, Argent SoulSilver, Noire, Blanche, Noire 2, Blanche 2, X, Y,
     Rubis Oméga, Saphir Alpha, Soleil, Lune, Ultra-Soleil, Ultra-Lune, Let's Go Pikachu, Let's Go Évoli, Épée, Bouclier,
-    Diamant Étincelant, Perle Scintillante, Légendes Arceus, Écarlate, Violet).
+    Diamant Étincelant, Perle Scintillante, Légendes Arceus, Écarlate, Violet). Le <strong>living dex global</strong>, lui,
+    compte les Pokémon de ton stockage interne (« Transfert »), tous jeux confondus, avec un mode de plus : Ultime, chaque
+    forme de chaque espèce.
 </p>
 
 @if (message is not null)
@@ -40,6 +42,14 @@
                (Rouge / Bleu : PKHeX ne distingue pas les deux, une sauvegarde Rouge / Bleu va avec l'un comme l'autre). *@
             @* Générations repliées au départ, dépliées une à une par leur titre ; repliée, celle du jeu choisi le montre encore. *@
             <div class="form-label">Jeu</div>
+            @{ var globalTaken = taken.Contains(LivingDexGame.Global); }
+            <div class="livingdex-games mb-3">
+                <label class="livingdex-game @(game == LivingDexGame.Global ? "selected" : "") @(globalTaken ? "taken" : "")" title="@(globalTaken ? "Tu as déjà ce living dex" : null)">
+                    <input type="radio" class="visually-hidden" name="dexGame" checked="@(game == LivingDexGame.Global)" disabled="@globalTaken" @onchange="() => GameChosen(LivingDexGame.Global)" />
+                    <LivingDexCover Game="GlobalLivingDex.Game" />
+                    <span>Living dex global@(globalTaken ? " (déjà créé)" : "")</span>
+                </label>
+            </div>
             @foreach (var generation in LivingDexGames.All.GroupBy(g => g.Generation))
             {
             var number = generation.Key;
@@ -57,17 +67,24 @@
                 @foreach (var info in shownGames)
                 {
                     var value = info.Game;
-                    var taken = dexes?.Any(d => d.Game.Game == value) == true;
-                    <label class="livingdex-game @(game == value ? "selected" : "") @(taken ? "taken" : "")" title="@(taken ? "Tu as déjà ce living dex" : null)">
-                        <input type="radio" class="visually-hidden" name="dexGame" checked="@(game == value)" disabled="@taken" @onchange="() => GameChosen(value)" />
+                    var isTaken = taken.Contains(value);
+                    <label class="livingdex-game @(game == value ? "selected" : "") @(isTaken ? "taken" : "")" title="@(isTaken ? "Tu as déjà ce living dex" : null)">
+                        <input type="radio" class="visually-hidden" name="dexGame" checked="@(game == value)" disabled="@isTaken" @onchange="() => GameChosen(value)" />
                         <img src="@info.Cover" alt="" onerror="this.style.visibility='hidden'" />
-                        <span>@info.Name@(taken ? " (déjà créé)" : "")</span>
+                        <span>@info.Name@(isTaken ? " (déjà créé)" : "")</span>
                     </label>
                 }
             </div>
             }
             }
-            @if (game is { } chosenGame)
+            @if (game == LivingDexGame.Global)
+            {
+                <p class="small text-muted mb-3">
+                    Il compte les Pokémon de ton stockage interne (« Transfert »), pas ceux des sauvegardes : pas de sauvegarde à
+                    choisir. Modes National, Complet et Ultime (toutes les formes, femelles, Méga, Gigamax...).
+                </p>
+            }
+            else if (game is { } chosenGame)
             {
                 @if (Saves.Count == 0)
                 {
@@ -88,7 +105,8 @@
                 }
             }
             <div class="d-flex flex-wrap gap-2">
-                <button type="button" class="btn btn-primary" @onclick="Create" disabled="@(busy || game is null || Saves.All(c => c.SaveId != saveId))">Créer</button>
+                <button type="button" class="btn btn-primary" @onclick="Create"
+                        disabled="@(busy || game is null || game != LivingDexGame.Global && Saves.All(c => c.SaveId != saveId))">Créer</button>
                 <button type="button" class="btn btn-outline-secondary" @onclick="() => creating = false">Annuler</button>
             </div>
         </div>
@@ -107,7 +125,7 @@
 {
     <p class="text-muted">Chargement…</p>
 }
-else if (dexes.Count == 0)
+else if (taken.Count == 0)
 {
     <p class="text-muted">Tu n'as pas encore de living dex.</p>
 }
@@ -136,11 +154,16 @@ else
                     aria-label="@(descending ? "Ordre décroissant" : "Ordre croissant")">@(descending ? "↓" : "↑")</button>
         </div>
     </div>
+    @if (dexes.Count == 0)
+    {
+        @* Ultime : seuls les living dex qui ont ce mode sont montrés. *@
+        <p class="text-muted">Seul le living dex global a le mode Ultime : crée-le avec « + Créer un living dex ».</p>
+    }
     <div class="livingdex-cards">
         @foreach (var d in LivingDexGames.Sort(dexes, sort, descending))
         {
             <a class="livingdex-card" href="@CardLink(d)">
-                <img src="@d.Game.Cover" alt="Jaquette de @d.Game.Name" loading="lazy" onerror="this.style.visibility='hidden'" />
+                <LivingDexCover Game="d.Game" Alt="@(d.Game.Game == LivingDexGame.Global ? d.Game.Name : $"Jaquette de {d.Game.Name}")" />
                 <div class="livingdex-card-body">
                     <strong>@d.Game.Name</strong>
                     <div class="small text-muted">@d.SaveLabel</div>
@@ -164,7 +187,7 @@ else
     [SupplyParameterFromQuery(Name = "tri")] private string? SortFromQuery { get; set; }
     [SupplyParameterFromQuery(Name = "ordre")] private string? OrderFromQuery { get; set; }
 
-    private static readonly LivingDexMode[] AllModes = [LivingDexMode.Regional, LivingDexMode.National, LivingDexMode.Complete];
+    private static readonly LivingDexMode[] AllModes = [LivingDexMode.Regional, LivingDexMode.National, LivingDexMode.Complete, LivingDexMode.Ultimate];
 
     private string userId = "";
     private LivingDexMode mode = LivingDexMode.National;
@@ -172,6 +195,7 @@ else
     private bool descending;
     private readonly HashSet<byte> openGenerations = [];
     private List<LivingDexSummary>? dexes;
+    private HashSet<LivingDexGame> taken = []; // jeux qui ont déjà leur living dex (tous, même cachés par le mode Ultime)
     private List<LivingDexCandidate> candidates = [];
     private bool creating;
     private int saveId;
@@ -190,6 +214,7 @@ else
         sort = LivingDexGames.SortFromSlug(SortFromQuery);
         descending = OrderFromQuery == "desc";
         dexes = await Dexes.ListAsync(userId, mode);
+        taken = await Dexes.TakenGamesAsync(userId);
     }
 
     private void SetMode(LivingDexMode value) =>
@@ -238,7 +263,7 @@ else
         if (game is not { } chosenGame)
             return;
         busy = true;
-        var result = await Dexes.CreateAsync(userId, saveId, chosenGame);
+        var result = chosenGame == LivingDexGame.Global ? await Dexes.CreateGlobalAsync(userId) : await Dexes.CreateAsync(userId, saveId, chosenGame);
         busy = false;
         if (result.Ok)
         {

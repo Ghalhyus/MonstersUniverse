@@ -19,6 +19,8 @@ public enum LivingDexMode
     /// <see cref="LivingDexGames"/> (« Forms ») à partir de la 4e.
     /// </summary>
     Complete,
+    /// <summary>Living dex global seulement : toutes les formes de chaque espèce (<see cref="GlobalLivingDex"/>).</summary>
+    Ultimate,
 }
 
 /// <summary>Tri des cartes de la vue générale.</summary>
@@ -612,7 +614,7 @@ public static class LivingDexGames
     /// <summary>Let's Go, Pikachu ou Évoli : sauvegarde de Switch, Pokémon sans objet tenu, Méga par la gemme du sac.</summary>
     public static bool IsLetsGo(LivingDexGameInfo game) => game.Game is LivingDexGame.LetsGoPikachu or LivingDexGame.LetsGoEevee;
 
-    public static LivingDexGameInfo Get(LivingDexGame game) => All.Single(g => g.Game == game);
+    public static LivingDexGameInfo Get(LivingDexGame game) => game == LivingDexGame.Global ? GlobalLivingDex.Game : All.Single(g => g.Game == game);
 
     /// <summary>
     /// Jeux possibles pour une sauvegarde : PKHeX reconnaît Jaune, Cristal, Émeraude et Platine, mais pas Rouge de Bleu, Or
@@ -1061,6 +1063,9 @@ public static class LivingDexGames
         _ => PokemonSprites.Url(slot.Species, slot.Form, Context(game), female: false, heldItem: 0, shiny: false),
     };
 
+    /// <summary>Jeu des Pokémon du living dex chez PKHeX (noms des formes : casquettes de Pikachu en 7e, costumes en 6e).</summary>
+    public static EntityContext ContextOf(LivingDexGameInfo game) => Context(game);
+
     private static EntityContext Context(LivingDexGameInfo game) => game.Generation switch
     {
         1 => EntityContext.Gen1,
@@ -1091,6 +1096,8 @@ public static class LivingDexGames
     /// </summary>
     public static IReadOnlyList<LivingDexMode> Modes(LivingDexGameInfo game)
     {
+        if (game.Game == LivingDexGame.Global)
+            return GlobalLivingDex.Modes;
         var national = Slots(game, LivingDexMode.National);
         var modes = new List<LivingDexMode>();
         if (!Slots(game, LivingDexMode.Regional).SequenceEqual(national))
@@ -1105,7 +1112,8 @@ public static class LivingDexGames
     {
         LivingDexMode.Regional => "Régional",
         LivingDexMode.National => "National",
-        _ => "Complet",
+        LivingDexMode.Complete => "Complet",
+        _ => "Ultime",
     };
 
     /// <summary>Mode dans l'adresse (?mode=regional, complet) ; le National n'y figure pas (null), c'est le mode par défaut.</summary>
@@ -1113,6 +1121,7 @@ public static class LivingDexGames
     {
         LivingDexMode.Regional => "regional",
         LivingDexMode.Complete => "complet",
+        LivingDexMode.Ultimate => "ultime",
         _ => null,
     };
 
@@ -1121,27 +1130,31 @@ public static class LivingDexGames
     {
         "regional" => LivingDexMode.Regional,
         "complet" => LivingDexMode.Complete,
+        "ultime" => LivingDexMode.Ultimate,
         _ => LivingDexMode.National,
     };
 
     /// <summary>
     /// Cartes triées. Par génération : l'ordre des jeux, ou son exact inverse (Violet, Écarlate... Rouge). Par
     /// complétion : le pourcentage dans le mode de chaque carte (celui affiché, le National pour « National seul »), du
-    /// plus petit au plus grand ou l'inverse, et à égalité toujours dans l'ordre des jeux.
+    /// plus petit au plus grand ou l'inverse, et à égalité toujours dans l'ordre des jeux. Le living dex global reste en
+    /// tête.
     /// </summary>
     public static List<LivingDexSummary> Sort(IEnumerable<LivingDexSummary> dexes, LivingDexSort sort, bool descending)
     {
-        var byGame = dexes.OrderBy(d => d.Game.Game).ToList();
+        var all = dexes.ToList();
+        var global = all.Where(d => d.Game.Game == LivingDexGame.Global);
+        var byGame = all.Where(d => d.Game.Game != LivingDexGame.Global).OrderBy(d => d.Game.Game).ToList();
         if (sort == LivingDexSort.Generation)
         {
             if (descending)
                 byGame.Reverse();
-            return byGame;
+            return [.. global, .. byGame];
         }
         // Comparaison exacte des fractions (owned / total), sans arrondi : 1 / 3 avant 34 / 100.
         Comparison<LivingDexSummary> completion = (a, b) =>
             ((long)a.Owned * Math.Max(b.Total, 1)).CompareTo((long)b.Owned * Math.Max(a.Total, 1));
-        return [.. byGame.Order(Comparer<LivingDexSummary>.Create((a, b) => descending ? completion(b, a) : completion(a, b)))];
+        return [.. global, .. byGame.Order(Comparer<LivingDexSummary>.Create((a, b) => descending ? completion(b, a) : completion(a, b)))];
     }
 
     /// <summary>Tri dans l'adresse (?tri=completion) ; celui par génération n'y figure pas (null), c'est le tri par défaut.</summary>
@@ -1171,7 +1184,8 @@ public sealed class LivingDexService(
 {
     /// <summary>
     /// Living dex du compte, progression comptée dans un mode (vue générale) : le National pour un jeu qui ne propose pas
-    /// ce mode (<see cref="LivingDexSummary.Mode"/>), comme sur sa page.
+    /// ce mode (<see cref="LivingDexSummary.Mode"/>), comme sur sa page. En Ultime, seulement ceux qui ont ce mode (le
+    /// living dex global).
     /// </summary>
     public async Task<List<LivingDexSummary>> ListAsync(string ownerId, LivingDexMode mode = LivingDexMode.National)
     {
@@ -1183,11 +1197,42 @@ public sealed class LivingDexService(
         foreach (var d in dexes.OrderBy(d => d.Game))
         {
             var game = LivingDexGames.Get(d.Game);
-            var shown = LivingDexGames.Modes(game).Contains(mode) ? mode : LivingDexMode.National;
-            var entries = await EntriesAsync(db, game, d.StoredSaveId, shown);
-            summaries.Add(new(d.Id, game, SaveLabel(d.TrainerName, d.FileName), entries.Count(e => e.Owned), entries.Count, shown));
+            var modes = LivingDexGames.Modes(game);
+            if (mode == LivingDexMode.Ultimate && !modes.Contains(mode))
+                continue;
+            var shown = modes.Contains(mode) ? mode : LivingDexMode.National;
+            var entries = d.StoredSaveId is { } saveId ? await EntriesAsync(db, game, saveId, shown) : await GlobalEntriesAsync(db, ownerId, shown);
+            summaries.Add(new(d.Id, game, d.StoredSaveId is null ? GlobalLabel : SaveLabel(d.TrainerName, d.FileName),
+                entries.Count(e => e.Owned), entries.Count, shown));
         }
         return summaries;
+    }
+
+    /// <summary>Jeux qui ont déjà un living dex sur ce compte (global compris) : grisés à la création.</summary>
+    public async Task<HashSet<LivingDexGame>> TakenGamesAsync(string ownerId)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+        return [.. await db.LivingDexes.Where(d => d.OwnerId == ownerId).Select(d => d.Game).ToListAsync()];
+    }
+
+    /// <summary>Living dex global : un par compte, sur le stockage interne.</summary>
+    public async Task<LivingDexResult> CreateGlobalAsync(string ownerId)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+        if (await db.LivingDexes.AnyAsync(d => d.OwnerId == ownerId && d.Game == LivingDexGame.Global))
+            return new(false, "Tu as déjà un living dex global.");
+        var dex = new LivingDex { OwnerId = ownerId, Game = LivingDexGame.Global, CreatedAt = DateTime.UtcNow };
+        db.LivingDexes.Add(dex);
+        try
+        {
+            await db.SaveChangesAsync();
+        }
+        catch (DbUpdateException) // créé au même moment depuis un autre onglet (index unique)
+        {
+            return new(false, "Tu as déjà un living dex global.");
+        }
+        logger.LogInformation("Utilisateur {User} : living dex global créé.", ownerId);
+        return new(true, "Living dex global créé.", dex.Id);
     }
 
     /// <summary>Sauvegardes stockées qui peuvent recevoir un living dex : d'un jeu qui en a, pas encore liées, avec un jeu libre.</summary>
@@ -1195,7 +1240,7 @@ public sealed class LivingDexService(
     {
         await using var db = await dbFactory.CreateDbContextAsync();
         var taken = await db.LivingDexes.Where(d => d.OwnerId == ownerId).Select(d => d.Game).ToListAsync();
-        var linked = db.LivingDexes.Select(d => d.StoredSaveId);
+        var linked = db.LivingDexes.Where(d => d.StoredSaveId != null).Select(d => d.StoredSaveId!.Value);
         var saves = await db.StoredSaves.AsNoTracking()
             .Where(s => s.OwnerId == ownerId && s.Generation <= 9 && !linked.Contains(s.Id))
             .OrderBy(s => s.UploadedAt)
@@ -1255,8 +1300,42 @@ public sealed class LivingDexService(
         var modes = LivingDexGames.Modes(game);
         if (!modes.Contains(mode))
             mode = LivingDexMode.National;
-        var entries = await EntriesAsync(db, game, dex.StoredSaveId, mode);
-        return new(dex.Id, game, SaveLabel(dex.TrainerName, dex.FileName), modes, mode, entries);
+        var entries = dex.StoredSaveId is { } saveId ? await EntriesAsync(db, game, saveId, mode) : await GlobalEntriesAsync(db, ownerId, mode);
+        return new(dex.Id, game, dex.StoredSaveId is null ? GlobalLabel : SaveLabel(dex.TrainerName, dex.FileName), modes, mode, entries);
+    }
+
+    private const string GlobalLabel = "Stockage interne";
+
+    /// <summary>Espèces dont les octets servent au living dex global : Méga-Rayquaza, décoration de Charmilly, Gigamax.</summary>
+    private static readonly ushort[] GlobalDataSpecies = [LivingDexGames.Rayquaza, (ushort)Species.Alcremie, .. LivingDexGames.GigamaxSpecies];
+
+    /// <summary>
+    /// Cases du living dex global avec leur exemplaire, pris dans le stockage interne du compte (pas les sauvegardes
+    /// stockées, ni les œufs, ni les chromatiques), dans l'ordre des dépôts (<see cref="GlobalLivingDex.Assign"/>).
+    /// </summary>
+    private static async Task<List<LivingDexEntry>> GlobalEntriesAsync(ApplicationDbContext db, string ownerId, LivingDexMode mode)
+    {
+        var rows = await db.BankPokemon.AsNoTracking()
+            .Where(p => p.OwnerId == ownerId && p.StoredSaveId == null && !p.IsEgg && !p.IsShiny)
+            .OrderBy(p => p.DepositedAt).ThenBy(p => p.Id)
+            .Select(p => new { p.Id, p.Species, p.Form, p.Context, p.Gender, p.HeldItem, Data = GlobalDataSpecies.Contains(p.Species) ? p.Data : null })
+            .ToListAsync();
+        var copies = rows.Select(p =>
+        {
+            var pk = p.Data is null ? null : EntityFormat.GetFromBytes(p.Data, (EntityContext)p.Context);
+            return new GlobalLivingDex.Copy(p.Id, p.Species, p.Form, (EntityContext)p.Context, p.Gender, p.HeldItem ?? 0,
+                p.Species == (ushort)Species.Alcremie && pk is IFormArgument sweet ? (byte)sweet.FormArgument : null,
+                pk is IGigantamax { CanGigantamax: true },
+                p.Species == LivingDexGames.Rayquaza && pk is not null && pk.HasMove(LivingDexGames.DragonAscent));
+        }).ToList();
+        var slots = GlobalLivingDex.Slots(mode);
+        var assigned = GlobalLivingDex.Assign(slots, copies, mode);
+        return slots.Select((slot, i) =>
+        {
+            var sprite = GlobalLivingDex.Sprite(slot);
+            return new LivingDexEntry(slot.Species, slot.Species, slot.Form, slot.Name, sprite, assigned[i]?.Id,
+                assigned[i] is null ? null : GlobalLabel, sprite, GlobalLivingDex.Note(slot, assigned[i] is not null));
+        }).ToList();
     }
 
     /// <summary>
@@ -1365,8 +1444,8 @@ public sealed class LivingDexService(
     public async Task<Dictionary<int, string>> NamesBySaveAsync(string ownerId)
     {
         await using var db = await dbFactory.CreateDbContextAsync();
-        return (await db.LivingDexes.Where(d => d.OwnerId == ownerId).Select(d => new { d.StoredSaveId, d.Game }).ToListAsync())
-            .ToDictionary(d => d.StoredSaveId, d => LivingDexGames.Get(d.Game).Name);
+        return (await db.LivingDexes.Where(d => d.OwnerId == ownerId && d.StoredSaveId != null).Select(d => new { d.StoredSaveId, d.Game }).ToListAsync())
+            .ToDictionary(d => d.StoredSaveId!.Value, d => LivingDexGames.Get(d.Game).Name);
     }
 
     /// <summary>Pokémon de la sauvegarde qui remplit une case.</summary>

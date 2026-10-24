@@ -131,6 +131,17 @@ public static partial class PokemonSprites
             : Url(species, form, context, female: false, heldItem: 0, shiny: false);
     }
 
+    /// <summary>
+    /// Image d'un Charmilly avec sa crème et sa décoration (« 869-ruby-cream-star-sweet.png ») ; sinon celle de sa crème
+    /// (la décoration Fraise de Lait Vanille est l'image de l'espèce).
+    /// </summary>
+    public static string AlcremieUrl(byte cream, string sweet)
+    {
+        if (FormName((ushort)Species.Alcremie, cream, EntityContext.Gen8) is { } name && _files.Contains($"{(ushort)Species.Alcremie}-{Slug(name)}-{sweet}-sweet.png"))
+            return $"images/pokemon/{(ushort)Species.Alcremie}-{Slug(name)}-{sweet}-sweet.png";
+        return Url((ushort)Species.Alcremie, cream, EntityContext.Gen8, female: false, heldItem: 0, shiny: false);
+    }
+
     /// <summary>Jeu dont PKHeX donne toutes les Méga-Évolutions (Légendes Z-A, qui ajoute les siennes à celles de X/Y).</summary>
     private const EntityContext MegaContext = EntityContext.Gen9a;
 
