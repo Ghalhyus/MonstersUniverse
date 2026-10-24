@@ -28,7 +28,9 @@ else if (view is not null)
         <div class="flex-grow-1">
             <a class="small" href="livingdex">← Living dex</a>
             <h1 class="mb-0">@view.Game.Name</h1>
-            <div class="small text-muted mb-2">@(Global ? "Pokémon de ton stockage interne, tous jeux confondus" : $"Sauvegarde : {view.SaveLabel}")</div>
+            <div class="small text-muted mb-2">@(!Global ? $"Sauvegarde : {view.SaveLabel}"
+                : view.Game.Game == LivingDexGame.GlobalShiny ? "Pokémon chromatiques de ton stockage interne, tous jeux confondus"
+                : "Pokémon de ton stockage interne, tous jeux confondus (sans les chromatiques)")</div>
             @if (view.Modes.Count > 1)
             {
                 <div class="btn-group btn-group-sm mb-2 livingdex-choice" role="group" aria-label="Mode">
@@ -167,8 +169,8 @@ else if (view is not null)
         (Filter.Owned, "Possédés", view.Owned),
     ];
 
-    /// <summary>Living dex global : compté sur le stockage interne, sans sauvegarde.</summary>
-    private bool Global => view?.Game.Game == LivingDexGame.Global;
+    /// <summary>Living dex global (normal ou chromatique) : compté sur le stockage interne, sans sauvegarde.</summary>
+    private bool Global => view is not null && GlobalLivingDex.IsGlobal(view.Game.Game);
 
     private bool Shown(LivingDexEntry e) => filter switch
     {

@@ -1,10 +1,10 @@
 @using MonsutaPotaru.Data
 @using MonsutaPotaru.Services
-@* Image d'un living dex : la jaquette officielle du jeu ; pour le living dex global, qui n'a pas de jeu, la Poké Ball
-   (image de l'objet sur le site, agrandie sans flou). *@
-@if (Game.Game == LivingDexGame.Global)
+@* Image d'un living dex : la jaquette officielle du jeu ; pour les living dex globaux, qui n'ont pas de jeu, la Master Ball
+   ou le Charme Chroma (images des objets sur le site, agrandies sans flou). *@
+@if (GlobalLivingDex.IsGlobal(Game.Game))
 {
-    <img class="livingdex-pokeball @Class" src="@PokemonInfo.ItemSpriteUrl(GlobalLivingDex.CoverItem)" alt="@Alt" loading="lazy" />
+    <img class="livingdex-pokeball @Class" src="@PokemonInfo.ItemSpriteUrl(GlobalLivingDex.CoverItem(Game.Game))" alt="@Alt" loading="lazy" />
 }
 else
 {

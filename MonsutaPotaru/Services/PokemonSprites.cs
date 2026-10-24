@@ -121,25 +121,28 @@ public static partial class PokemonSprites
     /// Image Gigamax d'une forme (« 892-rapid-strike-gmax.png », Shifours Mille Poings), sinon celle de l'espèce
     /// (« 6-gmax.png ») ; sans image Gigamax, celle de la forme.
     /// </summary>
-    public static string GigamaxUrl(ushort species, byte form, EntityContext context)
+    public static string GigamaxUrl(ushort species, byte form, EntityContext context, bool shiny = false)
     {
+        var folder = shiny ? "chromatique/" : "";
         if (FormName(species, form, context) is { } name)
             foreach (var slug in Candidates(name))
-                if (_files.Contains($"{species}-{slug}-gmax.png"))
-                    return $"images/pokemon/{species}-{slug}-gmax.png";
-        return _files.Contains($"{species}-gmax.png") ? $"images/pokemon/{species}-gmax.png"
-            : Url(species, form, context, female: false, heldItem: 0, shiny: false);
+                if (_files.Contains($"{folder}{species}-{slug}-gmax.png"))
+                    return $"images/pokemon/{folder}{species}-{slug}-gmax.png";
+        return _files.Contains($"{folder}{species}-gmax.png") ? $"images/pokemon/{folder}{species}-gmax.png"
+            : Url(species, form, context, female: false, heldItem: 0, shiny);
     }
 
     /// <summary>
     /// Image d'un Charmilly avec sa crème et sa décoration (« 869-ruby-cream-star-sweet.png ») ; sinon celle de sa crème
     /// (la décoration Fraise de Lait Vanille est l'image de l'espèce).
     /// </summary>
-    public static string AlcremieUrl(byte cream, string sweet)
+    public static string AlcremieUrl(byte cream, string sweet, bool shiny = false)
     {
-        if (FormName((ushort)Species.Alcremie, cream, EntityContext.Gen8) is { } name && _files.Contains($"{(ushort)Species.Alcremie}-{Slug(name)}-{sweet}-sweet.png"))
-            return $"images/pokemon/{(ushort)Species.Alcremie}-{Slug(name)}-{sweet}-sweet.png";
-        return Url((ushort)Species.Alcremie, cream, EntityContext.Gen8, female: false, heldItem: 0, shiny: false);
+        var folder = shiny ? "chromatique/" : "";
+        if (FormName((ushort)Species.Alcremie, cream, EntityContext.Gen8) is { } name
+            && _files.Contains($"{folder}{(ushort)Species.Alcremie}-{Slug(name)}-{sweet}-sweet.png"))
+            return $"images/pokemon/{folder}{(ushort)Species.Alcremie}-{Slug(name)}-{sweet}-sweet.png";
+        return Url((ushort)Species.Alcremie, cream, EntityContext.Gen8, female: false, heldItem: 0, shiny);
     }
 
     /// <summary>Jeu dont PKHeX donne toutes les Méga-Évolutions (Légendes Z-A, qui ajoute les siennes à celles de X/Y).</summary>

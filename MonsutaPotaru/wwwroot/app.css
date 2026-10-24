@@ -249,7 +249,7 @@ h1:focus {
 }
 .livingdex-header { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; }
 .livingdex-cover { width: 7rem; height: 7rem; object-fit: contain; }
-/* Living dex global (sans jaquette) : la Poké Ball, petite image d'objet agrandie sans flou. */
+/* Living dex globaux (sans jaquette) : Master Ball ou Charme Chroma, petites images d'objet agrandies sans flou. */
 .livingdex-pokeball { image-rendering: pixelated; }
 .livingdex-grid { display: grid; grid-template-columns: repeat(var(--columns, 10), minmax(0, 1fr)); gap: .4rem; }
 .livingdex-slot {

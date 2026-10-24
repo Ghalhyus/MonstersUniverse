@@ -433,7 +433,7 @@ Violet** ; pas encore Légendes Z-A).
   les Pokémon du **stockage interne** (« Transfert »), pas ceux des sauvegardes stockées ni les œufs, et **pas les
   chromatiques** (ignorés même s'ils pourraient remplir une case) ; chaque exemplaire
   ne remplit qu'une case (d'abord les cases qui en demandent un de plus, puis les formes exactes, puis « n'importe quelle
-  forme »), dans l'ordre des dépôts. Carte et page : la **Poké Ball** (image de l'objet) à la place d'une jaquette
+  forme »), dans l'ordre des dépôts. Carte et page : la **Master Ball** (image de l'objet) à la place d'une jaquette
   (`Shared/LivingDexCover.razor`), toujours **en tête** de la vue générale, quel que soit le tri.
   Une forme y est reconnue par son **nom anglais chez PKHeX**, pas par son numéro : Pikachu 1 est Rockeur en 6e
   génération, à casquette Originale ensuite. Trois modes :
@@ -453,8 +453,17 @@ Violet** ; pas encore Légendes Z-A).
     Zygarde Parfait, Superdofin Super, Téracristal...), les coupes de Couafarel (en équipe seulement, et le stockage
     interne ne reçoit que des Pokémon des boîtes), les formes de monture de Koraidon et Miraidon, Floette Éternelle
     (jamais distribuée), les formes Roi de Légendes Arceus, Arceus « ??? ». **Spinda** n'a qu'une case.
-  Vue générale : bouton **Ultime** (`?mode=ultime`), qui ne montre que les living dex qui ont ce mode (le global) ; en
-  Régional, la carte globale compte en National (« National seul »).
+  Vue générale : bouton **Ultime** (`?mode=ultime`), qui ne montre que les living dex qui ont ce mode (les globaux) ; en
+  Régional, une carte globale compte en National (« National seul »).
+- **Living dex global chromatique** (`LivingDexGame.GlobalShiny`) : le même, un par compte, image le **Charme Chroma**,
+  juste après le global ; il ne compte **que les chromatiques** du stockage interne (images chromatiques de la
+  collection). Ses cases sont celles du global **sans ce qui n'a jamais existé en chromatique** dans un jeu pris en
+  charge (`GlobalLivingDex.ShinyLocked`, d'après la « List of unobtainable Shiny Pokémon » de Bulbapedia, distributions
+  et cadeaux de HOME compris) : 25 espèces (Victini, Hoopa, Volcanion — le chromatique de HOME vient de Légendes Z-A et
+  ne va ni dans Épée / Bouclier ni dans Écarlate / Violet —, Cosmog, Cosmovum, Magearna, Marshadow, Wushours, Shifours,
+  Zarude, Blizzeval, Spectreval, Sylveroy, et Serpente-Eau à Pêchaminus), les costumes et casquettes de Pikachu (sauf la
+  Partenaire), Pikachu et Évoli Partenaires, Pichu Troizépi, Amphinobi Lien Naturel, le motif Poké Ball, Ursaking Lune
+  Vermeille, Melmetal Gigamax, les Pokémon Dominants. National 1 000, Complet 1 244, Ultime 1 508.
 
 Données : table `LivingDexes` (`Data/LivingDex.cs`), jeux et modes dans `LivingDexGames` (`Services/LivingDexService.cs`).
 Images : `outils/images.py livingdex` (sprites de PokéAPI, jaquettes de Bulbagarden Archives, en anglais faute de
@@ -493,7 +502,7 @@ est incompatible (espèce, attaques ou objets inexistants dans le jeu, conversio
 | `MonsutaPotaru/Data/ParkMember.cs` | Table des Pokémon au parc (supprimée avec le Pokémon) |
 | `MonsutaPotaru/Components/Pages/LivingDexes.razor` | Page « Living dex » : cartes des living dex du compte (progression dans le mode choisi), création (jeu, générations repliables, puis sauvegarde) |
 | `MonsutaPotaru/Components/Shared/LivingDexProgress.razor` | Barre de progression d'un living dex, pourcentage au centre |
-| `MonsutaPotaru/Components/Shared/LivingDexCover.razor` | Image d'un living dex : jaquette du jeu, ou Poké Ball pour le global |
+| `MonsutaPotaru/Components/Shared/LivingDexCover.razor` | Image d'un living dex : jaquette du jeu, ou Master Ball / Charme Chroma pour les globaux |
 | `MonsutaPotaru/Components/Pages/LivingDexPage.razor` | Page d'un living dex : grille des sprites du jeu (silhouettes des manquants), progression, fiche au clic |
 | `MonsutaPotaru/Services/LivingDexService.cs` | Living dex : jeux (`LivingDexGames` : jaquette, sprites, Pokémon de chaque mode, modes cachés), comptage dans la sauvegarde, création, suppression |
 | `MonsutaPotaru/Data/LivingDex.cs` | Table des living dex (un par jeu et par compte, supprimé avec sa sauvegarde ; le global n'a pas de sauvegarde) |

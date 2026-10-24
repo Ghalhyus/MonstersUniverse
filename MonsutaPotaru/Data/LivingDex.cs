@@ -42,6 +42,8 @@ public enum LivingDexGame
     Violet = 37,
     /// <summary>Living dex global : sans jeu ni sauvegarde, compté sur le stockage interne (<see cref="Services.GlobalLivingDex"/>).</summary>
     Global = 100,
+    /// <summary>Living dex global chromatique : le même, avec les seuls chromatiques du stockage interne.</summary>
+    GlobalShiny = 101,
 }
 
 /// <summary>

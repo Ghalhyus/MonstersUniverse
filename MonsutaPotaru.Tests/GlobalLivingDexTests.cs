@@ -84,6 +84,30 @@ public sealed class GlobalLivingDexTests : IDisposable
         Assert.Equal(2, ultimate.Count(s => s.Species == 849 && s.Gigamax)); // Salarsen : un Gigamax par forme
     }
 
+    [Fact]
+    public void Shiny_WithoutWhatWasNeverShiny()
+    {
+        var national = GlobalLivingDex.Slots(LivingDexMode.National, shiny: true);
+        Assert.Equal(1000, national.Count); // 1 025 moins 25 espèces jamais chromatiques
+        Assert.DoesNotContain(national, s => s.Species is 494 or 720 or 892 or 1017 or 1025); // Victini, Hoopa, Shifours, Ogerpon, Pêchaminus
+        var ultimate = GlobalLivingDex.Slots(LivingDexMode.Ultimate, shiny: true);
+        Assert.Equal((1244, 1508), (GlobalLivingDex.Slots(LivingDexMode.Complete, shiny: true).Count, ultimate.Count));
+        List<string> Names(ushort species) => ultimate.Where(s => s.Species == species).Select(s => s.Name).ToList();
+        var pikachu = Names(25);
+        Assert.Equal(["Pikachu ♂", "Pikachu ♀", "Pikachu (casquette Partenaire)", "Pikachu Gigamax"], pikachu); // ni costumes, ni casquettes, ni Partenaire
+        Assert.Equal(["Évoli ♂", "Évoli ♀", "Évoli Gigamax"], Names(133));
+        Assert.Equal(["Pichu"], Names(172)); // pas Troizépi
+        Assert.Equal(["Amphinobi"], Names(658)); // pas Lien Naturel
+        Assert.Equal(19, Names(666).Count); // pas le motif Poké Ball
+        Assert.Equal(["Ursaking"], Names(901));
+        Assert.Equal(["Melmetal"], Names(809)); // pas de Gigamax
+        Assert.Equal(["Rattatac ♂", "Rattatac ♀", "Rattatac d'Alola"], Names(20)); // pas le Dominant
+        Assert.Contains("Zacian Suprême", Names(888)); // distribué en chromatique
+        Assert.DoesNotContain(GlobalLivingDex.Slots(LivingDexMode.Complete, shiny: true), s => s.Name == "Pikachu Cosplayeur");
+        Assert.Equal(LivingDexGames.Modes(LivingDexGames.Get(LivingDexGame.GlobalShiny)), GlobalLivingDex.Modes);
+        Assert.Equal((1, 632), (GlobalLivingDex.CoverItem(LivingDexGame.Global), GlobalLivingDex.CoverItem(LivingDexGame.GlobalShiny))); // Master Ball, Charme Chroma
+    }
+
     private static GlobalLivingDex.Copy Copy(int id, ushort species, byte form = 0, EntityContext context = EntityContext.Gen9,
         byte gender = 0, int held = 0, byte? sweet = null, bool gigamax = false) =>
         new(id, species, form, context, gender, held, sweet, gigamax, false);
@@ -174,6 +198,17 @@ public sealed class GlobalLivingDexTests : IDisposable
         Assert.Equal((LivingDexMode.National, 2), (cards[0].Mode, cards[0].Owned)); // le Rouge ne compte pas pour le global
         Assert.Equal([LivingDexGame.Global], (await _dex.ListAsync("sacha", LivingDexMode.Ultimate)).Select(c => c.Game.Game));
         Assert.Empty(await _dex.NamesBySaveAsync("ondine"));
+
+        // Global chromatique : les seuls chromatiques (le Bulbizarre), images chromatiques ; en tête juste après le global.
+        var shiny = await _dex.CreateGlobalAsync("sacha", shiny: true);
+        Assert.Equal((true, "Living dex global chromatique créé."), (shiny.Ok, shiny.Message));
+        Assert.Equal("Tu as déjà un living dex global chromatique.", (await _dex.CreateGlobalAsync("sacha", shiny: true)).Message);
+        var shinyView = (await _dex.GetAsync("sacha", shiny.Id!.Value))!;
+        Assert.Equal((1000, 1, "Stockage interne, chromatiques"), (shinyView.Entries.Count, shinyView.Owned, shinyView.SaveLabel));
+        Assert.True(shinyView.Entries.Single(e => e.Species == 1).Owned);
+        Assert.StartsWith("images/pokemon/chromatique/", shinyView.Entries[0].Sprite);
+        Assert.Equal([LivingDexGame.Global, LivingDexGame.GlobalShiny, LivingDexGame.Red],
+            LivingDexGames.Sort(await _dex.ListAsync("sacha"), LivingDexSort.Completion, descending: true).Select(c => c.Game.Game));
         Assert.Equal(["Pokémon Rouge"], (await _dex.NamesBySaveAsync("sacha")).Values);
     }
 }

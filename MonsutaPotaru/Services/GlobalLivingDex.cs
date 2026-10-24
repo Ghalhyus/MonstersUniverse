@@ -34,7 +34,8 @@ public sealed record GlobalSlot(ushort Species, byte Form, EntityContext Context
 /// d'aspect, avec les mêmes choix). Ultime : chaque forme qui tient en boîte dans un jeu pris en charge (1re à 9e
 /// génération, sans Légendes Z-A), même celles au même aspect, les formes de combat dues à un objet tenu et les Gigamax
 /// (avec un exemplaire de plus), les femelles différentes, Charmilly avec chaque crème et chaque décoration ; Spinda n'a
-/// qu'une case (motifs infinis).
+/// qu'une case (motifs infinis). Le living dex global chromatique a les mêmes cases, sans ce qui n'a jamais existé en
+/// chromatique (<see cref="ShinyLocked"/>), et ne compte que les chromatiques.
 /// </summary>
 public static class GlobalLivingDex
 {
@@ -42,17 +43,57 @@ public static class GlobalLivingDex
 
     public static readonly LivingDexGameInfo Game = new(LivingDexGame.Global, "Living dex global", "", null, 0, "", [], MaxSpecies);
 
+    public static readonly LivingDexGameInfo ShinyGame =
+        new(LivingDexGame.GlobalShiny, "Living dex global chromatique", "", null, 0, "", [], MaxSpecies);
+
+    /// <summary>Living dex global, normal ou chromatique (sans jeu ni sauvegarde).</summary>
+    public static bool IsGlobal(LivingDexGame game) => game is LivingDexGame.Global or LivingDexGame.GlobalShiny;
+
     public static readonly IReadOnlyList<LivingDexMode> Modes = [LivingDexMode.National, LivingDexMode.Complete, LivingDexMode.Ultimate];
 
-    /// <summary>Image de la carte, à la place d'une jaquette : la Poké Ball (objet n° 4).</summary>
-    public const int CoverItem = 4;
+    /// <summary>Image de la carte, à la place d'une jaquette : la Master Ball (objet n° 1), le Charme Chroma (n° 632) pour le chromatique.</summary>
+    public static int CoverItem(LivingDexGame game) => game == LivingDexGame.GlobalShiny ? 632 : 1;
 
-    public static IReadOnlyList<GlobalSlot> Slots(LivingDexMode mode) => mode switch
+    public static IReadOnlyList<GlobalSlot> Slots(LivingDexMode mode, bool shiny = false) => (mode, shiny) switch
     {
-        LivingDexMode.Complete => CompleteSlots.Value,
-        LivingDexMode.Ultimate => UltimateSlots.Value,
-        _ => NationalSlots.Value,
+        (LivingDexMode.Complete, false) => CompleteSlots.Value,
+        (LivingDexMode.Ultimate, false) => UltimateSlots.Value,
+        (_, false) => NationalSlots.Value,
+        (LivingDexMode.Complete, true) => ShinyComplete.Value,
+        (LivingDexMode.Ultimate, true) => ShinyUltimate.Value,
+        _ => ShinyNational.Value,
     };
+
+    /// <summary>
+    /// Espèces jamais obtenables en chromatique dans un jeu pris en charge (« shiny lock » ; liste de Bulbapedia, « List
+    /// of unobtainable Shiny Pokémon », distributions et cadeaux de HOME compris) : Victini, Hoopa, Volcanion (le
+    /// chromatique de HOME vient de Légendes Z-A, qui ne transfère pas vers Épée / Bouclier ni Écarlate / Violet), Cosmog,
+    /// Cosmovum, Magearna, Marshadow, Wushours, Shifours, Zarude, Blizzeval, Spectreval, Sylveroy, et les légendaires et
+    /// Paradoxes de la 9e génération donnés une seule fois (Serpente-Eau à Pêchaminus).
+    /// </summary>
+    public static readonly ushort[] ShinyLockedSpecies =
+        [494, 720, 721, 789, 790, 801, 802, 891, 892, 893, 896, 897, 898, 1009, 1010, 1014, 1015, 1016, 1017, 1020, 1021, 1022, 1023, 1024, 1025];
+
+    /// <summary>
+    /// Case jamais obtenable en chromatique : espèce de <see cref="ShinyLockedSpecies"/>, ou forme qui ne l'a jamais été
+    /// (costumes et casquettes de Pikachu, sauf la Partenaire ; Pikachu et Évoli Partenaires ; Pichu Troizépi ; Amphinobi
+    /// Lien Naturel ; motif Poké Ball ; Ursaking Lune Vermeille ; Melmetal Gigamax ; Pokémon Dominants, cadeaux fixes).
+    /// </summary>
+    public static bool ShinyLocked(GlobalSlot slot) =>
+        ShinyLockedSpecies.Contains(slot.Species)
+        || slot.Species == Pikachu && (slot.AnyOfKeys is not null || slot.Context == EntityContext.Gen6 && slot.Form > 0
+                                       || slot.FormKey is "Original" or "Hoenn" or "Sinnoh" or "Unova" or "Kalos" or "Alola" or "World")
+        || slot.FormKey == "Starter" && slot.Species is Pikachu or Eevee
+        || slot.Species == 172 && slot.FormKey == "Spiky"
+        || slot.Species == Greninja && slot.FormKey == "Ash"
+        || slot.Species is Scatterbug or Spewpa or Vivillon && slot.FormKey == "Poké Ball"
+        || slot.Species == 901 && slot.FormKey == "Bloodmoon"
+        || slot.Species == 809 && slot.Gigamax
+        || slot.FormKey == "Large";
+
+    private static readonly Lazy<IReadOnlyList<GlobalSlot>> ShinyNational = new(() => NationalSlots.Value.Where(s => !ShinyLocked(s)).ToList());
+    private static readonly Lazy<IReadOnlyList<GlobalSlot>> ShinyComplete = new(() => CompleteSlots.Value.Where(s => !ShinyLocked(s)).ToList());
+    private static readonly Lazy<IReadOnlyList<GlobalSlot>> ShinyUltimate = new(() => UltimateSlots.Value.Where(s => !ShinyLocked(s)).ToList());
 
     private const ushort Pikachu = 25, Eevee = 133, Raticate = 20, Marowak = 105, Mothim = 414, Arceus = 493, Genesect = 649,
         Greninja = 658, Floette = 670, Furfrou = 676, Zygarde = 718, Rockruff = 744, Silvally = 773, Mimikyu = 778, Necrozma = 800,
@@ -290,14 +331,14 @@ public static class GlobalLivingDex
     }
 
     /// <summary>Image d'une case : celle de la collection (forme, femelle, Méga par la gemme, Gigamax, décoration de Charmilly).</summary>
-    public static string Sprite(GlobalSlot slot) => slot switch
+    public static string Sprite(GlobalSlot slot, bool shiny = false) => slot switch
     {
-        { Gigamax: true } => PokemonSprites.GigamaxUrl(slot.Species, slot.Form, slot.Context),
+        { Gigamax: true } => PokemonSprites.GigamaxUrl(slot.Species, slot.Form, slot.Context, shiny),
         { HeldItem: not 0 } when HeldBattleForms.ContainsKey((slot.Species, slot.Form)) =>
-            PokemonSprites.Url(slot.Species, slot.Form, slot.Context, female: false, heldItem: 0, shiny: false),
-        { HeldItem: not 0 } => PokemonSprites.Url(slot.Species, 0, slot.Context, female: false, heldItem: slot.HeldItem, shiny: false),
-        { Sweet: { } sweet } => PokemonSprites.AlcremieUrl(slot.Form, Sweets[sweet].File),
-        _ => PokemonSprites.Url(slot.Species, slot.Form, slot.Context, female: slot.Gender == 1, heldItem: 0, shiny: false),
+            PokemonSprites.Url(slot.Species, slot.Form, slot.Context, female: false, heldItem: 0, shiny),
+        { HeldItem: not 0 } => PokemonSprites.Url(slot.Species, 0, slot.Context, female: false, heldItem: slot.HeldItem, shiny),
+        { Sweet: { } sweet } => PokemonSprites.AlcremieUrl(slot.Form, Sweets[sweet].File, shiny),
+        _ => PokemonSprites.Url(slot.Species, slot.Form, slot.Context, female: slot.Gender == 1, heldItem: 0, shiny),
     };
 
     /// <summary>
