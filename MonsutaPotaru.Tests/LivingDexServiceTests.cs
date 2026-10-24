@@ -12,9 +12,9 @@ namespace MonsutaPotaru.Tests;
 /// Rouge, Bleu, Jaune ; 2e : Or, Argent, Cristal ; 3e : Rubis, Saphir, Émeraude, Rouge Feu, Vert Feuille ; 4e : Diamant,
 /// Perle, Platine, HeartGold, SoulSilver ; 5e : Noire, Blanche, Noire 2, Blanche 2 ; 6e : X, Y, Rubis Oméga, Saphir
 /// Alpha ; 7e : Soleil, Lune, Ultra-Soleil, Ultra-Lune, Let's Go Pikachu, Let's Go Évoli ; 8e : Épée, Bouclier, Diamant
-/// Étincelant, Perle Scintillante, Légendes Arceus). Vraies sauvegardes de Rouge, Bleu, Argent, SoulSilver, Noire, Noire 2,
-/// Rubis Oméga, Ultra-Soleil et Épée (MonsutaPotaru.Tests/Sauvegardes) ; Let's Go et Diamant Étincelant fabriquées en
-/// mémoire.
+/// Étincelant, Perle Scintillante, Légendes Arceus ; 9e : Écarlate, Violet). Vraies sauvegardes de Rouge, Bleu, Argent,
+/// SoulSilver, Noire, Noire 2, Rubis Oméga, Ultra-Soleil et Épée (MonsutaPotaru.Tests/Sauvegardes) ; Let's Go et Diamant
+/// Étincelant fabriquées en mémoire ; ni Légendes Arceus ni Écarlate / Violet (une sauvegarde vide n'est pas relue).
 /// </summary>
 public sealed class LivingDexServiceTests : IDisposable
 {
@@ -116,7 +116,7 @@ public sealed class LivingDexServiceTests : IDisposable
         Assert.Equal([LivingDexGame.X, LivingDexGame.Y], LivingDexGames.For(new SAV6XY()));
         Assert.Equal([LivingDexGame.OmegaRuby, LivingDexGame.AlphaSapphire], LivingDexGames.For(new SAV6AO()));
 
-        // 7e et 8e génération : chaque sauvegarde dit son jeu, Let's Go et Légendes Arceus compris ; rien pour la 9e.
+        // 7e à 9e génération : chaque sauvegarde dit son jeu, Let's Go et Légendes Arceus compris ; rien pour Légendes Z-A.
         Assert.True(SaveUtil.TryGetSaveFile(RealSave("ultra-soleil.sav"), out var ultraSun, "ultra-soleil.sav"));
         Assert.Equal([LivingDexGame.UltraSun], LivingDexGames.For(ultraSun!));
         Assert.Equal([LivingDexGame.Sun, LivingDexGame.Moon], LivingDexGames.For(new SAV7SM()));
@@ -128,7 +128,9 @@ public sealed class LivingDexServiceTests : IDisposable
         Assert.Equal([LivingDexGame.Sword, LivingDexGame.Shield], LivingDexGames.For(new SAV8SWSH()));
         Assert.Equal([LivingDexGame.BrilliantDiamond], LivingDexGames.For(new SAV8BS())); // une sauvegarde vide est Diamant Étincelant
         Assert.Equal([LivingDexGame.LegendsArceus], LivingDexGames.For(new SAV8LA()));
-        Assert.Empty(LivingDexGames.For(new SAV9SV()));
+        Assert.Equal([LivingDexGame.Scarlet, LivingDexGame.Violet], LivingDexGames.For(new SAV9SV()));
+        Assert.Equal([LivingDexGame.Violet], LivingDexGames.For(new SAV9SV { Version = GameVersion.VL }));
+        Assert.Empty(LivingDexGames.For(new SAV9ZA()));
     }
 
     [Theory]
@@ -294,6 +296,45 @@ public sealed class LivingDexServiceTests : IDisposable
         Assert.Equal(slots.Count, slots.Distinct().Count());
         Assert.Equal(slots.Count, slots.Select(s => LivingDexGames.Name(game, s, LivingDexMode.Complete)).Distinct().Count());
         Assert.Null(game.SpriteFolder);
+    }
+
+    [Theory]
+    [InlineData(LivingDexGame.Scarlet)]
+    [InlineData(LivingDexGame.Violet)]
+    public void NinthGeneration_HasPaldea_National733_AndTheFormsOfTheGame(LivingDexGame value)
+    {
+        var game = LivingDexGames.Get(value);
+        Assert.Equal([LivingDexMode.Regional, LivingDexMode.National, LivingDexMode.Complete], LivingDexGames.Modes(game));
+        var paldea = LivingDexGames.Slots(game, LivingDexMode.Regional);
+        var national = LivingDexGames.Slots(game, LivingDexMode.National);
+        Assert.Equal((664, 733), (paldea.Count, national.Count));
+        Assert.Subset(national.Select(s => s.Species).ToHashSet(), paldea.Select(s => s.Species).ToHashSet());
+        Assert.Equal([906, 907, 908], paldea.Take(3).Select(s => (int)s.Species)); // Poussacha, Matourgeon, Miascarade
+        Assert.Equal([("Paldea", 1), ("Paldea", 400)], new[] { 0, 399 }.Select(i => LivingDexGames.RegionalNumber(game, i)));
+        Assert.Equal(("Septentria", "Myrtille"), (LivingDexGames.RegionalNumber(game, 400).Section, LivingDexGames.RegionalNumber(game, 663).Section));
+
+        var slots = LivingDexGames.Slots(game, LivingDexMode.Complete);
+        Assert.Equal(855, slots.Count); // 960 places en boîte : ça tient
+        Assert.All(slots, s => Assert.True(s is { MegaItem: 0, MegaMove: 0, Gigamax: false })); // ni Méga ni Gigamax
+        Assert.Equal(slots.Count, slots.Select(s => LivingDexGames.Name(game, s, LivingDexMode.Complete)).Distinct().Count());
+        LivingDexSlot Slot(ushort species, byte form) => slots.Single(s => s.Species == species && s.Form == form);
+        string Name(LivingDexSlot s) => LivingDexGames.Name(game, s, LivingDexMode.Complete);
+        int Forms(ushort species) => slots.Count(s => s.Species == species);
+
+        Assert.Equal(["Tauros", "Tauros de Paldea (race Combative)", "Tauros de Paldea (race Flamboyante)", "Tauros de Paldea (race Aquatique)"],
+            slots.Where(s => s.Species == 128).Select(Name));
+        Assert.Equal(("Axoloto de Paldea", "Ursaking (Lune Vermeille)", "Famignol (Famille de Quatre)", "Deusolourdo (forme Triple)"),
+            (Name(Slot(194, 1)), Name(Slot(901, 1)), Name(Slot(925, 1)), Name(Slot(982, 1))));
+        Assert.Equal(["Tapatoès (plumage Vert)", "Tapatoès (plumage Bleu)", "Tapatoès (plumage Jaune)", "Tapatoès (plumage Blanc)"],
+            slots.Where(s => s.Species == 931).Select(Name));
+        Assert.Equal(["Ogerpon (masque Turquoise)", "Ogerpon (masque du Puits)", "Ogerpon (masque du Fourneau)", "Ogerpon (masque de la Pierre)"],
+            slots.Where(s => s.Species == 1017).Select(Name)); // pas les formes Téracristal
+        Assert.Equal(("Mordudor (forme Marche)", "Nigirigon (forme Raide)"), (Name(Slot(999, 1)), Name(Slot(978, 2))));
+        Assert.Equal((3, 3, 3, 4, 7, 9), (Forms(550), Forms(52), Forms(898), Forms(585), Forms(774), Forms(869))); // Bargantua, Miaouss...
+        Assert.Equal((1, 1, 1, 1, 1, 1), (Forms(1007), Forms(1008), Forms(964), Forms(1024), Forms(666), Forms(25))); // Koraidon, Superdofin...
+        Assert.Equal((1, 1, 1, 1), (Forms(1012), Forms(916), Forms(893), Forms(801))); // Poltchageist, Fragroin, Zarude, Magearna
+        Assert.Equal(["Caninos", "Caninos de Hisui"], slots.Where(s => s.Species == 58).Select(Name));
+        Assert.Equal("images/livingdex/jaquettes/" + (value == LivingDexGame.Scarlet ? "ecarlate" : "violet") + ".png", game.Cover);
     }
 
     [Fact]

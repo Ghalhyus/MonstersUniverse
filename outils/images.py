@@ -25,8 +25,8 @@ Rassemble les images servies par le site, dans MonsutaPotaru/wwwroot/images/ :
   saphir.png, emeraude.png, rouge-feu.png, vert-feuille.png, diamant.png, perle.png, platine.png, heartgold.png,
   soulsilver.png, noire.png, blanche.png, noire-2.png, blanche-2.png, x.png, y.png, rubis-omega.png, saphir-alpha.png,
   soleil.png, lune.png, ultra-soleil.png, ultra-lune.png, lets-go-pikachu.png, lets-go-evoli.png, epee.png, bouclier.png,
-  diamant-etincelant.png, perle-scintillante.png, legendes-arceus.png : Bulbagarden Archives, versions anglaises, faute de
-  françaises).
+  diamant-etincelant.png, perle-scintillante.png, legendes-arceus.png, ecarlate.png, violet.png : Bulbagarden Archives,
+  versions anglaises, faute de françaises).
 
 Sources des objets, dans l'ordre :
   1. PokéAPI, par nom anglais (l'apparence d'origine du site), sauf quand ce nom est porté par plusieurs objets ;
@@ -290,7 +290,8 @@ LIVINGDEX_COVERS = {"rouge": "File:Red EN boxart.png", "bleu": "File:Blue EN box
                     "lets-go-pikachu": "File:Lets Go Pikachu EN boxart.png", "lets-go-evoli": "File:Lets Go Eevee EN boxart.png",
                     "epee": "File:Sword EN boxart.png", "bouclier": "File:Shield EN boxart.png",
                     "diamant-etincelant": "File:Brilliant Diamond EN boxart.png", "perle-scintillante": "File:Shining Pearl EN boxart.png",
-                    "legendes-arceus": "File:Legends Arceus EN boxart.png"}
+                    "legendes-arceus": "File:Legends Arceus EN boxart.png",
+                    "ecarlate": "File:Scarlet EN boxart.png", "violet": "File:Violet EN boxart.png"}
 
 
 def livingdex_jobs():

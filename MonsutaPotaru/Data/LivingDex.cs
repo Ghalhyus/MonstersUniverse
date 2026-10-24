@@ -38,6 +38,8 @@ public enum LivingDexGame
     BrilliantDiamond = 33,
     ShiningPearl = 34,
     LegendsArceus = 35,
+    Scarlet = 36,
+    Violet = 37,
 }
 
 /// <summary>

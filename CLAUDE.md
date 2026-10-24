@@ -200,6 +200,10 @@ suivante), sans lister les dossiers des dépôts.
   casquette d'Alola de Pikachu s'appelle aussi « Alola ». Gigamax : case `Gigamax`, un exemplaire de plus avec le facteur
   (`IGigantamax`, lu dans les octets des seules espèces de `GigamaxSpecies`). Une sauvegarde Légendes Arceus vide n'est
   pas reconnue par `SaveUtil` (pas de test du service pour ce jeu) ; Diamant Étincelant vide, oui.
+- 9e génération : Écarlate / Violet seulement (`For` : `SAV9SV`) ; Légendes Z-A est aussi en 9e chez PKHeX, sans living
+  dex pour l'instant. Une sauvegarde Écarlate / Violet vide n'est pas reconnue par `SaveUtil`, et l'utilisateur n'en a
+  pas déposé : les images ont été vérifiées par un test temporaire (`PokemonSprites.Load(RealSavesTests.WebRootWithImages())`,
+  chaque case a son image, présente), pas dans le navigateur.
 - Les tests ne doivent **pas** exiger ces images : la CI les copie depuis le VPS, qui ne les reçoit qu'au déploiement,
   après les tests. Une nouvelle image : tester son chemin, pas sa présence.
 - Jaquettes : Bulbagarden Archives (API MediaWiki, version réduite `iiurlwidth=480`). Sur ce PC, Python refuse son

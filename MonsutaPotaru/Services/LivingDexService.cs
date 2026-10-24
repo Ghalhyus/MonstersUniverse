@@ -32,11 +32,12 @@ public enum LivingDexMode
 /// <param name="NationalMax">Dernier numéro national que le jeu peut contenir.</param>
 /// <param name="National">
 /// Pokémon du national que le jeu peut contenir, quand ce ne sont pas tous ceux jusqu'à <paramref name="NationalMax"/> :
-/// Let's Go n'a que ceux de Kanto, Meltan et Melmetal ; Épée / Bouclier, ceux que PKHeX dit présents dans le jeu.
+/// Let's Go n'a que ceux de Kanto, Meltan et Melmetal ; Épée / Bouclier et Écarlate / Violet, ceux que PKHeX dit
+/// présents dans le jeu.
 /// </param>
 /// <param name="RegionalNumbers">
 /// Numéros du jeu des Pokémon du régional, quand ils ne se suivent pas : Galar, puis ce que l'Isolarmure et la Couronneige
-/// ajoutent (chacun avec ses numéros, sans les Pokémon déjà vus).
+/// ajoutent (chacun avec ses numéros, sans les Pokémon déjà vus) ; de même Paldea, Septentria et la Myrtille.
 /// </param>
 /// <param name="DeoxysForm">
 /// Forme de Deoxys dans ce jeu (3e génération) : un Pokémon de 3e génération n'enregistre pas sa forme, c'est le jeu qui
@@ -117,7 +118,7 @@ public sealed record LivingDexCandidate(int SaveId, string Label, IReadOnlyList<
 
 public sealed record LivingDexResult(bool Ok, string Message, int? Id = null);
 
-/// <summary>Jeux qui ont un living dex : 1re à 8e génération pour l'instant.</summary>
+/// <summary>Jeux qui ont un living dex : 1re à 9e génération (Écarlate / Violet ; pas encore Légendes Z-A).</summary>
 public static class LivingDexGames
 {
     private static readonly ushort[] Kanto = Enumerable.Range(1, 151).Select(n => (ushort)n).ToArray();
@@ -146,7 +147,8 @@ public static class LivingDexGames
         Thundurus = 642, Landorus = 645, Kyurem = 646, Keldeo = 647, Genesect = 649, Pikachu = 25, Flabebe = 669,
         Floette = 670, Florges = 671, Pumpkaboo = 710, Gourgeist = 711, Hoopa = 720, Zygarde = 718, Oricorio = 741,
         Lycanroc = 745, Silvally = 773, Minior = 774, Necrozma = 800, Dialga = 483, Palkia = 484, Toxtricity = 849,
-        Alcremie = 869, Urshifu = 892, Calyrex = 898, Enamorus = 905;
+        Alcremie = 869, Urshifu = 892, Calyrex = 898, Enamorus = 905, Ursaluna = 901, Maushold = 925, Squawkabilly = 931,
+        Tatsugiri = 978, Dudunsparce = 982, Gimmighoul = 999, Ogerpon = 1017;
 
     /// <summary>Espèces qui ont une forme d'Alola (forme 1), de Rattata à Ossatueur.</summary>
     private static readonly ushort[] AlolanForms = [19, 20, 26, 27, 28, 37, 38, 50, 51, 52, 53, 74, 75, 76, 88, 89, 103, 105];
@@ -439,6 +441,81 @@ public static class LivingDexGames
         .ToArray();
 
     /// <summary>
+    /// Pokédex de Paldea d'Écarlate et Violet : celui du jeu (400), puis ce que les Pokédex de Septentria (99 de plus sur
+    /// 200) et de la Myrtille (165 de plus sur 243) ajoutent, sans doublon, chacun avec ses numéros (<see cref="PaldeaNumbers"/>).
+    /// Repris des données de PokéAPI (pokemon_dex_numbers.csv, Pokédex 31, 32 et 33 « paldea », « kitakami », « blueberry »).
+    /// </summary>
+    private static readonly ushort[] Paldea =
+    [
+        906, 907, 908, 909, 910, 911, 912, 913, 914, 915, 916, 917, 918, 919, 920, 187, 188, 189, 661, 662, 663, 921, 922, 923, 228,
+        229, 734, 735, 819, 820, 191, 192, 401, 402, 664, 665, 666, 415, 416, 821, 822, 823, 440, 113, 242, 298, 183, 184, 283, 284,
+        418, 419, 194, 980, 54, 55, 833, 834, 174, 39, 40, 280, 281, 282, 475, 96, 97, 92, 93, 94, 924, 925, 172, 25, 26,
+        926, 927, 287, 288, 289, 761, 762, 763, 928, 929, 930, 438, 185, 744, 745, 837, 838, 839, 403, 404, 405, 396, 397, 398, 741,
+        179, 180, 181, 548, 549, 285, 286, 840, 841, 842, 325, 326, 931, 200, 429, 296, 297, 739, 740, 757, 758, 231, 232, 878, 879,
+        443, 444, 445, 932, 933, 934, 278, 279, 129, 130, 846, 847, 550, 316, 317, 52, 53, 425, 426, 669, 670, 671, 50, 51, 324,
+        322, 323, 436, 437, 610, 611, 612, 56, 57, 979, 307, 308, 447, 448, 935, 936, 937, 339, 340, 938, 939, 704, 705, 706, 453,
+        454, 940, 941, 133, 134, 135, 136, 196, 197, 470, 471, 700, 206, 982, 585, 586, 203, 981, 88, 89, 942, 943, 848, 849, 702,
+        417, 944, 945, 234, 590, 591, 100, 101, 81, 82, 462, 132, 58, 59, 216, 217, 335, 336, 333, 334, 672, 673, 128, 667, 668,
+        434, 435, 570, 571, 215, 461, 198, 430, 574, 575, 576, 854, 855, 778, 707, 876, 946, 947, 948, 949, 357, 753, 754, 950, 951,
+        952, 331, 332, 953, 954, 48, 49, 204, 205, 123, 212, 214, 955, 956, 449, 450, 551, 552, 553, 843, 844, 749, 750, 636, 637,
+        371, 372, 373, 957, 958, 959, 856, 857, 858, 859, 860, 861, 960, 961, 962, 963, 964, 965, 966, 967, 968, 302, 353, 354, 870,
+        701, 442, 714, 715, 885, 886, 887, 969, 970, 479, 971, 972, 765, 766, 775, 246, 247, 248, 874, 875, 871, 769, 770, 79, 80,
+        199, 422, 423, 90, 91, 211, 370, 456, 457, 779, 594, 690, 691, 692, 693, 602, 603, 604, 747, 748, 973, 147, 148, 149, 872,
+        873, 459, 460, 225, 613, 614, 361, 362, 478, 615, 974, 975, 712, 713, 627, 628, 624, 625, 983, 633, 634, 635, 976, 977, 978,
+        984, 985, 986, 987, 988, 989, 990, 991, 992, 993, 994, 995, 996, 997, 998, 999, 1000, 1001, 1002, 1003, 1004, 1005, 1006, 1007, 1008,
+        167, 168, 193, 469, 195, 261, 262, 313, 314, 341, 342, 540, 541, 542, 742, 743, 23, 24, 69, 70, 71, 161, 162, 1011, 37,
+        38, 60, 61, 62, 186, 163, 164, 190, 424, 220, 221, 473, 273, 274, 275, 708, 709, 1012, 1013, 74, 75, 76, 532, 533, 534,
+        877, 446, 143, 270, 271, 272, 299, 476, 736, 737, 738, 27, 28, 207, 472, 629, 630, 782, 783, 784, 109, 110, 619, 620, 355,
+        356, 477, 433, 358, 218, 219, 607, 608, 609, 173, 35, 36, 349, 350, 703, 580, 581, 845, 902, 901, 1014, 1015, 1016, 1017, 84,
+        85, 102, 103, 111, 112, 464, 239, 125, 466, 240, 126, 467, 900, 522, 523, 235, 868, 869, 328, 329, 330, 731, 732, 733, 72,
+        73, 116, 117, 230, 546, 547, 764, 43, 44, 45, 182, 170, 171, 686, 687, 751, 752, 236, 106, 107, 237, 529, 530, 677, 678,
+        774, 408, 409, 410, 411, 572, 573, 227, 311, 312, 559, 560, 622, 623, 137, 233, 474, 595, 596, 374, 375, 376, 86, 87, 131,
+        904, 577, 578, 579, 209, 210, 884, 1018, 1019, 1, 2, 3, 4, 5, 6, 7, 8, 9, 152, 153, 154, 155, 156, 157, 158,
+        159, 160, 252, 253, 254, 255, 256, 257, 258, 259, 260, 387, 388, 389, 390, 391, 392, 393, 394, 395, 495, 496, 497, 498, 499,
+        500, 501, 502, 503, 650, 651, 652, 653, 654, 655, 656, 657, 658, 722, 723, 724, 725, 726, 727, 728, 729, 730, 810, 811, 812,
+        813, 814, 815, 816, 817, 818, 1020, 1021, 1023, 1022, 1024, 1009, 1010, 1025,
+    ];
+
+    /// <summary>Numéro de chaque Pokémon de <see cref="Paldea"/> dans le Pokédex du jeu où il apparaît en premier.</summary>
+    private static readonly int[] PaldeaNumbers =
+    [
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
+        26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50,
+        51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75,
+        76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100,
+        101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125,
+        126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150,
+        151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175,
+        176, 177, 178, 179, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 197, 198, 199, 200,
+        201, 202, 203, 204, 205, 206, 207, 208, 209, 210, 211, 212, 213, 214, 215, 216, 217, 218, 219, 220, 221, 222, 223, 224, 225,
+        226, 227, 228, 229, 230, 231, 232, 233, 234, 235, 236, 237, 238, 239, 240, 241, 242, 243, 244, 245, 246, 247, 248, 249, 250,
+        251, 252, 253, 254, 255, 256, 257, 258, 259, 260, 261, 262, 263, 264, 265, 266, 267, 268, 269, 270, 271, 272, 273, 274, 275,
+        276, 277, 278, 279, 280, 281, 282, 283, 284, 285, 286, 287, 288, 289, 290, 291, 292, 293, 294, 295, 296, 297, 298, 299, 300,
+        301, 302, 303, 304, 305, 306, 307, 308, 309, 310, 311, 312, 313, 314, 315, 316, 317, 318, 319, 320, 321, 322, 323, 324, 325,
+        326, 327, 328, 329, 330, 331, 332, 333, 334, 335, 336, 337, 338, 339, 340, 341, 342, 343, 344, 345, 346, 347, 348, 349, 350,
+        351, 352, 353, 354, 355, 356, 357, 358, 359, 360, 361, 362, 363, 364, 365, 366, 367, 368, 369, 370, 371, 372, 373, 374, 375,
+        376, 377, 378, 379, 380, 381, 382, 383, 384, 385, 386, 387, 388, 389, 390, 391, 392, 393, 394, 395, 396, 397, 398, 399, 400,
+        1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 23, 24, 25, 26, 27, 36, 37,
+        38, 39, 40, 41, 42, 45, 46, 47, 48, 50, 51, 52, 54, 55, 56, 68, 69, 76, 77, 80, 81, 82, 85, 86, 87,
+        95, 102, 103, 104, 105, 106, 107, 108, 112, 113, 114, 116, 117, 121, 122, 127, 128, 131, 132, 133, 135, 136, 137, 138, 139,
+        140, 141, 142, 143, 144, 145, 146, 147, 148, 151, 152, 153, 158, 159, 167, 181, 182, 185, 195, 196, 197, 198, 199, 200, 1,
+        2, 3, 4, 5, 6, 7, 10, 11, 12, 13, 14, 15, 21, 23, 24, 40, 42, 43, 44, 45, 46, 47, 48, 49, 50,
+        51, 52, 53, 54, 56, 57, 58, 62, 63, 64, 65, 78, 79, 80, 81, 90, 91, 92, 93, 94, 95, 99, 100, 104, 105,
+        106, 107, 108, 109, 110, 111, 112, 113, 119, 120, 121, 122, 123, 124, 129, 130, 131, 132, 133, 137, 138, 139, 143, 144, 145,
+        147, 148, 149, 150, 151, 152, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 179,
+        180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204,
+        205, 206, 207, 208, 209, 210, 211, 212, 213, 214, 215, 216, 217, 218, 219, 220, 221, 222, 223, 224, 225, 226, 227, 228, 229,
+        230, 231, 232, 233, 234, 235, 236, 237, 238, 239, 240, 241, 242, 243,
+    ];
+
+    private static readonly (string Name, int Count)[] PaldeaSections = [("Paldea", 400), ("Septentria", 99), ("Myrtille", 165)];
+
+    /// <summary>Espèces qu'Écarlate et Violet peuvent contenir (733 : PKHeX, sous n'importe quelle forme).</summary>
+    private static readonly ushort[] ScarletVioletNational = Enumerable.Range(1, 1025).Select(n => (ushort)n)
+        .Where(n => Enumerable.Range(0, PersonalTable.SV[n].FormCount).Any(f => PersonalTable.SV.IsPresentInGame(n, (byte)f)))
+        .ToArray();
+
+    /// <summary>
     /// Pokédex de Hisui de Légendes Arceus : 242 Pokémon (Brindibou d'abord, Arceus à la fin), tout ce que le jeu peut
     /// contenir. Repris des données de PokéAPI (pokemon_dex_numbers.csv, Pokédex 30 « hisui »).
     /// </summary>
@@ -516,6 +593,11 @@ public static class LivingDexGames
             "Sinnoh", Sinnoh, 493),
         new(LivingDexGame.LegendsArceus, "Légendes Pokémon : Arceus", "images/livingdex/jaquettes/legendes-arceus.png", null, 8,
             "Hisui", Hisui, 905, National: [.. Hisui.Order()]),
+        // 9e génération : les images de la collection aussi.
+        new(LivingDexGame.Scarlet, "Pokémon Écarlate", "images/livingdex/jaquettes/ecarlate.png", null, 9, "Paldea", Paldea, 1025,
+            Sections: PaldeaSections, National: ScarletVioletNational, RegionalNumbers: PaldeaNumbers),
+        new(LivingDexGame.Violet, "Pokémon Violet", "images/livingdex/jaquettes/violet.png", null, 9, "Paldea", Paldea, 1025,
+            Sections: PaldeaSections, National: ScarletVioletNational, RegionalNumbers: PaldeaNumbers),
     ];
 
     /// <summary>Let's Go, Pikachu ou Évoli : sauvegarde de Switch, Pokémon sans objet tenu, Méga par la gemme du sac.</summary>
@@ -608,6 +690,13 @@ public static class LivingDexGames
             _ when sav is SAV8BS => [LivingDexGame.BrilliantDiamond, LivingDexGame.ShiningPearl],
             _ => [LivingDexGame.Sword, LivingDexGame.Shield],
         },
+        // Légendes Z-A (9e génération aussi chez PKHeX) n'a pas encore de living dex.
+        9 when sav is SAV9SV => sav.Version switch
+        {
+            GameVersion.SL => [LivingDexGame.Scarlet],
+            GameVersion.VL => [LivingDexGame.Violet],
+            _ => [LivingDexGame.Scarlet, LivingDexGame.Violet],
+        },
         _ => [],
     };
 
@@ -653,7 +742,10 @@ public static class LivingDexGames
     /// Hisui), Salarsen, Shifours, Sylveroy fusionné, Dialga et Palkia Originels, Amovénus Totémique, les 9 crèmes de
     /// Charmilly (pas ses décorations), et les cases Gigamax (<see cref="Gigamax"/>) ; ni Zarude Papa ni Magearna Couleur du
     /// Passé (distributions terminées), ni Papilord, Théffroi ou Polthégeist Authentique (même aspect), ni les formes Roi
-    /// de Légendes Arceus (impossibles à capturer).
+    /// de Légendes Arceus (impossibles à capturer). En 9e : les formes de Paldea (les 3 races de Tauros, Axoloto), Ursaking
+    /// Lune Vermeille, Famignol Famille de Quatre, les plumages de Tapatoès, les formes de Nigirigon, Deusolourdo Triple,
+    /// Mordudor Marche, les masques d'Ogerpon ; une seule case pour Koraidon et Miraidon (leurs autres formes sont celles
+    /// de la monture, jamais en boîte).
     /// </summary>
     private static IEnumerable<LivingDexSlot> Forms(LivingDexGameInfo game, ushort species) => species switch
     {
@@ -733,7 +825,8 @@ public static class LivingDexGames
         .Where(s => Enumerable.Range(0, PersonalTable.SWSH[s].FormCount).Any(f => Gigantamax.CanToggle(s, (byte)f))).ToArray();
 
     /// <summary>
-    /// Formes régionales de l'espèce présentes dans le jeu (8e génération : Alola, Galar, Hisui, d'après leur nom anglais
+    /// Formes régionales de l'espèce présentes dans le jeu (à partir de la 8e génération : Alola, Galar, Hisui, Paldea et
+    /// les races de Tauros, d'après leur nom anglais
     /// chez PKHeX), sans les formes de combat (Darumacho de Galar en Transe). Pas Pikachu : sa casquette d'Alola s'appelle
     /// aussi « Alola ».
     /// </summary>
@@ -743,8 +836,8 @@ public static class LivingDexGames
             return [];
         var names = FormConverter.GetFormList(species, EnglishStrings.types, EnglishStrings.forms, GameInfo.GenderSymbolASCII, Context(game));
         return Enumerable.Range(1, Math.Max(0, FormCount(game, species) - 1)).Select(f => (byte)f)
-            .Where(f => f < names.Length && names[f] is "Alola" or "Galar" or "Hisui" && Present(game, species, f)
-                        && !FormInfo.IsBattleOnlyForm(species, f, game.Generation))
+            .Where(f => f < names.Length && (names[f] is "Alola" or "Galar" or "Hisui" || names[f].StartsWith("Paldea"))
+                        && Present(game, species, f) && !FormInfo.IsBattleOnlyForm(species, f, game.Generation))
             .ToList();
     }
 
@@ -783,12 +876,14 @@ public static class LivingDexGames
     /// Ultra-Necrozma, Morphéo, Ceriflor, Darumacho, Meloetta, Exagide, Xerneas, Froussardine, Mimiqui...) ; ni
     /// Mistigrix, dont la forme est le sexe. En 8e, Salarsen Grave, Shifours Mille Poings, Sylveroy du Froid et d'Effroi,
     /// les crèmes de Charmilly, Dialga et Palkia Originels et Amovénus Totémique (Légendes Arceus), Bargantua Blanc
-    /// (Légendes Arceus, qui n'a que lui).
+    /// (Légendes Arceus, qui n'a que lui). En 9e, Ursaking Lune Vermeille, Famignol, Tapatoès, Nigirigon, Deusolourdo,
+    /// Mordudor, Ogerpon (masques ; pas ses formes Téracristal, de combat).
     /// </summary>
     private static readonly ushort[] AspectForms =
         [Pichu, Deoxys, Burmy, Wormadam, Shellos, Gastrodon, Rotom, Giratina, Shaymin, Basculin, Tornadus, Thundurus, Landorus,
          Kyurem, Keldeo, Deerling, Sawsbuck, Flabebe, Florges, Pumpkaboo, Gourgeist, Hoopa, Oricorio, Lycanroc, Minior, Necrozma,
-         Dialga, Palkia, Toxtricity, Alcremie, Urshifu, Calyrex, Enamorus];
+         Dialga, Palkia, Toxtricity, Alcremie, Urshifu, Calyrex, Enamorus, Ursaluna, Maushold, Squawkabilly, Tatsugiri, Dudunsparce,
+         Gimmighoul, Ogerpon];
 
     /// <summary>Formes de l'espèce que le jeu connaît (données de PKHeX : Motisma n'en a qu'une en Diamant / Perle).</summary>
     private static int FormCount(LivingDexGameInfo game, ushort species) => Table(game)[species].FormCount;
@@ -814,7 +909,8 @@ public static class LivingDexGames
         LivingDexGame.LetsGoPikachu or LivingDexGame.LetsGoEevee => PersonalTable.GG,
         LivingDexGame.Sword or LivingDexGame.Shield => PersonalTable.SWSH,
         LivingDexGame.BrilliantDiamond or LivingDexGame.ShiningPearl => PersonalTable.BDSP,
-        _ => PersonalTable.LA,
+        LivingDexGame.LegendsArceus => PersonalTable.LA,
+        _ => PersonalTable.SV,
     };
 
     /// <summary>
@@ -905,12 +1001,14 @@ public static class LivingDexGames
         {
             Unown when mode == LivingDexMode.Complete && UnownForms(game) > 1 => $"{species} {form}",
             Burmy or Wormadam or Shellos or Gastrodon or Basculin or Deerling or Sawsbuck or Flabebe or Floette or Florges or Pumpkaboo
-                or Gourgeist or Oricorio or Lycanroc or Minior or Toxtricity or Urshifu
+                or Gourgeist or Oricorio or Lycanroc or Minior or Toxtricity or Urshifu or Maushold or Squawkabilly or Tatsugiri
+                or Dudunsparce or Gimmighoul or Ogerpon
                 when mode == LivingDexMode.Complete => $"{species} ({FormLabel(slot.Species, form)})",
             Alcremie when mode == LivingDexMode.Complete => $"{species} ({AlcremieCreams[Math.Min(slot.Form, (byte)(AlcremieCreams.Length - 1))]})",
             Zygarde when mode == LivingDexMode.Complete && game.Generation >= 7 => $"{species} ({FormLabel(slot.Species, form)})",
             Kyurem or Hoopa or Necrozma or Calyrex when slot.Form != 0 => $"{species} {form}",
-            _ when slot.Form != 0 && form is "Alola" or "Galar" or "Hisui" => $"{species} {(form == "Alola" ? "d'" : "de ")}{form}",
+            _ when slot.Form != 0 && form is "Alola" or "Galar" or "Hisui" or "Paldea" => $"{species} {(form == "Alola" ? "d'" : "de ")}{form}",
+            _ when slot.Form != 0 && form.StartsWith("Paldea ") => $"{species} de Paldea (race {form[7..]})", // Tauros
             Pikachu when slot.FormsFrom != 0 => "Pikachu Cosplayeur",
             _ when slot.Form != 0 => $"{species} ({FormLabel(slot.Species, form)})",
             _ => species,
@@ -934,6 +1032,9 @@ public static class LivingDexGames
         Lycanroc => form.StartsWith("Forme ") ? $"forme {form[6..]}" : $"forme {form}", // PKHeX : « Forme Crépusculaire »
         Zygarde or Toxtricity or Dialga or Palkia or Enamorus => $"forme {form}",
         Urshifu => $"style {form}",
+        Tatsugiri or Dudunsparce or Gimmighoul => $"forme {form}",
+        Squawkabilly => $"plumage {form switch { "Bleue" => "Bleu", "Blanche" => "Blanc", _ => form }}", // PKHeX : « Bleue », « Blanche »
+        Ogerpon => $"masque {form switch { "Puits" => "du Puits", "Fourneau" => "du Fourneau", "Pierre" => "de la Pierre", _ => form }}",
         Minior => $"noyau {form.Replace("N-", "")}", // PKHeX : « N-Rouge »
         Pichu => "Troizépi", // PKHeX n'a que l'anglais (« Spiky »)
         Keldeo => "forme Décidée", // PKHeX : « Décidé »
@@ -964,6 +1065,7 @@ public static class LivingDexGames
         {
             LivingDexGame.BrilliantDiamond or LivingDexGame.ShiningPearl => EntityContext.Gen8b,
             LivingDexGame.LegendsArceus => EntityContext.Gen8a,
+            LivingDexGame.Scarlet or LivingDexGame.Violet => EntityContext.Gen9,
             _ => EntityContext.Gen8,
         },
     };
@@ -1060,7 +1162,7 @@ public sealed class LivingDexService(
         var taken = await db.LivingDexes.Where(d => d.OwnerId == ownerId).Select(d => d.Game).ToListAsync();
         var linked = db.LivingDexes.Select(d => d.StoredSaveId);
         var saves = await db.StoredSaves.AsNoTracking()
-            .Where(s => s.OwnerId == ownerId && s.Generation <= 8 && !linked.Contains(s.Id))
+            .Where(s => s.OwnerId == ownerId && s.Generation <= 9 && !linked.Contains(s.Id))
             .OrderBy(s => s.UploadedAt)
             .Select(s => new { s.Id, s.GameName, s.TrainerName, s.FileName, s.Data })
             .ToListAsync();
