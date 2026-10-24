@@ -296,6 +296,9 @@ Violet** ; pas encore Légendes Z-A).
   Boutons **Régional / National / Complet** pour la progression de toutes les cartes (`?mode=regional`, `?mode=complet`) :
   une carte dont le jeu n'a pas ce mode compte en National et l'indique (« National seul », 1re génération) ; un clic
   sur une carte ouvre le living dex dans le mode affiché. Même comptage que sur sa page (`LivingDexService.EntriesAsync`).
+  **Tri** à côté (« Trier par » Génération / Complétion, et ↑ / ↓ pour le sens ; `?tri=completion`, `?ordre=desc`,
+  `LivingDexGames.Sort`) : par génération, l'ordre des jeux ou son exact inverse ; par complétion, le pourcentage exact
+  dans le mode affiché (celui de la carte, le National pour « National seul »), à égalité dans l'ordre des jeux.
 - **Barres de progression** (cartes et page d'un living dex, `Shared/LivingDexProgress.razor`) : pourcentage au centre
   de la barre, avec une décimale **arrondie vers le bas** (« 5,6 % » ; 100 % seulement quand tout y est),
   `LivingDexGames.Percent`.

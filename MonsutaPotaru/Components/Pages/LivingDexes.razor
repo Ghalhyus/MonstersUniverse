@@ -113,18 +113,31 @@ else if (dexes.Count == 0)
 }
 else
 {
-    @* Progression de toutes les cartes dans un mode, gardé dans l'adresse (?mode=regional) ; une carte s'ouvre dans ce mode. *@
-    <div class="btn-group btn-group-sm mb-3 livingdex-choice" role="group" aria-label="Progression affichée">
-        @foreach (var m in AllModes)
-        {
-            var value = m;
-            <button type="button" class="btn @(mode == value ? "btn-primary" : "btn-outline-primary")" @onclick="() => SetMode(value)">
-                @LivingDexGames.ModeName(value)
-            </button>
-        }
+    @* Progression de toutes les cartes dans un mode, gardé dans l'adresse (?mode=regional) ; une carte s'ouvre dans ce mode.
+       Tri à côté, gardé aussi (?tri=completion&ordre=desc) : par complétion, dans le mode affiché. *@
+    <div class="d-flex flex-wrap align-items-center gap-3 mb-3">
+        <div class="btn-group btn-group-sm livingdex-choice" role="group" aria-label="Progression affichée">
+            @foreach (var m in AllModes)
+            {
+                var value = m;
+                <button type="button" class="btn @(mode == value ? "btn-primary" : "btn-outline-primary")" @onclick="() => SetMode(value)">
+                    @LivingDexGames.ModeName(value)
+                </button>
+            }
+        </div>
+        <div class="d-flex align-items-center gap-2 livingdex-choice">
+            <label class="small text-nowrap" for="dexSort">Trier par</label>
+            <select id="dexSort" class="form-select form-select-sm w-auto" value="@LivingDexGames.SortSlug(sort)" @onchange="SortChosen">
+                <option value="">Génération</option>
+                <option value="completion">Complétion</option>
+            </select>
+            <button type="button" class="btn btn-sm btn-outline-primary" @onclick="ToggleOrder"
+                    title="@(descending ? "Décroissant : clique pour trier en croissant" : "Croissant : clique pour trier en décroissant")"
+                    aria-label="@(descending ? "Ordre décroissant" : "Ordre croissant")">@(descending ? "↓" : "↑")</button>
+        </div>
     </div>
     <div class="livingdex-cards">
-        @foreach (var d in dexes)
+        @foreach (var d in LivingDexGames.Sort(dexes, sort, descending))
         {
             <a class="livingdex-card" href="@CardLink(d)">
                 <img src="@d.Game.Cover" alt="Jaquette de @d.Game.Name" loading="lazy" onerror="this.style.visibility='hidden'" />
@@ -148,11 +161,15 @@ else
 @code {
     [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = default!;
     [SupplyParameterFromQuery(Name = "mode")] private string? ModeFromQuery { get; set; }
+    [SupplyParameterFromQuery(Name = "tri")] private string? SortFromQuery { get; set; }
+    [SupplyParameterFromQuery(Name = "ordre")] private string? OrderFromQuery { get; set; }
 
     private static readonly LivingDexMode[] AllModes = [LivingDexMode.Regional, LivingDexMode.National, LivingDexMode.Complete];
 
     private string userId = "";
     private LivingDexMode mode = LivingDexMode.National;
+    private LivingDexSort sort;
+    private bool descending;
     private readonly HashSet<byte> openGenerations = [];
     private List<LivingDexSummary>? dexes;
     private List<LivingDexCandidate> candidates = [];
@@ -170,11 +187,22 @@ else
     {
         userId = (await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
         mode = LivingDexGames.ModeFromSlug(ModeFromQuery);
+        sort = LivingDexGames.SortFromSlug(SortFromQuery);
+        descending = OrderFromQuery == "desc";
         dexes = await Dexes.ListAsync(userId, mode);
     }
 
     private void SetMode(LivingDexMode value) =>
         Navigation.NavigateTo(Navigation.GetUriWithQueryParameter("mode", LivingDexGames.ModeSlug(value)), replace: true);
+
+    /// <summary>Critère de tri choisi, gardé dans l'adresse (le sens ne change pas).</summary>
+    private void SortChosen(ChangeEventArgs e) =>
+        Navigation.NavigateTo(Navigation.GetUriWithQueryParameter("tri",
+            LivingDexGames.SortSlug(LivingDexGames.SortFromSlug(e.Value?.ToString()))), replace: true);
+
+    /// <summary>Inverse le sens du tri (croissant par défaut, absent de l'adresse).</summary>
+    private void ToggleOrder() =>
+        Navigation.NavigateTo(Navigation.GetUriWithQueryParameter("ordre", descending ? null : "desc"), replace: true);
 
     /// <summary>Page du living dex, dans le mode de la vue générale s'il le propose (le National n'est pas écrit).</summary>
     private static string CardLink(LivingDexSummary d) =>

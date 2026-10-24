@@ -809,6 +809,28 @@ public sealed class LivingDexServiceTests : IDisposable
     public void Percent_HasOneDecimal_RoundedDown(int owned, int total, string expected) =>
         Assert.Equal(expected, LivingDexGames.Percent(owned, total));
 
+    [Fact]
+    public void Sort_ByGeneration_OrByCompletionInTheShownMode()
+    {
+        LivingDexSummary Card(LivingDexGame game, int owned, int total) => new(0, LivingDexGames.Get(game), "", owned, total);
+        var cards = new[]
+        {
+            Card(LivingDexGame.Violet, 10, 664), Card(LivingDexGame.Red, 76, 151), Card(LivingDexGame.Blue, 1, 3),
+            Card(LivingDexGame.Black, 34, 100), Card(LivingDexGame.Silver, 76, 151),
+        };
+        string Order(LivingDexSort sort, bool descending) => string.Join(", ", LivingDexGames.Sort(cards, sort, descending).Select(c => c.Game.Game));
+
+        // Génération : l'ordre des jeux, ou son exact inverse.
+        Assert.Equal("Red, Blue, Silver, Black, Violet", Order(LivingDexSort.Generation, false));
+        Assert.Equal("Violet, Black, Silver, Blue, Red", Order(LivingDexSort.Generation, true));
+        // Complétion : le pourcentage exact (1 / 3 avant 34 / 100) ; à égalité (Rouge et Argent), l'ordre des jeux.
+        Assert.Equal("Violet, Blue, Black, Red, Silver", Order(LivingDexSort.Completion, false));
+        Assert.Equal("Red, Silver, Black, Blue, Violet", Order(LivingDexSort.Completion, true));
+
+        Assert.Equal((LivingDexSort.Completion, "completion"), (LivingDexGames.SortFromSlug("completion"), LivingDexGames.SortSlug(LivingDexSort.Completion)));
+        Assert.Equal((LivingDexSort.Generation, (string?)null), (LivingDexGames.SortFromSlug("n-importe-quoi"), LivingDexGames.SortSlug(LivingDexSort.Generation)));
+    }
+
     [Theory]
     [InlineData(null, LivingDexMode.National)]
     [InlineData("regional", LivingDexMode.Regional)]

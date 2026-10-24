@@ -21,6 +21,15 @@ public enum LivingDexMode
     Complete,
 }
 
+/// <summary>Tri des cartes de la vue générale.</summary>
+public enum LivingDexSort
+{
+    /// <summary>Dans l'ordre des jeux (génération, puis jeu : Rouge, Bleu, Jaune...).</summary>
+    Generation,
+    /// <summary>Par pourcentage dans le mode affiché ; à égalité, dans l'ordre des jeux.</summary>
+    Completion,
+}
+
 /// <summary>Un jeu de living dex : nom, jaquette, sprites, et Pokémon de chaque mode.</summary>
 /// <param name="Cover">Jaquette officielle (outils/images.py, partie « livingdex »).</param>
 /// <param name="SpriteFolder">
@@ -1114,6 +1123,32 @@ public static class LivingDexGames
         "complet" => LivingDexMode.Complete,
         _ => LivingDexMode.National,
     };
+
+    /// <summary>
+    /// Cartes triées. Par génération : l'ordre des jeux, ou son exact inverse (Violet, Écarlate... Rouge). Par
+    /// complétion : le pourcentage dans le mode de chaque carte (celui affiché, le National pour « National seul »), du
+    /// plus petit au plus grand ou l'inverse, et à égalité toujours dans l'ordre des jeux.
+    /// </summary>
+    public static List<LivingDexSummary> Sort(IEnumerable<LivingDexSummary> dexes, LivingDexSort sort, bool descending)
+    {
+        var byGame = dexes.OrderBy(d => d.Game.Game).ToList();
+        if (sort == LivingDexSort.Generation)
+        {
+            if (descending)
+                byGame.Reverse();
+            return byGame;
+        }
+        // Comparaison exacte des fractions (owned / total), sans arrondi : 1 / 3 avant 34 / 100.
+        Comparison<LivingDexSummary> completion = (a, b) =>
+            ((long)a.Owned * Math.Max(b.Total, 1)).CompareTo((long)b.Owned * Math.Max(a.Total, 1));
+        return [.. byGame.Order(Comparer<LivingDexSummary>.Create((a, b) => descending ? completion(b, a) : completion(a, b)))];
+    }
+
+    /// <summary>Tri dans l'adresse (?tri=completion) ; celui par génération n'y figure pas (null), c'est le tri par défaut.</summary>
+    public static string? SortSlug(LivingDexSort sort) => sort == LivingDexSort.Completion ? "completion" : null;
+
+    /// <summary>Tri lu dans l'adresse ; absent ou inconnu : par génération.</summary>
+    public static LivingDexSort SortFromSlug(string? slug) => slug == "completion" ? LivingDexSort.Completion : LivingDexSort.Generation;
 
     /// <summary>
     /// Progression affichée dans les barres, avec une décimale arrondie vers le bas : « 57,3 % » ; 100 % seulement quand
