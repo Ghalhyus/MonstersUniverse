@@ -445,7 +445,7 @@ est refusée **en entière** avec un message qui chiffre le manque : dépôt dan
 puis à la validation), ajout ou mise à jour d'une sauvegarde stockée. Ce qui réduit la collection n'est jamais bloqué :
 un compte au-dessus de sa limite garde tout, mais ne peut plus rien ajouter.
 
-« Agrandir » (page « Ma collection ») achète des lots de 100 emplacements pour 10 000 ₽ avec le porte-monnaie ;
+« Agrandir » (page « Ma collection ») achète des lots de 50 emplacements pour 10 000 ₽ avec le porte-monnaie ;
 l'achat apparaît dans le journal de l'inventaire. Valeurs dans `Services/CollectionCapacity.cs`.
 
 Lors d'un retrait, PKHeX convertit le Pokémon au format du jeu si possible (ex. PK4 → PK5) et refuse ce qui

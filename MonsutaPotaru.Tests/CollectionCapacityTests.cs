@@ -152,13 +152,13 @@ public sealed class CollectionCapacityTests : IDisposable
 
         var result = await _inventory.BuyCollectionSlotsAsync("sacha", 2);
         Assert.True(result.Ok, result.Message);
-        Assert.Equal((1_200, 5_000L), (result.Limit, result.Balance));
-        Assert.Equal(1_200, (await _bank.GetUsageAsync("sacha")).Limit);
+        Assert.Equal((1_100, 5_000L), (result.Limit, result.Balance)); // 2 lots de 50 emplacements à 10 000 ₽
+        Assert.Equal(1_100, (await _bank.GetUsageAsync("sacha")).Limit);
         Assert.Equal(5_000, await _inventory.GetBalanceAsync("sacha"));
 
         var op = Assert.Single(await _inventory.ListOperationsAsync("sacha"));
         Assert.Equal((WalletOperationKind.BuyCollectionSlots, -20_000L, 5_000L), (op.Kind, op.Amount, op.BalanceAfter));
-        Assert.Contains("1 200", op.Details.Replace(' ', ' ').Replace(' ', ' '));
+        Assert.Contains("1 100", op.Details.Replace(' ', ' ').Replace(' ', ' '));
     }
 
     [Theory]

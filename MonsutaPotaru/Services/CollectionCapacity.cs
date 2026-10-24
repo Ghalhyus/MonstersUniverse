@@ -19,7 +19,7 @@ public readonly record struct CollectionUsage(int Used, int Limit)
 public static class CollectionCapacity
 {
     public const int DefaultLimit = 1000;
-    public const int SlotsPerLot = 100;
+    public const int SlotsPerLot = 50;
     public const long LotPrice = 10_000;
 
     private static readonly CultureInfo French = CultureInfo.GetCultureInfo("fr-FR");

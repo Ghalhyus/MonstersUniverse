@@ -19,6 +19,8 @@
                 <span class="text-muted ms-1">(@(Pending > 0 ? "+" : "−")@Math.Abs(Pending) en attente)</span>
             }
         </span>
+        @* Juste à droite du nombre d'emplacements occupés. *@
+        <button class="btn btn-sm btn-outline-primary" @onclick="OpenPurchase">Agrandir</button>
         @if (projected > Usage.Limit)
         {
             <span class="text-danger">· limite dépassée : plus aucun ajout possible</span>
@@ -27,7 +29,6 @@
         {
             <span class="text-danger">· collection pleine</span>
         }
-        <button class="btn btn-sm btn-outline-primary ms-auto" @onclick="OpenPurchase">Agrandir</button>
     </div>
     <div class="progress" role="progressbar" aria-label="Emplacements utilisés" aria-valuenow="@projected" aria-valuemin="0" aria-valuemax="@Usage.Limit">
         <div class="progress-bar @(percent >= 100 ? "bg-danger" : percent >= 90 ? "bg-warning" : "")" style="width: @(percent)%"></div>
