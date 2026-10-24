@@ -38,8 +38,9 @@ Ce fichier ne garde que ce que le README ne dit pas.
 
 ## CI/CD
 
-`.github/workflows/ci-cd.yml` (README, « CI/CD ») : tests sur Ubuntu à chaque push, déploiement par le bouton « Run
-workflow ». Le CLI `gh` n'est pas installé : les résultats de GitHub ne sont pas lisibles d'ici, l'utilisateur copie le
+`.github/workflows/ci.yml` et `cd.yml` (README, « CI/CD »), séparés : tests sur Ubuntu à chaque push ; déploiement par
+le bouton « Run workflow » de « CD », qui ne relance pas les tests mais lit le résultat de la CI du commit (case
+« Forcer » pour passer outre). Le CLI `gh` n'est pas installé : les résultats de GitHub ne sont pas lisibles d'ici, l'utilisateur copie le
 message d'un échec. Les tests y tournent sous **Linux** : noms de fichiers sensibles à la casse, séparateur `/`, culture
 `fr-FR` par ICU. Un nouveau fichier nécessaire au déploiement s'ajoute à l'archive des deux côtés (`publier.ps1` et le
 workflow).
@@ -108,7 +109,7 @@ tests créent la base avec `EnsureCreated`, sans passer par les migrations.
 rempli à chaque déploiement de la CI/CD et par `deploy\images-serveur.cmd`), copiées en local par `outils\recuperer-images.cmd` (SSH), servies depuis le disque
 par `UseStaticFiles` (`Program.cs` ; `MapStaticAssets` ne connaît que les fichiers de la compilation, d'où aussi
 `Content Remove` dans le `.csproj`). Ne jamais les remettre dans Git. Un nouveau type d'image : l'ajouter à
-`outils/images.py` : le prochain déploiement (« Run workflow ») les télécharge sur le VPS, après les tests ; les tests
+`outils/images.py` : le prochain déploiement (« Run workflow » de « CD ») les télécharge sur le VPS ; les tests
 d'images existants exigent qu'elles soient là (`WebRootWithImages`).
 
 Servies par le site, plus rien n'est chargé depuis GitHub : `wwwroot/images/pokemon/<numéro d'espèce>.png`,
@@ -204,8 +205,8 @@ suivante), sans lister les dossiers des dépôts.
   dex pour l'instant. Une sauvegarde Écarlate / Violet vide n'est pas reconnue par `SaveUtil`, et l'utilisateur n'en a
   pas déposé : les images ont été vérifiées par un test temporaire (`PokemonSprites.Load(RealSavesTests.WebRootWithImages())`,
   chaque case a son image, présente), pas dans le navigateur.
-- Les tests ne doivent **pas** exiger ces images : la CI les copie depuis le VPS, qui ne les reçoit qu'au déploiement,
-  après les tests. Une nouvelle image : tester son chemin, pas sa présence.
+- Les tests ne doivent **pas** exiger ces images : la CI les copie depuis le VPS, qui ne les reçoit qu'au déploiement
+  (CD), lancé après la CI du commit. Une nouvelle image : tester son chemin, pas sa présence.
 - Jaquettes : Bulbagarden Archives (API MediaWiki, version réduite `iiurlwidth=480`). Sur ce PC, Python refuse son
   certificat (« certificate has expired ») à cause du magasin de certificats de Windows, pas du site : sur le VPS (Debian)
   ça passe. Pour les avoir en local, `outils\recuperer-images.cmd`, ou un contexte SSL avec `cafile` (paquet de Git :

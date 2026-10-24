@@ -1,0 +1,53 @@
+# Intégration continue de Monsuta Potaru (README, section « CI/CD ») : les tests, à chaque push, sur une machine Ubuntu
+# propre. Les images (hors du dépôt) sont copiées depuis le VPS. Le déploiement est à part (cd.yml) : il lit le
+# résultat de ce workflow sur son commit, sans relancer les tests.
+# Dépôt public : les journaux des Actions sont visibles de tous, n'y afficher ni secret ni donnée du site.
+# Secrets du dépôt : VPS_HOST (adresse IP), VPS_USER (debian), VPS_SSH_KEY (clé privée réservée à GitHub),
+# VPS_KNOWN_HOSTS (empreinte du serveur, ssh-keyscan).
+name: CI
+
+on:
+  push:
+  workflow_dispatch: # relancer les tests à la main, sans nouveau commit
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Accès SSH au VPS
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+        run: |
+          if [ -z "$VPS_SSH_KEY" ] || [ -z "$VPS_KNOWN_HOSTS" ] || [ -z "$VPS_HOST" ] || [ -z "$VPS_USER" ]; then
+            echo "::error::Secrets VPS_HOST, VPS_USER, VPS_SSH_KEY ou VPS_KNOWN_HOSTS manquants : voir la section « CI/CD » du README."
+            exit 1
+          fi
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      # Images des Pokémon, objets et sprites Donjon Mystère : exigées par les tests d'images (comme outils\recuperer-images.cmd).
+      - name: Images (depuis le VPS)
+        env:
+          CIBLE: ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}
+        run: |
+          mkdir -p MonsutaPotaru/wwwroot/images
+          ssh -o BatchMode=yes "$CIBLE" 'tar -czf - -C ~/monsuta-potaru-images .' > "$RUNNER_TEMP/images.tgz"
+          tar -xzf "$RUNNER_TEMP/images.tgz" -C MonsutaPotaru/wwwroot/images
+          echo "$(find MonsutaPotaru/wwwroot/images -type f | wc -l) images récupérées"
+
+      - name: Tests
+        run: dotnet test MonsutaPotaru.Tests/MonsutaPotaru.Tests.csproj

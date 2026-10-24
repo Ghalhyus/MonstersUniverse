@@ -1,33 +1,61 @@
-# Intégration et déploiement continus de Monsuta Potaru (mise en place : README, section « CI/CD »).
-# - Tests : à chaque push, sur une machine Ubuntu propre. Les images (hors du dépôt) sont copiées depuis le VPS.
-# - Déploiement : bouton « Run workflow » de l'onglet Actions, sur main seulement, si les tests passent. Sauvegarde des
-#   données, envoi du code (même archive que deploy\publier.ps1), images manquantes (outils/images.py, comme
-#   deploy\images-serveur.cmd), reconstruction Docker, puis vérification que le site répond.
+# Déploiement continu de Monsuta Potaru (README, section « CI/CD ») : bouton « Run workflow » de l'onglet Actions, sur
+# main seulement. Il ne relance pas les tests : il lit le résultat de la CI (ci.yml) déjà passée sur ce commit, et
+# refuse de déployer si elle a échoué, n'a pas fini ou n'a pas tourné (case « Forcer » pour passer outre). Puis
+# sauvegarde des données, envoi du code (même archive que deploy\publier.ps1), images manquantes (outils/images.py,
+# comme deploy\images-serveur.cmd), reconstruction Docker, et vérification que le site répond.
 # Dépôt public : les journaux des Actions sont visibles de tous, n'y afficher ni secret ni donnée du site.
 # Secrets du dépôt : VPS_HOST (adresse IP), VPS_USER (debian), VPS_SSH_KEY (clé privée réservée à GitHub),
 # VPS_KNOWN_HOSTS (empreinte du serveur, ssh-keyscan).
-name: CI/CD
+name: CD
 
 on:
-  push:
   workflow_dispatch:
+    inputs:
+      forcer:
+        description: "Forcer : déployer même si la CI de ce commit a échoué ou n'a pas fini"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
+  actions: read # lire le résultat de la CI
 
 env:
   DOSSIER: monsuta-potaru # dossier du site sur le VPS (comme publier.ps1)
 
 jobs:
-  tests:
-    name: Tests
+  deploiement:
+    name: Déploiement
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    environment: production
+    concurrency:
+      group: deploiement-production # jamais deux déploiements à la fois
+      cancel-in-progress: false
     steps:
-      - uses: actions/checkout@v7
+      # Dernière exécution de la CI sur ce commit (gh est installé sur les machines de GitHub).
+      - name: Résultat de la CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FORCER: ${{ inputs.forcer }}
+        run: |
+          resultat=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$GITHUB_SHA&per_page=1" \
+            --jq '.workflow_runs[0] | if . == null then "absente" elif .status != "completed" then "en cours" else .conclusion end')
+          commit=${GITHUB_SHA::7}
+          case "$resultat" in
+            success) echo "CI réussie sur $commit : déploiement." ; exit 0 ;;
+            absente) message="Aucune CI sur $commit." ;;
+            "en cours") message="La CI de $commit n'a pas encore fini : attends son résultat." ;;
+            *) message="La CI de $commit a échoué ($resultat)." ;;
+          esac
+          if [ "$FORCER" = "true" ]; then
+            echo "::warning title=CI::$message Déploiement forcé."
+          else
+            echo "::error title=CI::$message Déploiement annulé (coche « Forcer » pour déployer quand même)."
+            exit 1
+          fi
 
-      - uses: actions/setup-dotnet@v6
-        with:
-          dotnet-version: 9.0.x
+      - uses: actions/checkout@v7
 
       - name: Accès SSH au VPS
         env:
@@ -40,40 +68,6 @@ jobs:
             echo "::error::Secrets VPS_HOST, VPS_USER, VPS_SSH_KEY ou VPS_KNOWN_HOSTS manquants : voir la section « CI/CD » du README."
             exit 1
           fi
-          install -m 700 -d ~/.ssh
-          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
-          printf '%s\n' "$VPS_KNOWN_HOSTS" > ~/.ssh/known_hosts
-
-      # Images des Pokémon, objets et sprites Donjon Mystère : exigées par les tests d'images (comme outils\recuperer-images.cmd).
-      - name: Images (depuis le VPS)
-        env:
-          CIBLE: ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}
-        run: |
-          mkdir -p MonsutaPotaru/wwwroot/images
-          ssh -o BatchMode=yes "$CIBLE" 'tar -czf - -C ~/monsuta-potaru-images .' > "$RUNNER_TEMP/images.tgz"
-          tar -xzf "$RUNNER_TEMP/images.tgz" -C MonsutaPotaru/wwwroot/images
-          echo "$(find MonsutaPotaru/wwwroot/images -type f | wc -l) images récupérées"
-
-      - name: Tests
-        run: dotnet test MonsutaPotaru.Tests/MonsutaPotaru.Tests.csproj
-
-  deploiement:
-    name: Déploiement
-    needs: tests
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    environment: production
-    concurrency:
-      group: deploiement-production # jamais deux déploiements à la fois
-      cancel-in-progress: false
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Accès SSH au VPS
-        env:
-          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
-          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
-        run: |
           install -m 700 -d ~/.ssh
           printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
           printf '%s\n' "$VPS_KNOWN_HOSTS" > ~/.ssh/known_hosts
