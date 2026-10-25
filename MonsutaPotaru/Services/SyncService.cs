@@ -310,7 +310,7 @@ public sealed class SyncService(
             .FirstOrDefaultAsync();
         if (stored is null)
             return new(SyncCompareVerdict.Refused, "Cette sauvegarde n'existe plus sur le site.", Refusal: SyncCompareRefusal.Missing);
-        if (SaveModification.Hash(stored.Data) == SaveModification.Hash(local))
+        if (SaveModification.Hash(stored.Data) == SaveModification.Hash(local) || SameGameBoyMemory(stored.Data, local))
             return new(SyncCompareVerdict.UpToDate, "Identique à celle du site : rien à récupérer.");
         if (!StoredSaveService.TryRead(local, "", out var sav))
             return new(SyncCompareVerdict.Refused, "Le fichier de la console n'est pas une sauvegarde Pokémon reconnue : il ne sera pas écrasé.",
@@ -338,6 +338,18 @@ public sealed class SyncService(
                 changes is null ? "Même temps de jeu, mais contenu différent de celui du site." : $"{Capitalize(changes)} a modifié cette partie sur le site.",
                 modification is not null);
         return new(SyncCompareVerdict.Retrievable, $"Plus avancée sur le site ({onConsole} → {site}).", modification is not null);
+    }
+
+    /// <summary>
+    /// Deux sauvegardes Game Boy dont la mémoire du jeu (les 32 premiers Ko) est identique : l'une vient d'un émulateur,
+    /// qui ajoute quelques octets à la fin (32 792 octets pour une Rouge), l'autre de la Console virtuelle (32 Ko tout
+    /// juste), où la console n'écrit que ces 32 Ko.
+    /// </summary>
+    public static bool SameGameBoyMemory(byte[] a, byte[] b)
+    {
+        const int memory = 0x8000;
+        static bool GameBoySize(int length) => length is >= memory and <= 0x8100;
+        return GameBoySize(a.Length) && GameBoySize(b.Length) && a.AsSpan(0, memory).SequenceEqual(b.AsSpan(0, memory));
     }
 
     /// <summary>

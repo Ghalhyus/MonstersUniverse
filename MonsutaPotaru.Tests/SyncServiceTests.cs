@@ -266,6 +266,23 @@ public sealed class SyncServiceTests : IDisposable
         Assert.Null(await _sync.DownloadAsync(await Linked("ondine"), id, null)); // pas son compte
     }
 
+    [Fact]
+    public async Task Compare_AnEmulatorGameBoySave_WithTheConsoleOne_IsUpToDate()
+    {
+        var console = await Linked();
+        var emulator = File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Sauvegardes", "rouge.sav"));
+        Assert.Equal(0x8018, emulator.Length); // 32 Ko + 24 octets de l'émulateur
+        Assert.True((await _saves.AddAsync("sacha", "rouge.sav", emulator)).Ok);
+        var id = Assert.Single(await _saves.ListAsync("sacha")).Id;
+
+        // Ce que la console a écrit dans le jeu de la Console virtuelle : la mémoire du jeu seule.
+        var virtualConsole = emulator[..0x8000];
+        Assert.Equal(SyncCompareVerdict.UpToDate, (await _sync.CompareAsync(console, id, virtualConsole)).Verdict);
+
+        virtualConsole[0x100] ^= 0xFF; // un octet de la mémoire du jeu qui change : plus identique
+        Assert.NotEqual(SyncCompareVerdict.UpToDate, (await _sync.CompareAsync(console, id, virtualConsole)).Verdict);
+    }
+
     [Theory]
     [InlineData("rouge.sav", "gb", "RB")]
     [InlineData("bleu.sav", "gb", "RB")]

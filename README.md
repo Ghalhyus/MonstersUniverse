@@ -138,7 +138,8 @@ avec « Mes sauvegardes » (ouvert de lui-même sur l'une des deux pages) :
   fichier actuel, temps de jeu, modifiée sur le serveur, console d'origine et jeu précis pour y trouver une ROM, emplacements
   connus sur cette console). Avant de remplacer sa sauvegarde, elle la fait **comparer** par le site (PKHeX) :
   refusé si ce n'est pas la même partie (autre dresseur) ou si celle de la console a **plus de temps de jeu** (sa
-  progression serait perdue) ; identique : « à jour » ; même temps de jeu mais contenu différent (retrait d'argent,
+  progression serait perdue) ; identique (en Game Boy : même mémoire du jeu, les 32 premiers Ko, une sauvegarde d'émulateur ayant quelques octets
+  de plus, `SyncService.SameGameBoyMemory`) : « à jour » ; même temps de jeu mais contenu différent (retrait d'argent,
   transfert d'objets du site) ou moins de temps de jeu : récupérable. Le téléchargement par la console vaut
   « Télécharger » (lève le blocage de « Mettre à jour ») et note l'emplacement où elle l'écrit. Cas sans issue pour
   l'instant : la console a joué **après** une modification du site sans la récupérer (envoi refusé, récupération aussi).
