@@ -132,7 +132,16 @@ avec « Mes sauvegardes » (ouvert de lui-même sur l'une des deux pages) :
   version exacte du jeu), seul le nom de la sauvegarde stockée change. Rien n'est jamais forcé : moins de
   temps de jeu, partie modifiée sur le serveur et pas encore téléchargée, partie d'un autre compte, collection pleine sont
   refusés avec le message du site, que la console affiche. Le nom de fichier envoyé est nettoyé (sans dossier, 100
-  caractères au plus).
+  caractères au plus). L'emplacement du fichier sur la console (`cle`) est noté à chaque envoi réussi (table
+  `SyncSaveLocations`, une sauvegarde stockée par fichier et par console ; supprimé avec la console ou la sauvegarde).
+- **Récupération** (« Récupérer » sur la console) : la console liste les sauvegardes stockées du compte (empreinte du
+  fichier actuel, temps de jeu, modifiée sur le serveur, console d'origine et jeu précis pour y trouver une ROM, emplacements
+  connus sur cette console). Avant de remplacer sa sauvegarde, elle la fait **comparer** par le site (PKHeX) :
+  refusé si ce n'est pas la même partie (autre dresseur) ou si celle de la console a **plus de temps de jeu** (sa
+  progression serait perdue) ; identique : « à jour » ; même temps de jeu mais contenu différent (retrait d'argent,
+  transfert d'objets du site) ou moins de temps de jeu : récupérable. Le téléchargement par la console vaut
+  « Télécharger » (lève le blocage de « Mettre à jour ») et note l'emplacement où elle l'écrit. Cas sans issue pour
+  l'instant : la console a joué **après** une modification du site sans la récupérer (envoi refusé, récupération aussi).
 
 API (JSON, messages en français prêts à afficher ; `MonsutaPotaru/Api/SyncEndpoints.cs`) :
 
@@ -140,9 +149,12 @@ API (JSON, messages en français prêts à afficher ; `MonsutaPotaru/Api/SyncEnd
 |---|---|
 | `POST /api/sync/liaison` `{"code", "nom"}` | `{"jeton", "compte", "message"}` ; 400 si le code est faux ou expiré, 429 au-delà de 10 essais par minute depuis la même adresse IP (celle transmise par Caddy) |
 | `GET /api/sync/compte` | `{"compte", "console"}` : vérifie le jeton |
-| `POST /api/sync/sauvegardes?fichier=nom.sav`, corps = fichier brut (4 Mo au plus) | `{"statut", "raison", "message"}` ; `statut` : `ajoutee`, `mise-a-jour`, `inchangee` ou `refusee` (`raison` : `StoreStatus`) |
+| `POST /api/sync/sauvegardes?fichier=nom.sav&cle=...`, corps = fichier brut (4 Mo au plus) | `{"statut", "raison", "message"}` ; `statut` : `ajoutee`, `mise-a-jour`, `inchangee` ou `refusee` (`raison` : `StoreStatus`) |
+| `GET /api/sync/sauvegardes` | `{"sauvegardes": [{"id", "jeu", "dresseur", "idDresseur", "fichier", "empreinte", "tempsDeJeu", "modifieeSurSite", "console", "famille", "cles"}]}` ; `console` : `3ds`, `ds`, `gba`, `gb` ou `autre` ; `famille` en DS : `DP`, `Pt`, `HGSS`, `B`, `W`, `BW`, `B2`, `W2`, `B2W2` (`SyncService.DescribeForConsole`) |
+| `POST /api/sync/sauvegardes/{id}/comparer`, corps = sauvegarde de la console | `{"verdict", "modifieeSurSite", "message"}` ; `verdict` : `recuperable`, `a-jour` ou `refusee` |
+| `GET /api/sync/sauvegardes/{id}?cle=...` | Fichier brut de la version du site (404 si elle n'existe plus) |
 
-Les deux dernières demandent `Authorization: Bearer <jeton>` (401 sinon, jeton inconnu ou console retirée).
+Toutes sauf la liaison demandent `Authorization: Bearer <jeton>` (401 sinon, jeton inconnu ou console retirée).
 
 ### Filtres de « Ma collection »
 
@@ -510,7 +522,7 @@ est incompatible (espèce, attaques ou objets inexistants dans le jeu, conversio
 | `MonsutaPotaru/Components/Pages/Collection.razor` | Toute la collection sur une page (chargée au fil du défilement), filtres en pastilles (`Shared/CollectionFilterChips.razor`), filtre par origine, tri par arrivée (les plus récents d'abord, par défaut), par nom d'espèce ou par numéro de Pokédex (croissants), inversable, gardé dans l'adresse (`?tri=nom&ordre=desc`) ; les œufs toujours à la fin (leur espèce reste cachée), à égalité les plus récents d'abord ; le tri par nom ignore les accents (colonne `SortName`, remplie au démarrage pour les Pokémon plus anciens) ; 5 / 10 / 15 / 20 colonnes par défaut selon la largeur de la fenêtre en pixels physiques (téléphone, jusqu'à 1920, jusqu'à 2560, au-delà ; mise à l'échelle de Windows comprise), recalculées au redimensionnement, modifiables au curseur |
 | `MonsutaPotaru/Components/Pages/Saves.razor` | Gestion des sauvegardes stockées (ajout, mise à jour, suppression) |
 | `MonsutaPotaru/Components/Pages/Sync3ds.razor` | « Synchronisation 3DS » : consoles reliées (code de liaison, attente de la console, retrait) |
-| `MonsutaPotaru/Services/SyncService.cs` | Synchronisation 3DS : codes de liaison, jetons, envoi d'une sauvegarde (ajout, mise à jour ou « déjà à jour ») |
+| `MonsutaPotaru/Services/SyncService.cs` | Synchronisation 3DS : codes de liaison, jetons, envoi d'une sauvegarde (ajout, mise à jour ou « déjà à jour »), emplacements sur la console, liste, comparaison et téléchargement pour « Récupérer » |
 | `MonsutaPotaru/Api/SyncEndpoints.cs` | API du homebrew PokeBank Sync (`/api/sync/...`) et limite d'essais de codes |
 | `MonsutaPotaru/Services/StoredSaveService.cs` | Stockage, mise à jour et suppression des sauvegardes stockées |
 | `MonsutaPotaru/Services/SaveIdentity.cs` | Empreinte d'une sauvegarde (unicité sur le serveur) |
@@ -531,7 +543,7 @@ est incompatible (espèce, attaques ou objets inexistants dans le jeu, conversio
 | `outils/images.py` | Rassemble ces images (PokéAPI ; pour les objets, puis pokesprite et PKHeX par numéro d'objet) ; à relancer pour en ajouter |
 | `MonsutaPotaru/Data/BankPokemon.cs` | Table des Pokémon (octets bruts + métadonnées ; `StoredSaveId` si lecture seule) |
 | `MonsutaPotaru/Data/StoredSave.cs` | Table des sauvegardes stockées |
-| `MonsutaPotaru/Data/SyncDevice.cs` | Tables des consoles 3DS reliées (empreinte du jeton) et des codes de liaison |
+| `MonsutaPotaru/Data/SyncDevice.cs` | Tables des consoles 3DS reliées (empreinte du jeton), des emplacements des sauvegardes sur chaque console et des codes de liaison |
 | `MonsutaPotaru/Data/Wallet.cs` | Tables du porte-monnaie et du journal des opérations |
 | `MonsutaPotaru/Data/OwnedItem.cs` | Table des objets de l'inventaire (objets, Pokéballs, médicaments, baies ; CT/DT sous une clé de capacité, `SaveBag.MachineKey`) |
 

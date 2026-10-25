@@ -12,9 +12,14 @@ namespace MonsutaPotaru.Api;
 /// <item><c>POST /api/sync/liaison</c> <c>{"code", "nom"}</c> → <c>{"jeton", "compte", "message"}</c> : échange le code de
 /// « Synchronisation 3DS » contre un jeton longue durée.</item>
 /// <item><c>GET /api/sync/compte</c> → <c>{"compte", "console"}</c> : vérifie le jeton.</item>
-/// <item><c>POST /api/sync/sauvegardes?fichier=nom.sav</c>, corps = fichier brut → <c>{"statut", "raison", "message"}</c>.</item>
+/// <item><c>POST /api/sync/sauvegardes?fichier=nom.sav&amp;cle=...</c>, corps = fichier brut → <c>{"statut", "raison", "message"}</c>
+/// (<c>cle</c> : emplacement du fichier sur la console, noté pour la récupération).</item>
+/// <item><c>GET /api/sync/sauvegardes</c> → <c>{"sauvegardes": [...]}</c> : sauvegardes stockées du compte, pour « Récupérer ».</item>
+/// <item><c>POST /api/sync/sauvegardes/{id}/comparer</c>, corps = sauvegarde de la console → <c>{"verdict", "modifieeSurSite",
+/// "message"}</c> : peut-elle être remplacée par celle du site ?</item>
+/// <item><c>GET /api/sync/sauvegardes/{id}?cle=...</c> → fichier brut de la version du site.</item>
 /// </list>
-/// Les deux derniers demandent <c>Authorization: Bearer &lt;jeton&gt;</c> (401 sinon). Un refus métier (partie d'un autre
+/// Toutes sauf la liaison demandent <c>Authorization: Bearer &lt;jeton&gt;</c> (401 sinon). Un refus métier (partie d'un autre
 /// compte, moins de temps de jeu...) répond 200 avec <c>"statut": "refusee"</c> : seul le message compte pour la console.
 /// </summary>
 public static class SyncEndpoints
@@ -50,6 +55,26 @@ public static class SyncEndpoints
         [property: JsonPropertyName("message")] string Message);
 
     public sealed record ErrorResponse([property: JsonPropertyName("message")] string Message);
+
+    public sealed record SaveEntryResponse(
+        [property: JsonPropertyName("id")] int Id,
+        [property: JsonPropertyName("jeu")] string Game,
+        [property: JsonPropertyName("dresseur")] string Trainer,
+        [property: JsonPropertyName("idDresseur")] string TrainerId,
+        [property: JsonPropertyName("fichier")] string FileName,
+        [property: JsonPropertyName("empreinte")] string Hash,
+        [property: JsonPropertyName("tempsDeJeu")] int PlayTimeSeconds,
+        [property: JsonPropertyName("modifieeSurSite")] bool ModifiedOnServer,
+        [property: JsonPropertyName("console")] string Console,
+        [property: JsonPropertyName("famille")] string Family,
+        [property: JsonPropertyName("cles")] IReadOnlyList<string> Keys);
+
+    public sealed record SaveListResponse([property: JsonPropertyName("sauvegardes")] IReadOnlyList<SaveEntryResponse> Saves);
+
+    public sealed record CompareResponse(
+        [property: JsonPropertyName("verdict")] string Verdict,
+        [property: JsonPropertyName("modifieeSurSite")] bool ModifiedOnServer,
+        [property: JsonPropertyName("message")] string Message);
 
     public static IServiceCollection AddSyncRateLimits(this IServiceCollection services) =>
         services.AddRateLimiter(options =>
@@ -88,7 +113,7 @@ public static class SyncEndpoints
                 : Unauthorized());
 
         api.MapPost("/sauvegardes", async (HttpRequest http, [FromQuery(Name = "fichier")] string? fileName,
-                SyncService sync, ILogger<SyncService> logger) =>
+                [FromQuery(Name = "cle")] string? key, SyncService sync, ILogger<SyncService> logger) =>
             {
                 if (await sync.AuthenticateAsync(BearerToken(http)) is not { } caller)
                     return Unauthorized();
@@ -100,7 +125,7 @@ public static class SyncEndpoints
 
                 try
                 {
-                    var result = await sync.UploadAsync(caller, fileName, data);
+                    var result = await sync.UploadAsync(caller, fileName, data, key);
                     return Results.Ok(new UploadResponse(StatusName(result.Status), result.Refusal?.ToString(), result.Message));
                 }
                 catch (Exception ex) // copie de sécurité impossible, base indisponible... : la console affiche le message
@@ -109,6 +134,50 @@ public static class SyncEndpoints
                     return Results.Json(new ErrorResponse("Erreur du serveur : réessaie plus tard."), statusCode: StatusCodes.Status500InternalServerError);
                 }
             });
+
+        api.MapGet("/sauvegardes", async (HttpRequest http, SyncService sync) =>
+        {
+            if (await sync.AuthenticateAsync(BearerToken(http)) is not { } caller)
+                return Unauthorized();
+            var saves = await sync.ListForDeviceAsync(caller);
+            return Results.Ok(new SaveListResponse(saves.Select(s => new SaveEntryResponse(s.Id, s.Game, s.Trainer, s.TrainerId,
+                s.FileName, s.Hash, s.PlayTimeSeconds, s.ModifiedOnServer, s.Console, s.Family, s.Keys)).ToList()));
+        });
+
+        api.MapPost("/sauvegardes/{id:int}/comparer", async (HttpRequest http, int id, SyncService sync) =>
+        {
+            if (await sync.AuthenticateAsync(BearerToken(http)) is not { } caller)
+                return Unauthorized();
+            if (await ReadBodyAsync(http) is not { } data)
+                return Results.Json(new ErrorResponse($"Fichier trop gros (plus de {MaxSaveBytes / (1024 * 1024)} Mo) : ce n'est pas une sauvegarde Pokémon."),
+                    statusCode: StatusCodes.Status413PayloadTooLarge);
+            var result = await sync.CompareAsync(caller, id, data);
+            var verdict = result.Verdict switch
+            {
+                SyncCompareVerdict.Retrievable => "recuperable",
+                SyncCompareVerdict.UpToDate => "a-jour",
+                _ => "refusee",
+            };
+            return Results.Ok(new CompareResponse(verdict, result.ModifiedOnServer, result.Message));
+        });
+
+        api.MapGet("/sauvegardes/{id:int}", async (HttpRequest http, int id, [FromQuery(Name = "cle")] string? key,
+            SyncService sync, ILogger<SyncService> logger) =>
+        {
+            if (await sync.AuthenticateAsync(BearerToken(http)) is not { } caller)
+                return Unauthorized();
+            try
+            {
+                return await sync.DownloadAsync(caller, id, key) is { } file
+                    ? Results.File(file.Data, "application/octet-stream")
+                    : Results.Json(new ErrorResponse("Cette sauvegarde n'existe plus sur le site."), statusCode: StatusCodes.Status404NotFound);
+            }
+            catch (Exception ex) // modifiée au même moment (retrait depuis le site), base indisponible...
+            {
+                logger.LogError(ex, "Récupération de la sauvegarde {Id} par la 3DS {Device} impossible.", id, caller.DeviceId);
+                return Results.Json(new ErrorResponse("Erreur du serveur : réessaie plus tard."), statusCode: StatusCodes.Status500InternalServerError);
+            }
+        });
 
         return app;
     }

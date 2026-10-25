@@ -14,6 +14,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<ParkMember> ParkMembers => Set<ParkMember>();
     public DbSet<SyncDevice> SyncDevices => Set<SyncDevice>();
     public DbSet<SyncPairingCode> SyncPairingCodes => Set<SyncPairingCode>();
+    public DbSet<SyncSaveLocation> SyncSaveLocations => Set<SyncSaveLocation>();
     public DbSet<LivingDex> LivingDexes => Set<LivingDex>();
 
     protected override void OnModelCreating(ModelBuilder builder)
@@ -72,6 +73,15 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             e.HasIndex(d => d.TokenHash).IsUnique(); // la console est retrouvée par son jeton
             e.HasIndex(d => d.OwnerId);
             e.HasOne(d => d.Owner).WithMany().HasForeignKey(d => d.OwnerId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<SyncSaveLocation>(e =>
+        {
+            e.HasIndex(l => new { l.DeviceId, l.Key }).IsUnique(); // un fichier de la console = une sauvegarde stockée
+            e.HasIndex(l => l.StoredSaveId);
+            // Console retirée ou sauvegarde supprimée : l'emplacement ne veut plus rien dire.
+            e.HasOne(l => l.Device).WithMany().HasForeignKey(l => l.DeviceId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(l => l.StoredSave).WithMany().HasForeignKey(l => l.StoredSaveId).OnDelete(DeleteBehavior.Cascade);
         });
 
         builder.Entity<LivingDex>(e =>

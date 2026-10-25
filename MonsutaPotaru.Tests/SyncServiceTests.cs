@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using PKHeX.Core;
+using MonsutaPotaru.Data;
 using MonsutaPotaru.Services;
 
 namespace MonsutaPotaru.Tests;
@@ -179,6 +180,102 @@ public sealed class SyncServiceTests : IDisposable
         var name = SyncService.CleanFileName(new string('a', 300) + ".sav");
         Assert.Equal(SyncService.MaxFileNameLength, name.Length);
         Assert.EndsWith(".sav", name);
+    }
+
+    // --- Récupération depuis la console ---------------------------------------------------------------------------
+
+    private const string Cle = "sd:sdmc:/saves/Pokemon - Version Noire 2.sav";
+
+    [Fact]
+    public async Task Upload_RecordsWhereTheFileIs_ForThisConsoleOnly()
+    {
+        var console = await Linked();
+        var other = await Linked(name: "Autre 3DS");
+        var data = Save(box: [25]);
+        Assert.Equal(SyncUploadStatus.Added, (await _sync.UploadAsync(console, "noire2.sav", data, Cle)).Status);
+
+        var entry = Assert.Single(await _sync.ListForDeviceAsync(console));
+        Assert.Equal([Cle], entry.Keys);
+        Assert.Equal(("ds", "B2W2"), (entry.Console, entry.Family)); // version absente d'une sauvegarde créée par PKHeX
+        Assert.Equal(SaveModification.Hash(data), entry.Hash);
+        Assert.Equal(("Ludo", "noire2.sav", 10 * 3600, false), (entry.Trainer, entry.FileName, entry.PlayTimeSeconds, entry.ModifiedOnServer));
+
+        Assert.Empty(Assert.Single(await _sync.ListForDeviceAsync(other)).Keys);
+
+        // Même fichier envoyé depuis un autre endroit (déplacé sur la carte SD) : les deux emplacements sont connus.
+        Assert.Equal(SyncUploadStatus.Unchanged, (await _sync.UploadAsync(console, "noire2.sav", data, "sd:sdmc:/roms/nds/saves/noire2.sav")).Status);
+        Assert.Equal(2, Assert.Single(await _sync.ListForDeviceAsync(console)).Keys.Count);
+
+        // Un refus ne note rien.
+        Assert.Equal(SyncUploadStatus.Refused, (await _sync.UploadAsync(console, "x.sav", new byte[0x8000], "sd:sdmc:/x.sav")).Status);
+        Assert.Equal(2, Assert.Single(await _sync.ListForDeviceAsync(console)).Keys.Count);
+    }
+
+    [Fact]
+    public async Task Compare_FollowsPlayTime_AndNeverOverwritesAnotherGame()
+    {
+        var console = await Linked();
+        Assert.True((await _saves.AddAsync("sacha", "b2.sav", Save(hours: 10, box: [25]))).Ok);
+        var id = Assert.Single(await _saves.ListAsync("sacha")).Id;
+
+        Assert.Equal(SyncCompareVerdict.UpToDate, (await _sync.CompareAsync(console, id, Save(hours: 10, box: [25]))).Verdict);
+
+        var older = await _sync.CompareAsync(console, id, Save(hours: 8, box: [25]));
+        Assert.Equal(SyncCompareVerdict.Retrievable, older.Verdict);
+        Assert.Contains("Plus avancée sur le site", older.Message);
+
+        var newer = await _sync.CompareAsync(console, id, Save(hours: 12, box: [25]));
+        Assert.Equal(SyncCompareVerdict.Refused, newer.Verdict);
+        Assert.Contains("plus avancée", newer.Message);
+
+        var otherGame = await _sync.CompareAsync(console, id, Save(ot: "Autre", box: [25]));
+        Assert.Equal(SyncCompareVerdict.Refused, otherGame.Verdict);
+        Assert.Contains("autre partie", otherGame.Message);
+
+        Assert.Equal(SyncCompareVerdict.Refused, (await _sync.CompareAsync(console, id, new byte[0x80000])).Verdict);
+        Assert.Equal(SyncCompareVerdict.Refused, (await _sync.CompareAsync(await Linked("ondine"), id, Save(hours: 8))).Verdict); // pas son compte
+    }
+
+    [Fact]
+    public async Task AfterAWithdrawal_TheOldConsoleSave_IsRetrievable_ThenDownloadUnblocksUpdates()
+    {
+        var console = await Linked();
+        var old = Save(hours: 10, money: 1000, box: [25]);
+        Assert.Equal(SyncUploadStatus.Added, (await _sync.UploadAsync(console, "b2.sav", old, Cle)).Status);
+        var id = Assert.Single(await _saves.ListAsync("sacha")).Id;
+        Assert.True((await _db.Inventory().WithdrawFromSaveAsync("sacha", id, 500)).Ok);
+
+        var entry = Assert.Single(await _sync.ListForDeviceAsync(console));
+        Assert.True(entry.ModifiedOnServer);
+        Assert.NotEqual(SaveModification.Hash(old), entry.Hash);
+
+        // Même temps de jeu, contenu différent : c'est la modification du site.
+        var compared = await _sync.CompareAsync(console, id, old);
+        Assert.Equal(SyncCompareVerdict.Retrievable, compared.Verdict);
+        Assert.True(compared.ModifiedOnServer);
+        Assert.Contains("retrait", compared.Message);
+
+        var file = await _sync.DownloadAsync(console, id, "sd:sdmc:/saves/autre-nom.sav");
+        Assert.NotNull(file);
+        Assert.Equal(entry.Hash, SaveModification.Hash(file.Value.Data));
+        Assert.False(Assert.Single(await _saves.ListAsync("sacha")).MustDownloadBeforeUpdate); // comme « Télécharger »
+        Assert.Contains("sd:sdmc:/saves/autre-nom.sav", Assert.Single(await _sync.ListForDeviceAsync(console)).Keys);
+
+        // La console a maintenant la version du site : à jour.
+        Assert.Equal(SyncCompareVerdict.UpToDate, (await _sync.CompareAsync(console, id, file.Value.Data)).Verdict);
+        Assert.Null(await _sync.DownloadAsync(await Linked("ondine"), id, null)); // pas son compte
+    }
+
+    [Fact]
+    public async Task Locations_DisappearWithTheSave()
+    {
+        var console = await Linked();
+        Assert.Equal(SyncUploadStatus.Added, (await _sync.UploadAsync(console, "b2.sav", Save(box: [25]), Cle)).Status);
+        var id = Assert.Single(await _saves.ListAsync("sacha")).Id;
+        Assert.NotNull(await _saves.DeleteAsync("sacha", id));
+
+        using var db = _db.NewContext();
+        Assert.Empty(db.SyncSaveLocations);
     }
 
     public void Dispose() => _db.Dispose();

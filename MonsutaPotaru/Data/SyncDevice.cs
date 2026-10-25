@@ -24,6 +24,27 @@ public class SyncDevice
 }
 
 /// <summary>
+/// Emplacement d'une sauvegarde stockée sur une console reliée : la clé que la console donne à ce fichier
+/// (« sd:sdmc:/saves/Pokemon - Version Noire 2.sav », « titre:0004000000055D00:1 »). Noté à chaque envoi ou récupération,
+/// pour que la console sache où remettre la version du site. Supprimé avec la console ou la sauvegarde.
+/// </summary>
+public class SyncSaveLocation
+{
+    public int Id { get; set; }
+
+    public int DeviceId { get; set; }
+    public SyncDevice? Device { get; set; }
+
+    public int StoredSaveId { get; set; }
+    public StoredSave? StoredSave { get; set; }
+
+    /// <summary>Clé de la sauvegarde sur la console (une seule sauvegarde stockée par clé et par console).</summary>
+    public string Key { get; set; } = "";
+
+    public DateTime UpdatedAt { get; set; }
+}
+
+/// <summary>
 /// Code de liaison affiché dans « Synchronisation 3DS » et tapé sur la 3DS : valable quelques minutes, une seule fois,
 /// un seul à la fois par compte (en demander un autre remplace le précédent).
 /// </summary>

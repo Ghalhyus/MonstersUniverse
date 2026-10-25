@@ -551,6 +551,35 @@ namespace MonsutaPotaru.Migrations
                     b.ToTable("SyncPairingCodes");
                 });
 
+            modelBuilder.Entity("MonsutaPotaru.Data.SyncSaveLocation", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("DeviceId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("StoredSaveId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StoredSaveId");
+
+                    b.HasIndex("DeviceId", "Key")
+                        .IsUnique();
+
+                    b.ToTable("SyncSaveLocations");
+                });
+
             modelBuilder.Entity("MonsutaPotaru.Data.Wallet", b =>
                 {
                     b.Property<string>("OwnerId")
@@ -746,6 +775,25 @@ namespace MonsutaPotaru.Migrations
                         .IsRequired();
 
                     b.Navigation("Owner");
+                });
+
+            modelBuilder.Entity("MonsutaPotaru.Data.SyncSaveLocation", b =>
+                {
+                    b.HasOne("MonsutaPotaru.Data.SyncDevice", "Device")
+                        .WithMany()
+                        .HasForeignKey("DeviceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("MonsutaPotaru.Data.StoredSave", "StoredSave")
+                        .WithMany()
+                        .HasForeignKey("StoredSaveId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Device");
+
+                    b.Navigation("StoredSave");
                 });
 
             modelBuilder.Entity("MonsutaPotaru.Data.Wallet", b =>
