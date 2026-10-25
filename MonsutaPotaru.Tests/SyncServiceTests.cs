@@ -225,14 +225,14 @@ public sealed class SyncServiceTests : IDisposable
         Assert.Contains("Plus avancée sur le site", older.Message);
 
         var newer = await _sync.CompareAsync(console, id, Save(hours: 12, box: [25]));
-        Assert.Equal(SyncCompareVerdict.Refused, newer.Verdict);
+        Assert.Equal((SyncCompareVerdict.Refused, SyncCompareRefusal.MoreAdvanced), (newer.Verdict, newer.Refusal));
         Assert.Contains("plus avancée", newer.Message);
 
         var otherGame = await _sync.CompareAsync(console, id, Save(ot: "Autre", box: [25]));
-        Assert.Equal(SyncCompareVerdict.Refused, otherGame.Verdict);
+        Assert.Equal((SyncCompareVerdict.Refused, SyncCompareRefusal.OtherGame), (otherGame.Verdict, otherGame.Refusal));
         Assert.Contains("autre partie", otherGame.Message);
 
-        Assert.Equal(SyncCompareVerdict.Refused, (await _sync.CompareAsync(console, id, new byte[0x80000])).Verdict);
+        Assert.Equal(SyncCompareRefusal.Unreadable, (await _sync.CompareAsync(console, id, new byte[0x80000])).Refusal);
         Assert.Equal(SyncCompareVerdict.Refused, (await _sync.CompareAsync(await Linked("ondine"), id, Save(hours: 8))).Verdict); // pas son compte
     }
 
@@ -264,6 +264,22 @@ public sealed class SyncServiceTests : IDisposable
         // La console a maintenant la version du site : à jour.
         Assert.Equal(SyncCompareVerdict.UpToDate, (await _sync.CompareAsync(console, id, file.Value.Data)).Verdict);
         Assert.Null(await _sync.DownloadAsync(await Linked("ondine"), id, null)); // pas son compte
+    }
+
+    [Theory]
+    [InlineData("rouge.sav", "gb", "RB")]
+    [InlineData("bleu.sav", "gb", "RB")]
+    [InlineData("argent.sav", "gb", "GS")]
+    [InlineData("noir.sav", "ds", "B")]
+    [InlineData("rubis-omega.sav", "3ds", null)]
+    public void DescribeForConsole_GivesTheGameToLookFor(string file, string console, string? family)
+    {
+        var data = File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Sauvegardes", file));
+        Assert.True(SaveUtil.TryGetSaveFile(data, out var sav));
+        var described = SyncService.DescribeForConsole(sav!);
+        Assert.Equal(console, described.Console);
+        if (family is not null)
+            Assert.Equal(family, described.Family);
     }
 
     [Fact]

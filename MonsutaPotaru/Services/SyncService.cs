@@ -29,15 +29,23 @@ public sealed record SyncUploadResult(SyncUploadStatus Status, string Message, S
 /// </summary>
 /// <param name="Console">« 3ds », « ds », « gba », « gb », ou « autre » (jeux d'autres consoles : non récupérables).</param>
 /// <param name="Family">Jeu, pour trouver une ROM qui lui convient : « DP », « Pt », « HGSS », « B », « W », « BW »,
-/// « B2 », « W2 », « B2W2 » en DS (le jeu exact quand la sauvegarde le dit) ; numéro de version PKHeX sinon.</param>
+/// « B2 », « W2 », « B2W2 » en DS (le jeu exact quand la sauvegarde le dit) ; « RB » (Rouge, Bleu, Vert), « YW » (Jaune),
+/// « GS » (Or, Argent), « C » (Cristal) en Game Boy, suivis de « -JP » ou « -KO » pour les versions japonaise et coréenne
+/// (disposition différente) ; numéro de version PKHeX sinon.</param>
 public sealed record SyncSaveEntry(int Id, string Game, string Trainer, string TrainerId, string FileName, string Hash,
     int PlayTimeSeconds, bool ModifiedOnServer, string Console, string Family, IReadOnlyList<string> Keys);
 
 public enum SyncCompareVerdict { Retrievable, UpToDate, Refused }
 
+/// <summary>Pourquoi la sauvegarde de la console ne peut pas être remplacée.</summary>
+public enum SyncCompareRefusal { None, Missing, Unreadable, OtherGame, MoreAdvanced }
+
 /// <summary>Faut-il remplacer la sauvegarde de la console par celle du site ? Message prêt à afficher sur la console.</summary>
 /// <param name="ModifiedOnServer">Le site a modifié la partie (retrait d'argent, transfert d'objets) : la console ne l'a pas.</param>
-public sealed record SyncCompareResult(SyncCompareVerdict Verdict, string Message, bool ModifiedOnServer = false);
+/// <param name="Refusal">Pour un refus : autre partie (la console cherche alors ailleurs où la mettre), progression plus
+/// avancée sur la console, fichier illisible, sauvegarde supprimée du site.</param>
+public sealed record SyncCompareResult(SyncCompareVerdict Verdict, string Message, bool ModifiedOnServer = false,
+    SyncCompareRefusal Refusal = SyncCompareRefusal.None);
 
 /// <summary>
 /// Synchronisation depuis une 3DS (homebrew PokeBank Sync) : liaison de la console au compte par un code à usage unique,
@@ -283,7 +291,8 @@ public sealed class SyncService(
         SAV5B2W2 => ("ds", sav.Version switch { GameVersion.B2 => "B2", GameVersion.W2 => "W2", _ => "B2W2" }),
         SAV6XY or SAV6AO or SAV7SM or SAV7USUM => ("3ds", ((int)sav.Version).ToString()),
         SAV3 => ("gba", ((int)sav.Version).ToString()),
-        SAV1 or SAV2 => ("gb", ((int)sav.Version).ToString()),
+        SAV1 g1 => ("gb", (g1.Version == GameVersion.YW ? "YW" : "RB") + (g1.Japanese ? "-JP" : "")),
+        SAV2 g2 => ("gb", (g2.Version == GameVersion.C ? "C" : "GS") + (g2.Japanese ? "-JP" : g2.Korean ? "-KO" : "")),
         _ => ("autre", ((int)sav.Version).ToString()),
     };
 
@@ -300,16 +309,18 @@ public sealed class SyncService(
             .Select(s => new { s.Data, s.IdentityKey, s.PlayTimeSeconds })
             .FirstOrDefaultAsync();
         if (stored is null)
-            return new(SyncCompareVerdict.Refused, "Cette sauvegarde n'existe plus sur le site.");
+            return new(SyncCompareVerdict.Refused, "Cette sauvegarde n'existe plus sur le site.", Refusal: SyncCompareRefusal.Missing);
         if (SaveModification.Hash(stored.Data) == SaveModification.Hash(local))
             return new(SyncCompareVerdict.UpToDate, "Identique à celle du site : rien à récupérer.");
         if (!StoredSaveService.TryRead(local, "", out var sav))
-            return new(SyncCompareVerdict.Refused, "Le fichier de la console n'est pas une sauvegarde Pokémon reconnue : il ne sera pas écrasé.");
+            return new(SyncCompareVerdict.Refused, "Le fichier de la console n'est pas une sauvegarde Pokémon reconnue : il ne sera pas écrasé.",
+                Refusal: SyncCompareRefusal.Unreadable);
 
         var identity = SaveIdentity.Of(sav);
         if (identity.Key != stored.IdentityKey)
             return new(SyncCompareVerdict.Refused,
-                $"Le fichier de la console est une autre partie (dresseur {identity.TrainerName}, {identity.TrainerId}) : il ne sera pas écrasé.");
+                $"Le fichier de la console est une autre partie (dresseur {identity.TrainerName}, {identity.TrainerId}) : il ne sera pas écrasé.",
+                Refusal: SyncCompareRefusal.OtherGame);
 
         var modification = await db.SaveModifications.AsNoTracking().FirstOrDefaultAsync(m => m.IdentityKey == stored.IdentityKey);
         var changes = modification is null ? null : StoredSaveService.DescribeServerChanges(modification.Withdrawn, modification.ItemsChanged);
@@ -321,7 +332,7 @@ public sealed class SyncService(
                 + (changes is null
                     ? "Envoie-la plutôt."
                     : $"Attention : {changes} a modifié cette partie sur le site, et la console ne l'a pas."),
-                modification is not null);
+                modification is not null, SyncCompareRefusal.MoreAdvanced);
         if (identity.PlayTimeSeconds == stored.PlayTimeSeconds)
             return new(SyncCompareVerdict.Retrievable,
                 changes is null ? "Même temps de jeu, mais contenu différent de celui du site." : $"{Capitalize(changes)} a modifié cette partie sur le site.",

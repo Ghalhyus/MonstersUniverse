@@ -15,8 +15,8 @@ namespace MonsutaPotaru.Api;
 /// <item><c>POST /api/sync/sauvegardes?fichier=nom.sav&amp;cle=...</c>, corps = fichier brut → <c>{"statut", "raison", "message"}</c>
 /// (<c>cle</c> : emplacement du fichier sur la console, noté pour la récupération).</item>
 /// <item><c>GET /api/sync/sauvegardes</c> → <c>{"sauvegardes": [...]}</c> : sauvegardes stockées du compte, pour « Récupérer ».</item>
-/// <item><c>POST /api/sync/sauvegardes/{id}/comparer</c>, corps = sauvegarde de la console → <c>{"verdict", "modifieeSurSite",
-/// "message"}</c> : peut-elle être remplacée par celle du site ?</item>
+/// <item><c>POST /api/sync/sauvegardes/{id}/comparer</c>, corps = sauvegarde de la console → <c>{"verdict", "raison",
+/// "modifieeSurSite", "message"}</c> : peut-elle être remplacée par celle du site ?</item>
 /// <item><c>GET /api/sync/sauvegardes/{id}?cle=...</c> → fichier brut de la version du site.</item>
 /// </list>
 /// Toutes sauf la liaison demandent <c>Authorization: Bearer &lt;jeton&gt;</c> (401 sinon). Un refus métier (partie d'un autre
@@ -73,6 +73,7 @@ public static class SyncEndpoints
 
     public sealed record CompareResponse(
         [property: JsonPropertyName("verdict")] string Verdict,
+        [property: JsonPropertyName("raison")] string? Refusal,
         [property: JsonPropertyName("modifieeSurSite")] bool ModifiedOnServer,
         [property: JsonPropertyName("message")] string Message);
 
@@ -158,7 +159,15 @@ public static class SyncEndpoints
                 SyncCompareVerdict.UpToDate => "a-jour",
                 _ => "refusee",
             };
-            return Results.Ok(new CompareResponse(verdict, result.ModifiedOnServer, result.Message));
+            var refusal = result.Refusal switch
+            {
+                SyncCompareRefusal.Missing => "absente",
+                SyncCompareRefusal.Unreadable => "illisible",
+                SyncCompareRefusal.OtherGame => "autre-partie",
+                SyncCompareRefusal.MoreAdvanced => "plus-avancee",
+                _ => null,
+            };
+            return Results.Ok(new CompareResponse(verdict, refusal, result.ModifiedOnServer, result.Message));
         });
 
         api.MapGet("/sauvegardes/{id:int}", async (HttpRequest http, int id, [FromQuery(Name = "cle")] string? key,

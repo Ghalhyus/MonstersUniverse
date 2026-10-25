@@ -150,8 +150,8 @@ API (JSON, messages en français prêts à afficher ; `MonsutaPotaru/Api/SyncEnd
 | `POST /api/sync/liaison` `{"code", "nom"}` | `{"jeton", "compte", "message"}` ; 400 si le code est faux ou expiré, 429 au-delà de 10 essais par minute depuis la même adresse IP (celle transmise par Caddy) |
 | `GET /api/sync/compte` | `{"compte", "console"}` : vérifie le jeton |
 | `POST /api/sync/sauvegardes?fichier=nom.sav&cle=...`, corps = fichier brut (4 Mo au plus) | `{"statut", "raison", "message"}` ; `statut` : `ajoutee`, `mise-a-jour`, `inchangee` ou `refusee` (`raison` : `StoreStatus`) |
-| `GET /api/sync/sauvegardes` | `{"sauvegardes": [{"id", "jeu", "dresseur", "idDresseur", "fichier", "empreinte", "tempsDeJeu", "modifieeSurSite", "console", "famille", "cles"}]}` ; `console` : `3ds`, `ds`, `gba`, `gb` ou `autre` ; `famille` en DS : `DP`, `Pt`, `HGSS`, `B`, `W`, `BW`, `B2`, `W2`, `B2W2` (`SyncService.DescribeForConsole`) |
-| `POST /api/sync/sauvegardes/{id}/comparer`, corps = sauvegarde de la console | `{"verdict", "modifieeSurSite", "message"}` ; `verdict` : `recuperable`, `a-jour` ou `refusee` |
+| `GET /api/sync/sauvegardes` | `{"sauvegardes": [{"id", "jeu", "dresseur", "idDresseur", "fichier", "empreinte", "tempsDeJeu", "modifieeSurSite", "console", "famille", "cles"}]}` ; `console` : `3ds`, `ds`, `gba`, `gb` ou `autre` ; `famille` en DS : `DP`, `Pt`, `HGSS`, `B`, `W`, `BW`, `B2`, `W2`, `B2W2` ; en Game Boy : `RB` (Rouge, Bleu, Vert), `YW` (Jaune), `GS` (Or, Argent), `C` (Cristal), suivis de `-JP` ou `-KO` (versions japonaise et coréenne, de disposition différente) (`SyncService.DescribeForConsole`) |
+| `POST /api/sync/sauvegardes/{id}/comparer`, corps = sauvegarde de la console | `{"verdict", "raison", "modifieeSurSite", "message"}` ; `verdict` : `recuperable`, `a-jour` ou `refusee` ; `raison` d'un refus : `autre-partie` (la console cherche alors une autre place), `plus-avancee`, `illisible`, `absente` |
 | `GET /api/sync/sauvegardes/{id}?cle=...` | Fichier brut de la version du site (404 si elle n'existe plus) |
 
 Toutes sauf la liaison demandent `Authorization: Bearer <jeton>` (401 sinon, jeton inconnu ou console retirée).
