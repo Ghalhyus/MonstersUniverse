@@ -31,6 +31,14 @@ Ce fichier ne garde que ce que le README ne dit pas.
   en base à chaque action (le cookie peut le garder 30 minutes). Le code d'invitation est en base (`SiteSettings`) :
   `Bank:InviteCode` ne sert qu'au premier démarrage. EF ne traduit pas `Guid.NewGuid()` dans un `ExecuteUpdate` :
   calculer la valeur avant.
+- Thèmes (README « Thèmes ») : tout le style d'un thème sous `[data-theme="<clé>"]` (posé par `App.razor`), le Classique
+  n'a rien. `app.css` fixe des couleurs en dur (`.btn-primary`, `.btn-link`, focus) : les écraser explicitement ; le CSS
+  isolé des composants (menu) se charge après : sélecteurs en `html[data-theme=...]`. Le thème Pokédex couvre tout le
+  site (contenu sous `main`) : un nouvel élément coloré en dur dans `app.css` (bleu, orange) doit y recevoir sa version.
+  L'utilisateur veut du **sobre** : il a refusé un thème Hoenn (sac de ROSA) trop chargé (fond rayé, pastilles et
+  bordures épaisses partout), et trouvé le rouge du Pokédex `#dc0a2d` trop vif (`#c2323d` retenu).
+- Tests de migration : ajouter les comptes en SQL (`MigrationsTests.AddUserAsync`), pas par `db.Users` : le modèle actuel
+  a des colonnes (`Theme`) qu'une base migrée à une étape plus ancienne n'a pas.
 - Tests : `AccountServiceTests` monte Identity comme `Program.cs` (`AccountService.ConfigureIdentity`) sur la base de test.
   Les comptes de `TestDatabase` sont créés sans Identity (pas d'adresse) : n'y appeler aucune méthode qui les revalide.
 

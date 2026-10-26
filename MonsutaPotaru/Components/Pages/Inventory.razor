@@ -19,8 +19,9 @@
    retourner) ; seule la copie du serveur est modifiée (la mise à jour de la sauvegarde est ensuite encadrée).
    Le stockage peut aussi montrer, en lecture seule, le sac d'une sauvegarde ou le total de tout (interne + sauvegardes).
    Le journal et le détail d'un objet s'ouvrent dans un panneau à droite, qui réduit la largeur de la page (il la recouvre
-   sur un téléphone). *@
+   sur un téléphone). Le tout dans .inventory-page, que les thèmes peuvent habiller (wwwroot/themes/). *@
 
+<div class="inventory-page">
 <div class="inventory-layout">
 <div class="inventory-main">
     <div class="d-flex align-items-center gap-2 mb-3">
@@ -392,6 +393,7 @@ else if (panel == SidePanel.Detail && detail is { } d)
 {
     <ItemTransferDialog Deposit="deposit" UserId="@userId" Stock="items" OnDone="ItemsDone" OnCancel="() => itemDialog = null" />
 }
+</div>
 
 @code {
     [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = default!;

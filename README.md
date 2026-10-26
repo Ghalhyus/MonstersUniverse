@@ -86,6 +86,27 @@ liste sans trou, tassée à l'écriture comme le fait le jeu (un Pokémon dépos
   codes de secours supprimés. Un mot de passe oublié passe par l'administrateur.
 - Messages d'Identity en français : `FrenchIdentityErrorDescriber` (même fichier).
 
+### Thèmes
+
+« Mon compte » → **Thèmes** (`Account/Pages/Manage/Themes.razor`) : une carte par thème, avec une miniature dessinée en
+CSS ; un clic l'applique (la page est rechargée). Le choix est gardé dans le compte (colonne `Theme`, migration
+`UserTheme` ; null = défaut), donc sur tous les appareils. Liste et défaut : `Services/SiteThemes.cs`. Le serveur pose la
+clé du thème du compte sur la page dès le premier rendu (`<html data-theme="pokedex">`, `App.razor`) ; sans compte :
+**Classique**, le thème d'origine, qui n'a aucun style à lui.
+
+- **Pokédex** (`wwwroot/themes/pokedex.css`, tout sous `[data-theme="pokedex"]`) : le Pokédex rouge, **sobre** (un
+  premier essai inspiré du sac de Rubis Oméga / Saphir Alpha a été jugé trop chargé). Menu latéral comme le boîtier
+  (rouge adouci `#c2323d` : celui du Pokédex était trop vif ; charnière plus sombre, lentille bleue et trois voyants devant
+  le nom du site, lien actif en petit écran clair ; barre du haut de la page dans la même teinte),
+  contenus dans des « écrans » gris-bleu au cadre ardoise (cartes, tableaux, boîtes du Transfert, grilles de Pokémon,
+  cartes des living dex), dialogues et fiches de Pokémon dans un cadre rouge ; le rouge pour les accents (bouton
+  principal, onglet choisi, objet ou Pokémon choisi, barres de progression), liens en bleu lentille, fond blanc. **Tout
+  le site** : le menu, la barre du haut et le contenu des pages (`main`, dialogues compris). Le parc garde son décor.
+  Les styles du menu sont isolés par composant (`NavMenu.razor.css`, chargés après) : ses sélecteurs commencent par
+  `html` pour passer devant.
+- `app.css` fixe certaines couleurs en dur (`.btn-primary`, `.btn-link`, anneau bleu du focus) : un thème doit les
+  écraser explicitement, pas seulement changer les variables de Bootstrap.
+
 ### Administration
 
 Rôles Identity **exclusifs** (`Data/SiteSetting.cs`, `SiteRoles`, créés avec la base, identifiants fixes) : **Standard**
@@ -551,6 +572,9 @@ est incompatible (espèce, attaques ou objets inexistants dans le jeu, conversio
 | `MonsutaPotaru/Services/SaveSession.cs` | Sauvegarde chargée + dépôts/retraits en attente (PKHeX) |
 | `MonsutaPotaru/Services/AdminService.cs` | Administration : rôles (donner, retirer, garde-fous), liste des comptes, code d'invitation (lecture, régénération), initialisation au démarrage (code, premier administrateur) |
 | `MonsutaPotaru/Components/Pages/Admin.razor` | Page « Administration » : code d'invitation, comptes et rôles |
+| `MonsutaPotaru/Services/SiteThemes.cs` | Thèmes du site (clé, nom, description) et thème par défaut |
+| `MonsutaPotaru/Components/Account/Pages/Manage/Themes.razor` | « Mon compte » → « Thèmes » : choix du thème, miniatures en CSS |
+| `MonsutaPotaru/wwwroot/themes/pokedex.css` | Thème Pokédex, sous `[data-theme="pokedex"]` : menu, barre du haut, contenu de toutes les pages |
 | `MonsutaPotaru/Data/SiteSetting.cs` | Table des réglages du site (code d'invitation) et rôles des comptes (`SiteRoles`) |
 | `MonsutaPotaru/Services/AccountService.cs` | Comptes : règles du pseudo, inscription, connexion par l'adresse, choix du pseudo des anciens comptes, changement d'adresse ; réglages d'Identity, messages d'Identity en français |
 | `MonsutaPotaru/Components/Account/Pages/` | Pages du compte : connexion, inscription, « Choisis ton pseudo », « Mon compte » (`Manage/` : profil, adresse, mot de passe, données personnelles) |

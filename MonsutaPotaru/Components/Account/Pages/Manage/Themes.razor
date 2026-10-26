@@ -1,0 +1,67 @@
+@page "/Account/Manage/Themes"
+
+@using MonsutaPotaru.Data
+@using MonsutaPotaru.Services
+
+@inject AccountService Accounts
+@inject IdentityUserAccessor UserAccessor
+@inject IdentityRedirectManager RedirectManager
+
+<PageTitle>Thèmes</PageTitle>
+
+<h3>Thèmes</h3>
+<StatusMessage Message="@message" />
+<p>Choisis l'apparence du site. Ton choix est gardé dans ton compte : il te suit sur tous tes appareils.</p>
+
+@* Un bouton d'envoi par thème (name="Key") : le choix est enregistré, puis la page est rechargée avec le nouveau thème. *@
+<form method="post" @formname="theme" @onsubmit="OnSubmitAsync">
+    <AntiforgeryToken />
+    <div class="theme-choices">
+        @foreach (var t in SiteThemes.All)
+        {
+            var selected = t.Key == current;
+            <button type="submit" name="Key" value="@t.Key" class="theme-choice @(selected ? "selected" : "")" aria-pressed="@(selected ? "true" : "false")">
+                @* Miniature dessinée en CSS : menu, ligne d'objet et bouton aux couleurs du thème. *@
+                <span class="theme-preview theme-preview-@t.Key" aria-hidden="true">
+                    <span class="theme-preview-menu"><span></span><span></span><span></span></span>
+                    <span class="theme-preview-content">
+                        <span class="theme-preview-row"></span>
+                        <span class="theme-preview-row"></span>
+                        <span class="theme-preview-button"></span>
+                    </span>
+                </span>
+                <span class="theme-choice-name">@t.Name @(selected ? "(actuel)" : "")</span>
+                <span class="theme-choice-description">@t.Description</span>
+            </button>
+        }
+    </div>
+</form>
+
+@code {
+    private string? message;
+    private ApplicationUser user = default!;
+    private string current = SiteThemes.Classic;
+
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    [SupplyParameterFromForm(FormName = "theme")]
+    private string? Key { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        user = await UserAccessor.GetRequiredUserAsync(HttpContext);
+        current = SiteThemes.Normalize(user.Theme);
+    }
+
+    private async Task OnSubmitAsync()
+    {
+        var result = await Accounts.SetThemeAsync(user.Id, Key ?? "");
+        if (!result.Ok)
+        {
+            message = AccountService.AsError(result.Message);
+            return;
+        }
+        RedirectManager.RedirectToCurrentPageWithStatus(result.Message, HttpContext); // rechargée : le nouveau thème s'applique
+    }
+}

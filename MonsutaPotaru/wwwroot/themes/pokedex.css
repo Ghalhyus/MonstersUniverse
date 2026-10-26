@@ -1,0 +1,285 @@
+/*
+ * Thème « Pokédex » (Services/SiteThemes.cs) : le Pokédex rouge. Menu latéral comme son boîtier (rouge, charnière plus
+ * sombre, lentille bleue et trois voyants en tête), contenus dans des « écrans » gris-bleu clair au cadre ardoise ; le
+ * rouge reste pour les accents (bouton principal, onglet choisi). Sobre : fond blanc, pas de motifs.
+ * Tout est rangé sous [data-theme="pokedex"] (posé par App.razor) : le thème Classique n'est pas touché. Les styles du
+ * menu sont isolés par composant (NavMenu.razor.css, MainLayout.razor.css, chargés après) : les sélecteurs commencent par
+ * « html » pour passer devant.
+ * Tout le site : le menu, la barre du haut, et le contenu des pages (main, dialogues compris).
+ */
+
+[data-theme="pokedex"] {
+    --dex-red: #c2323d; /* rouge du Pokédex adouci (#dc0a2d jugé trop vif) */
+    --dex-red-dark: #a3262f;
+    --dex-hinge: #7a1b23;
+    --dex-lens: #30a7d7;
+    --dex-screen: #e8eef2;
+    --dex-screen-line: #cfd8de;
+    --dex-frame: #2b3a44;
+    --dex-ink: #1d2a33;
+}
+
+/* ---------- Menu : le boîtier ---------- */
+
+html[data-theme="pokedex"] .sidebar {
+    background-image: linear-gradient(180deg, var(--dex-red) 0%, var(--dex-red-dark) 100%);
+    box-shadow: inset -5px 0 0 var(--dex-hinge); /* charnière */
+}
+html[data-theme="pokedex"] .sidebar .top-row {
+    background-color: rgba(0, 0, 0, .18);
+    border-bottom: 2px solid var(--dex-hinge);
+}
+/* Barre du haut de la page : dans le prolongement de l'en-tête du menu */
+html[data-theme="pokedex"] main > .top-row {
+    background: linear-gradient(rgba(0, 0, 0, .18), rgba(0, 0, 0, .18)), var(--dex-red);
+    border-bottom: 2px solid var(--dex-hinge);
+}
+/* Lentille bleue cerclée de blanc, puis trois voyants (rouge, jaune, vert), devant le nom du site */
+html[data-theme="pokedex"] .sidebar .navbar-brand {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    font-weight: 700;
+}
+html[data-theme="pokedex"] .sidebar .navbar-brand::before {
+    content: "";
+    flex: none;
+    width: 1.9rem;
+    height: 1.9rem;
+    border-radius: 50%;
+    border: 3px solid #fff;
+    background: radial-gradient(circle at 35% 35%, #c4eeff 0%, #6fcdf0 25%, var(--dex-lens) 55%, #1a6f9a 100%);
+    box-shadow: 0 0 0 2px var(--dex-hinge);
+}
+html[data-theme="pokedex"] .sidebar .navbar-brand::after {
+    content: "";
+    flex: none;
+    width: .5rem;
+    height: .5rem;
+    margin-left: auto;
+    margin-right: 1.4rem;
+    border-radius: 50%;
+    background: #ff5a5a;
+    box-shadow: .8rem 0 0 #ffd64a, 1.6rem 0 0 #5ad16a;
+}
+html[data-theme="pokedex"] .sidebar .nav-link { color: #fff; }
+html[data-theme="pokedex"] .sidebar .nav-link:hover { background-color: rgba(0, 0, 0, .15); }
+/* Lien de la page affichée : un petit écran */
+html[data-theme="pokedex"] .sidebar a.nav-link.active {
+    color: var(--dex-ink);
+    font-weight: 600;
+    background-color: var(--dex-screen);
+    box-shadow: inset 0 0 0 2px var(--dex-frame);
+}
+html[data-theme="pokedex"] .sidebar a.nav-link.active .bi { filter: invert(1); } /* icônes blanches (SVG) sur l'écran clair */
+
+/* ---------- Contenu des pages ---------- */
+
+[data-theme="pokedex"] main {
+    --bs-primary: var(--dex-red);
+    --bs-primary-rgb: 194, 50, 61;
+    --bs-link-color-rgb: 43, 58, 68;
+    --bs-link-hover-color-rgb: 194, 50, 61;
+    color: var(--dex-ink);
+}
+[data-theme="pokedex"] main h1 { font-weight: 700; }
+[data-theme="pokedex"] main h1::after {
+    content: "";
+    display: block;
+    width: 3rem;
+    height: 4px;
+    margin-top: .3rem;
+    border-radius: 2px;
+    background: var(--dex-red);
+}
+
+/* Boutons : le principal en rouge, les autres en ardoise (app.css fixe en dur .btn-primary, .btn-link et le focus) */
+[data-theme="pokedex"] main .btn-primary {
+    --bs-btn-color: #fff;
+    --bs-btn-bg: var(--dex-red);
+    --bs-btn-border-color: var(--dex-red);
+    --bs-btn-hover-color: #fff;
+    --bs-btn-hover-bg: var(--dex-red-dark);
+    --bs-btn-hover-border-color: var(--dex-red-dark);
+    --bs-btn-active-bg: var(--dex-hinge);
+    --bs-btn-active-border-color: var(--dex-hinge);
+    color: var(--bs-btn-color);
+    background-color: var(--bs-btn-bg);
+    border-color: var(--bs-btn-border-color);
+}
+[data-theme="pokedex"] main .btn-primary:hover {
+    color: var(--bs-btn-hover-color);
+    background-color: var(--bs-btn-hover-bg);
+    border-color: var(--bs-btn-hover-border-color);
+}
+[data-theme="pokedex"] main .btn-outline-primary,
+[data-theme="pokedex"] main .btn-outline-secondary {
+    --bs-btn-color: var(--dex-frame);
+    --bs-btn-border-color: var(--dex-frame);
+    --bs-btn-hover-color: #fff;
+    --bs-btn-hover-bg: var(--dex-frame);
+    --bs-btn-hover-border-color: var(--dex-frame);
+    --bs-btn-active-color: #fff;
+    --bs-btn-active-bg: var(--dex-ink);
+    --bs-btn-active-border-color: var(--dex-ink);
+    --bs-btn-disabled-color: #7d8a92;
+    --bs-btn-disabled-border-color: #b8c4cb;
+}
+[data-theme="pokedex"] main .btn-secondary {
+    --bs-btn-bg: var(--dex-frame);
+    --bs-btn-border-color: var(--dex-frame);
+    --bs-btn-hover-bg: var(--dex-ink);
+    --bs-btn-hover-border-color: var(--dex-ink);
+}
+[data-theme="pokedex"] main .btn-link {
+    --bs-btn-color: var(--dex-ink);
+    --bs-btn-hover-color: var(--dex-red);
+    color: var(--bs-btn-color);
+    text-decoration: none;
+}
+[data-theme="pokedex"] main .btn-link:hover { color: var(--bs-btn-hover-color); }
+[data-theme="pokedex"] main .btn:focus,
+[data-theme="pokedex"] main .btn:active:focus { box-shadow: 0 0 0 .2rem rgba(48, 167, 215, .4); }
+
+/* Onglets : l'onglet choisi en rouge, posé sur un trait ardoise */
+[data-theme="pokedex"] main .nav-tabs { border-bottom: 2px solid var(--dex-frame); }
+[data-theme="pokedex"] main .nav-tabs .nav-link { color: var(--dex-frame); font-weight: 600; }
+[data-theme="pokedex"] main .nav-tabs .nav-link:hover { border-color: transparent; color: var(--dex-red); }
+[data-theme="pokedex"] main .nav-tabs .nav-link.active {
+    color: #fff;
+    background-color: var(--dex-red);
+    border-color: var(--dex-red);
+}
+[data-theme="pokedex"] main .nav-link.active .badge.text-bg-light { color: var(--dex-red) !important; }
+[data-theme="pokedex"] main .nav-pills .nav-link { color: var(--dex-frame); }
+[data-theme="pokedex"] main .nav-pills .nav-link.active { color: #fff; background-color: var(--dex-frame); }
+
+/* Champs : focus bleu lentille */
+[data-theme="pokedex"] main .form-control:focus,
+[data-theme="pokedex"] main .form-select:focus {
+    border-color: var(--dex-lens);
+    box-shadow: 0 0 0 .2rem rgba(48, 167, 215, .3);
+}
+[data-theme="pokedex"] main .form-range::-webkit-slider-thumb { background-color: var(--dex-red); }
+[data-theme="pokedex"] main .form-range::-moz-range-thumb { background-color: var(--dex-red); }
+
+/* Écrans : porte-monnaie, journal, détail, dialogues */
+[data-theme="pokedex"] main .card {
+    --bs-card-bg: var(--dex-screen);
+    --bs-card-border-color: var(--dex-frame);
+    --bs-card-border-width: 2px;
+    --bs-card-border-radius: .75rem;
+    --bs-card-inner-border-radius: .6rem;
+    --bs-card-cap-bg: #d5dee4;
+    box-shadow: inset 0 2px 0 rgba(255, 255, 255, .7);
+}
+[data-theme="pokedex"] main .card-header { border-bottom: 1px solid #b8c4cb; }
+[data-theme="pokedex"] main .journal-panel .card-header { background: #d5dee4; }
+/* Dialogues : l'écran dans son boîtier rouge */
+[data-theme="pokedex"] main .dialog-panel.card {
+    --bs-card-bg: #f4f7f9;
+    --bs-card-border-color: var(--dex-red);
+    --bs-card-border-width: 4px;
+    --bs-card-border-radius: 1rem;
+}
+[data-theme="pokedex"] main .wallet-balance { font-variant-numeric: tabular-nums; }
+
+/* Listes des panneaux : lignes blanches sur l'écran */
+[data-theme="pokedex"] main .list-group {
+    --bs-list-group-bg: #fff;
+    --bs-list-group-border-color: var(--dex-screen-line);
+    --bs-list-group-action-hover-bg: #f4f7f9;
+}
+[data-theme="pokedex"] main .list-group-item-action:not(:disabled):hover { box-shadow: inset 4px 0 0 var(--dex-red); }
+
+/* Liste des objets : un écran, en-tête ardoise, objet choisi marqué de rouge */
+[data-theme="pokedex"] main .table,
+[data-theme="pokedex"] main .dialog-panel .table {
+    --bs-table-bg: var(--dex-screen);
+    --bs-table-border-color: var(--dex-screen-line);
+    border-collapse: separate;
+    border-spacing: 0;
+    overflow: hidden;
+    border: 2px solid var(--dex-frame);
+    border-radius: .75rem;
+}
+[data-theme="pokedex"] main .table > thead th {
+    color: #fff;
+    background: var(--dex-frame);
+    border-bottom: 0;
+}
+[data-theme="pokedex"] main .table > tbody > tr:last-child > td { border-bottom: 0; }
+[data-theme="pokedex"] main .table > * > tr > :first-child { padding-left: .75rem; }
+[data-theme="pokedex"] main .table > * > tr > :last-child { padding-right: .75rem; }
+[data-theme="pokedex"] main .table > tbody > tr.table-active > td { --bs-table-bg-state: #d5dee4; }
+[data-theme="pokedex"] main .table > tbody > tr.table-active > td:first-child { box-shadow: inset 4px 0 0 var(--dex-red); }
+
+/* Grille des objets : petites cases d'écran */
+[data-theme="pokedex"] main .item-tile {
+    background: var(--dex-screen);
+    border-color: var(--dex-screen-line);
+}
+[data-theme="pokedex"] main .item-tile-button:hover,
+[data-theme="pokedex"] main .item-tile-button.selected { border-color: var(--dex-red); }
+
+/* ---------- Le reste du site ---------- */
+
+/* Liens (app.css les fixe en bleu) : bleu de la lentille, rouge au survol */
+[data-theme="pokedex"] main a:not(.btn):not(.nav-link):not(.livingdex-card) { color: #1a6f9a; }
+[data-theme="pokedex"] main a:not(.btn):not(.nav-link):not(.livingdex-card):hover { color: var(--dex-red); }
+
+/* Cases à cocher, barres de progression, listes : plus de bleu de Bootstrap */
+[data-theme="pokedex"] main .form-check-input:checked {
+    background-color: var(--dex-red);
+    border-color: var(--dex-red);
+}
+[data-theme="pokedex"] main .form-check-input:focus { box-shadow: 0 0 0 .2rem rgba(48, 167, 215, .3); border-color: var(--dex-lens); }
+[data-theme="pokedex"] main .progress { --bs-progress-bg: #d5dee4; --bs-progress-bar-bg: var(--dex-red); }
+[data-theme="pokedex"] main .list-group { --bs-list-group-active-bg: var(--dex-frame); --bs-list-group-active-border-color: var(--dex-frame); }
+[data-theme="pokedex"] main .btn-light {
+    --bs-btn-bg: var(--dex-screen);
+    --bs-btn-border-color: var(--dex-frame);
+    --bs-btn-hover-bg: #d5dee4;
+    --bs-btn-hover-border-color: var(--dex-frame);
+}
+
+/* Boîtes (Transfert) et grilles de Pokémon (Ma collection, choix du parc) : des écrans gris-bleu, à la place du bleu ciel */
+[data-theme="pokedex"] main .box-grid,
+[data-theme="pokedex"] main .collection,
+[data-theme="pokedex"] main .park-candidates {
+    background: linear-gradient(180deg, #dbe3e8, #c6d2d9);
+    box-shadow: inset 0 0 0 2px var(--dex-frame);
+}
+[data-theme="pokedex"] main .slot.selected { border-color: var(--dex-red); }
+[data-theme="pokedex"] main .slot:focus-visible { outline-color: var(--dex-red); }
+[data-theme="pokedex"] main .box-grid.drop-active { box-shadow: inset 0 0 0 2px var(--dex-frame), 0 0 0 3px var(--dex-lens); }
+[data-theme="pokedex"] main .bank-zone.drop-active { background: rgba(48, 167, 215, .08); box-shadow: 0 0 0 3px var(--dex-lens); }
+[data-theme="pokedex"] main .drop-hint { color: var(--dex-frame); border-color: var(--dex-frame); }
+[data-theme="pokedex"] .drag-ghost { border-color: var(--dex-red); box-shadow: 4px 4px 0 -2px #fff, 4px 4px 0 0 var(--dex-frame), 8px 8px 0 -2px #fff, 8px 8px 0 0 var(--dex-frame); }
+[data-theme="pokedex"] .drag-count { background: var(--dex-red); }
+
+/* Filtres de « Ma collection » */
+[data-theme="pokedex"] main .filter-chip.active { border-color: var(--dex-red); }
+[data-theme="pokedex"] main .filter-chip-caret,
+[data-theme="pokedex"] main .filter-chip-remove { color: var(--dex-red); }
+
+/* Living dex : cartes, choix du jeu, cases */
+[data-theme="pokedex"] main .livingdex-card { background: var(--dex-screen); border: 2px solid var(--dex-frame); border-radius: .75rem; }
+[data-theme="pokedex"] main .livingdex-card:hover { border-color: var(--dex-red); }
+[data-theme="pokedex"] main .livingdex-game.selected,
+[data-theme="pokedex"] main .livingdex-game:hover { border-color: var(--dex-red); }
+[data-theme="pokedex"] main .livingdex-game.selected { box-shadow: 0 0 0 .2rem rgba(194, 50, 61, .25); }
+[data-theme="pokedex"] main .livingdex-game:has(input:focus-visible) { outline-color: var(--dex-red); }
+[data-theme="pokedex"] main button.livingdex-slot:hover { border-color: var(--dex-red); box-shadow: 0 0 0 .15rem rgba(194, 50, 61, .25); }
+[data-theme="pokedex"] main .livingdex-slot.missing { background: var(--dex-screen); }
+
+/* Fiche d'un Pokémon (Ma collection) : dans le cadre rouge, comme les dialogues */
+[data-theme="pokedex"] main .collection-dialog > .card {
+    --bs-card-bg: #f4f7f9;
+    --bs-card-border-color: var(--dex-red);
+    --bs-card-border-width: 4px;
+    --bs-card-border-radius: 1rem;
+}
+
+/* « Mon compte » : menu des réglages et choix du thème */
+[data-theme="pokedex"] main .theme-choice.selected { box-shadow: 0 0 0 .2rem rgba(194, 50, 61, .25); }

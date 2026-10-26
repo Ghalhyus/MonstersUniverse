@@ -23,13 +23,23 @@ public sealed class MigrationsTests : IDisposable
 
     private ApplicationDbContext NewContext() => new(_options);
 
+    /// <summary>
+    /// Compte ajouté en SQL, avec les seules colonnes d'origine d'Identity : le modèle actuel a des colonnes (Theme...) que
+    /// la base, migrée seulement jusqu'à une étape plus ancienne, n'a pas encore.
+    /// </summary>
+    private static Task AddUserAsync(ApplicationDbContext db, string id, string userName, string? phone = null, bool twoFactor = false) =>
+        db.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO AspNetUsers (Id, UserName, EmailConfirmed, PhoneNumber, PhoneNumberConfirmed, TwoFactorEnabled, LockoutEnabled, AccessFailedCount)
+            VALUES ({id}, {userName}, 0, {phone}, {phone is not null}, {twoFactor}, 1, 0)
+            """);
+
     [Fact]
     public async Task JournalFileNames_AddsTheFileName_OfSavesThatStillExist()
     {
         using (var db = NewContext())
         {
             await db.GetService<IMigrator>().MigrateAsync("20261016182506_SpriteDetails"); // juste avant JournalFileNames
-            db.Users.Add(new ApplicationUser { Id = "sacha", UserName = "sacha" });
+            await AddUserAsync(db, "sacha", "sacha");
             var save = new StoredSave { OwnerId = "sacha", IdentityKey = "cle", FileName = "rouge.sav", GameName = "Rouge / Bleu", TrainerName = "Red" };
             db.StoredSaves.Add(save);
             await db.SaveChangesAsync();
@@ -60,7 +70,7 @@ public sealed class MigrationsTests : IDisposable
         using (var db = NewContext())
         {
             await db.GetService<IMigrator>().MigrateAsync(before);
-            db.Users.Add(new ApplicationUser { Id = "sacha", UserName = "sacha" });
+            await AddUserAsync(db, "sacha", "sacha");
             db.StoredSaves.AddRange(
                 new StoredSave { OwnerId = "sacha", IdentityKey = "a", FileName = "soulsilver.sav", GameName = "HGSS", TrainerName = "Ghal" },
                 new StoredSave { OwnerId = "sacha", IdentityKey = "b", FileName = "rubis.sav", GameName = "RS", TrainerName = "Ghal" },
@@ -93,9 +103,8 @@ public sealed class MigrationsTests : IDisposable
         using (var db = NewContext())
         {
             await db.GetService<IMigrator>().MigrateAsync(before);
-            db.Users.AddRange(
-                new ApplicationUser { Id = "sacha", UserName = "sacha@kanto.fr", PhoneNumber = "0612345678", PhoneNumberConfirmed = true, TwoFactorEnabled = true },
-                new ApplicationUser { Id = "ondine", UserName = "ondine@azuria.fr" });
+            await AddUserAsync(db, "sacha", "sacha@kanto.fr", phone: "0612345678", twoFactor: true);
+            await AddUserAsync(db, "ondine", "ondine@azuria.fr");
             db.UserTokens.AddRange(
                 new IdentityUserToken<string> { UserId = "sacha", LoginProvider = "[AspNetUserStore]", Name = "AuthenticatorKey", Value = "cle" },
                 new IdentityUserToken<string> { UserId = "sacha", LoginProvider = "[AspNetUserStore]", Name = "RecoveryCodes", Value = "codes" },
@@ -122,8 +131,8 @@ public sealed class MigrationsTests : IDisposable
         using (var db = NewContext())
         {
             await db.GetService<IMigrator>().MigrateAsync(before);
-            db.Users.AddRange(new ApplicationUser { Id = "sacha", UserName = "Sacha" }, new ApplicationUser { Id = "ondine", UserName = "ondine@azuria.fr" });
-            await db.SaveChangesAsync();
+            await AddUserAsync(db, "sacha", "Sacha");
+            await AddUserAsync(db, "ondine", "ondine@azuria.fr");
         }
 
         using (var db = NewContext())

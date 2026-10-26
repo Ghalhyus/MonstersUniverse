@@ -10,4 +10,8 @@ public class ApplicationUser : IdentityUser
     /// emplacements avec les Pokédollars du porte-monnaie (voir <see cref="Services.CollectionCapacity"/>).
     /// </summary>
     public int CollectionLimit { get; set; } = Services.CollectionCapacity.DefaultLimit;
+
+    /// <summary>Thème choisi dans « Mon compte » → « Thèmes » (clé de <see cref="Services.SiteThemes"/>) ; null : le thème par défaut.</summary>
+    [System.ComponentModel.DataAnnotations.MaxLength(32)]
+    public string? Theme { get; set; }
 }

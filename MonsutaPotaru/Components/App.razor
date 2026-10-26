@@ -1,5 +1,6 @@
-﻿<!DOCTYPE html>
-<html lang="fr">
+﻿@inject MonsutaPotaru.Services.AccountService Accounts
+<!DOCTYPE html>
+<html lang="fr" data-theme="@theme">
 
 <head>
     <meta charset="utf-8" />
@@ -7,6 +8,7 @@
     <base href="/" />
     <link rel="stylesheet" href="@Assets["lib/bootstrap/dist/css/bootstrap.min.css"]" />
     <link rel="stylesheet" href="@Assets["app.css"]" />
+    <link rel="stylesheet" href="@Assets["themes/pokedex.css"]" />
     <link rel="stylesheet" href="@Assets["MonsutaPotaru.styles.css"]" />
     <ImportMap />
     <link rel="icon" type="image/png" href="favicon.png" />
@@ -114,6 +116,12 @@
 @code {
     [CascadingParameter]
     private HttpContext HttpContext { get; set; } = default!;
+
+    private string theme = MonsutaPotaru.Services.SiteThemes.Classic;
+
+    // Thème du compte, posé sur la page dès le rendu du serveur (pas de passage par l'ancien thème).
+    protected override async Task OnInitializedAsync() =>
+        theme = await Accounts.ThemeAsync(HttpContext.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value);
 
     private IComponentRenderMode? PageRenderMode =>
         HttpContext.AcceptsInteractiveRouting() ? InteractiveServer : null;

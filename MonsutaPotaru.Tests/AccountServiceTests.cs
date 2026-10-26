@@ -168,4 +168,20 @@ public sealed class AccountServiceTests : IDisposable
         Assert.False(await AdminService.PromoteFirstAdminAsync(db, _scope.ServiceProvider.GetRequiredService<IConfiguration>(), sacha.Id, AdminPseudo));
         Assert.Equal([SiteRoles.StandardId], await RolesOf(sacha.Id));
     }
+    [Fact]
+    public async Task Theme_IsClassicByDefault_AndFollowsTheAccount()
+    {
+        var sacha = (await _accounts.RegisterAsync("Sacha", "sacha@kanto.fr", Password, Invite)).User!;
+        Assert.Equal(SiteThemes.Classic, await _accounts.ThemeAsync(sacha.Id));
+        Assert.Equal(SiteThemes.Classic, await _accounts.ThemeAsync(null)); // pas connecté
+
+        Assert.True((await _accounts.SetThemeAsync(sacha.Id, SiteThemes.Pokedex)).Ok);
+        Assert.Equal(SiteThemes.Pokedex, await _accounts.ThemeAsync(sacha.Id));
+        Assert.False((await _accounts.SetThemeAsync(sacha.Id, "inconnu")).Ok);
+        Assert.Equal(SiteThemes.Pokedex, await _accounts.ThemeAsync(sacha.Id));
+
+        Assert.True((await _accounts.SetThemeAsync(sacha.Id, SiteThemes.Classic)).Ok);
+        await using var db = _db.NewContext();
+        Assert.Null(await db.Users.Where(u => u.Id == sacha.Id).Select(u => u.Theme).SingleAsync()); // le défaut n'est pas enregistré
+    }
 }
