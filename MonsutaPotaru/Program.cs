@@ -42,10 +42,12 @@ builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 // Pseudo, connexion par l'adresse mail, messages en français : AccountService. Ni mails, ni double authentification :
 // pas de fournisseurs de jetons.
 builder.Services.AddIdentityCore<ApplicationUser>(AccountService.ConfigureIdentity)
+    .AddRoles<IdentityRole>() // Standard, Administrateur (SiteRoles) : rôles dans le cookie de connexion
     .AddEntityFrameworkStores<ApplicationDbContext>()
     .AddSignInManager()
     .AddErrorDescriber<FrenchIdentityErrorDescriber>();
 builder.Services.AddScoped<AccountService>();
+builder.Services.AddScoped<AdminService>();
 
 // Clés qui chiffrent les cookies (connexion, formulaires) : gardées avec les données (volume Docker),
 // sinon chaque mise à jour du conteneur en crée de nouvelles et déconnecte tout le monde.
@@ -74,6 +76,7 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
     db.Database.Migrate();
+    await AdminService.InitializeAsync(db, app.Configuration, app.Logger); // code d'invitation en base, premier administrateur
     await BankService.FillSortNamesAsync(db); // nom de tri des Pokémon enregistrés avant son ajout
     await BankService.FillSpriteDetailsAsync(db); // sexe et objet tenu (image) des Pokémon enregistrés avant leur ajout
     await BankService.FillFilterDetailsAsync(db); // types, nature, IV... (filtres de « Ma collection ») des Pokémon plus anciens

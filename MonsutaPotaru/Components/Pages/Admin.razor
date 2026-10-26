@@ -1,0 +1,152 @@
+@page "/administration"
+@attribute [Authorize(Roles = SiteRoles.Admin)]
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Authorization
+@using MonsutaPotaru.Data
+@using MonsutaPotaru.Services
+@inject AdminService Administration
+
+<PageTitle>Administration</PageTitle>
+
+@* Réservée aux administrateurs (SiteRoles) : code d'invitation et rôles des comptes. Chaque action revérifie le rôle en
+   base (AdminService) : le cookie de connexion peut garder un rôle retiré pendant quelques minutes. *@
+
+<h1 class="mb-3">Administration</h1>
+
+@if (message is not null)
+{
+    <div class="alert @(messageIsError ? "alert-danger" : "alert-success") alert-dismissible" role="alert">
+        @message
+        <button type="button" class="btn-close" aria-label="Fermer" @onclick="() => message = null"></button>
+    </div>
+}
+
+@if (!loaded)
+{
+    <p class="text-muted">Chargement…</p>
+}
+else if (inviteCode is null)
+{
+    <p class="text-danger">@AdminService.NotAdminMessage</p>
+}
+else
+{
+    <h2 class="h4">Code d'invitation</h2>
+    <p class="small text-muted">À donner à qui tu veux voir s'inscrire. Majuscules, tirets et espaces ne comptent pas quand on le tape.</p>
+    <div class="d-flex flex-wrap align-items-center gap-3 mb-2">
+        <span class="font-monospace fw-bold fs-3">@inviteCode</span>
+        <button class="btn btn-outline-primary" @onclick="() => confirmRegenerate = true" disabled="@busy">Régénérer</button>
+    </div>
+    @if (confirmRegenerate)
+    {
+        <div class="alert alert-warning small">
+            Un nouveau code est tiré au hasard ; l'ancien ne permettra plus de s'inscrire (les comptes déjà créés ne changent pas).
+            <div class="d-flex flex-wrap gap-2 mt-2">
+                <button class="btn btn-sm btn-warning" @onclick="Regenerate" disabled="@busy">Tirer un nouveau code</button>
+                <button class="btn btn-sm btn-outline-secondary" @onclick="() => confirmRegenerate = false">Annuler</button>
+            </div>
+        </div>
+    }
+
+    <h2 class="h4 mt-4">Comptes</h2>
+    <p class="small text-muted">
+        Rôle Standard pour tous ; un administrateur a aussi accès à cette page. Un changement de rôle prend effet à la
+        prochaine connexion du compte (il est déconnecté dans les 30 minutes). Tu ne peux pas te retirer le rôle
+        toi-même, et il reste toujours au moins un administrateur.
+    </p>
+    <div class="list-group">
+        @foreach (var account in accounts)
+        {
+            var a = account;
+            <div class="list-group-item d-flex flex-wrap align-items-center gap-2">
+                <div>
+                    @if (a.Pseudo is null)
+                    {
+                        <em class="text-muted">Pseudo pas encore choisi</em>
+                    }
+                    else
+                    {
+                        <strong>@a.Pseudo</strong>
+                    }
+                    @if (a.Id == userId)
+                    {
+                        <span class="small text-muted"> (toi)</span>
+                    }
+                </div>
+                <span class="badge @(a.IsAdmin ? "text-bg-primary" : "text-bg-secondary")">@(a.IsAdmin ? SiteRoles.Admin : SiteRoles.Standard)</span>
+                @if (a.IsAdmin)
+                {
+                    @if (a.Id != userId)
+                    {
+                        <button class="btn btn-sm btn-outline-danger ms-auto" @onclick="() => SetAdmin(a, false)" disabled="@busy">Retirer le rôle administrateur</button>
+                    }
+                }
+                else
+                {
+                    <button class="btn btn-sm btn-outline-primary ms-auto" @onclick="() => SetAdmin(a, true)" disabled="@busy">Rendre administrateur</button>
+                }
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = default!;
+
+    private string userId = "";
+    private bool loaded;
+    private bool busy;
+    private string? message;
+    private bool messageIsError;
+    private string? inviteCode; // null : pas (ou plus) administrateur
+    private List<AdminAccount> accounts = [];
+    private bool confirmRegenerate;
+
+    protected override async Task OnInitializedAsync()
+    {
+        userId = (await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
+        await Reload();
+        loaded = true;
+    }
+
+    private async Task Reload()
+    {
+        inviteCode = await Administration.InviteCodeAsync(userId);
+        accounts = await Administration.ListAccountsAsync(userId);
+    }
+
+    private Task Regenerate() =>
+        RunBusy(async () =>
+        {
+            confirmRegenerate = false;
+            var result = await Administration.RegenerateInviteCodeAsync(userId);
+            Show(result.Message, !result.Ok);
+        });
+
+    private Task SetAdmin(AdminAccount account, bool admin) =>
+        RunBusy(async () =>
+        {
+            var result = await Administration.SetAdminAsync(userId, account.Id, admin);
+            Show(result.Message, !result.Ok);
+        });
+
+    private async Task RunBusy(Func<Task> action)
+    {
+        busy = true;
+        try
+        {
+            await action();
+            await Reload();
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private void Show(string text, bool isError = false)
+    {
+        message = text;
+        messageIsError = isError;
+    }
+}

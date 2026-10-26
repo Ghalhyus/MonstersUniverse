@@ -27,6 +27,10 @@ Ce fichier ne garde que ce que le README ne dit pas.
   jamais afficher l'adresse d'un compte à la place du pseudo.
 - Identity **modifie l'objet du compte avant de valider** (`SetUserNameAsync`, `SetEmailAsync`) : un refus laisse la
   valeur refusée dessus. D'où les vérifications d'unicité faites avant, dans `AccountService`.
+- Rôles exclusifs Standard / Administrateur (`SiteRoles`, README « Administration ») ; `AdminService` revérifie le rôle
+  en base à chaque action (le cookie peut le garder 30 minutes). Le code d'invitation est en base (`SiteSettings`) :
+  `Bank:InviteCode` ne sert qu'au premier démarrage. EF ne traduit pas `Guid.NewGuid()` dans un `ExecuteUpdate` :
+  calculer la valeur avant.
 - Tests : `AccountServiceTests` monte Identity comme `Program.cs` (`AccountService.ConfigureIdentity`) sur la base de test.
   Les comptes de `TestDatabase` sont créés sans Identity (pas d'adresse) : n'y appeler aucune méthode qui les revalide.
 
@@ -79,7 +83,8 @@ tests créent la base avec `EnsureCreated`, sans passer par les migrations.
   `dotnet <build>/bin/MonsutaPotaru/debug/MonsutaPotaru.dll --contentRoot <dépôt>/MonsutaPotaru --environment Development --urls http://localhost:5299
   --ConnectionStrings:DefaultConnection="DataSource=<tmp>/test.db;Cache=Shared" --Bank:BackupPath=<tmp>/backups --Bank:KeysPath=<tmp>/keys`.
   Le `.claude/launch.json` correspondant est temporaire (dossier ignoré par Git) : le supprimer après les tests.
-- Compte de test : en créer un sur l'instance de test (code d'invitation de développement : `pokeamis`), noter ses
+- Compte de test : en créer un sur l'instance de test (code d'invitation de développement : `pokeamis` sur une base neuve ;
+  administrateur : passer `--Bank:AdminPseudo=<pseudo>`), noter ses
   identifiants dans un fichier du dossier temporaire, jamais dans la conversation.
 - Envoi d'un `.sav` : servir le dossier des fichiers avec un petit serveur HTTP local qui autorise CORS, puis, dans la page,
   `fetch` du fichier → `DataTransfer` → `input.files`, et déclencher l'événement `change`.

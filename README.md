@@ -24,8 +24,8 @@ le site marche mais affiche des points d'interrogation, et les tests d'images é
 dotnet run --project MonsutaPotaru
 ```
 
-Puis ouvrir http://localhost:5265. En développement, le code d'invitation est `pokeamis`
-(voir `MonsutaPotaru/appsettings.Development.json`). La base SQLite est créée automatiquement dans `MonsutaPotaru/Data/app.db`.
+Puis ouvrir http://localhost:5265. En développement, le code d'invitation de départ est `pokeamis`
+(voir `MonsutaPotaru/appsettings.Development.json` ; ensuite, page « Administration »). La base SQLite est créée automatiquement dans `MonsutaPotaru/Data/app.db`.
 
 Tests :
 
@@ -68,7 +68,8 @@ liste sans trou, tassée à l'écriture comme le fait le jeu (un Pokémon dépos
 
 `Services/AccountService.cs`, pages dans `Components/Account` (ASP.NET Identity, tout en français) :
 
-- **Inscription** : pseudo, adresse mail, mot de passe et **code d'invitation** (obligatoire, `Bank:InviteCode`).
+- **Inscription** : pseudo, adresse mail, mot de passe et **code d'invitation** (obligatoire, gardé en base : voir
+  « Administration » ; majuscules, tirets et espaces ne comptent pas). Rôle **Standard**.
   Le **pseudo** (3 à 20 caractères : lettres, accents compris, chiffres, espaces, tirets, points, tirets bas ; espaces en
   trop retirés) est unique sans tenir compte des majuscules et **définitif**. C'est le nom d'utilisateur d'Identity : le
   menu (lien vers « Mon compte ») et la 3DS (`compte` de l'API) l'affichent ; l'adresse mail n'est montrée à personne.
@@ -84,6 +85,26 @@ liste sans trou, tassée à l'écriture comme le fait le jeu (un Pokémon dépos
   (rien n'était envoyé). Migration `RemovePhoneAndTwoFactor` : numéros effacés, double authentification coupée, clés et
   codes de secours supprimés. Un mot de passe oublié passe par l'administrateur.
 - Messages d'Identity en français : `FrenchIdentityErrorDescriber` (même fichier).
+
+### Administration
+
+Rôles Identity **exclusifs** (`Data/SiteSetting.cs`, `SiteRoles`, créés avec la base, identifiants fixes) : **Standard**
+pour tous (donné à l'inscription, et aux comptes existants par la migration `RolesAndInviteCode`), **Administrateur** pour
+ceux qui gèrent le site, avec tout ce que peut un Standard en plus. Page « Administration » (`/administration`,
+`Components/Pages/Admin.razor`, lien du menu pour les seuls administrateurs ; un autre compte y lit « Accès refusé ») :
+
+- **Code d'invitation** : affiché, et **régénéré** au hasard (`ABCD-EFGH`, sans caractères ambigus, après confirmation) ;
+  l'ancien ne marche plus aussitôt. Gardé en base (table `SiteSettings`) : au premier démarrage, il reprend
+  `Bank:InviteCode` (`INVITE_CODE` du `.env`) ou est tiré au hasard ; ensuite la configuration n'est plus lue.
+- **Comptes** : pseudo et rôle (jamais l'adresse ; « Pseudo pas encore choisi » pour un ancien compte), bouton pour
+  donner ou retirer le rôle administrateur. On ne se le retire pas soi-même, et il en reste toujours au moins un
+  (vérifié dans la requête même du retrait). Un changement de rôle renouvelle le tampon de sécurité du compte : il est
+  déconnecté à la prochaine vérification (30 minutes au plus) et retrouve ses droits en se reconnectant. Chaque action
+  revérifie le rôle en base (`AdminService`) : le cookie peut garder un rôle retiré d'ici là.
+- **Premier administrateur** : le compte du pseudo `Bank:AdminPseudo` (`ADMIN_PSEUDO` du `.env`), **tant que le site n'en
+  a aucun** : au démarrage s'il existe déjà, sinon à son inscription ou quand il choisit son pseudo. Une fois qu'il y a
+  un administrateur, le réglage est ignoré (un rôle retiré ne revient pas au redémarrage).
+- L'administrateur ne change pas les mots de passe (pas encore d'outil pour un mot de passe oublié).
 
 ### Sauvegardes stockées (consultation)
 
@@ -528,6 +549,9 @@ est incompatible (espèce, attaques ou objets inexistants dans le jeu, conversio
 | Fichier | Rôle |
 |---|---|
 | `MonsutaPotaru/Services/SaveSession.cs` | Sauvegarde chargée + dépôts/retraits en attente (PKHeX) |
+| `MonsutaPotaru/Services/AdminService.cs` | Administration : rôles (donner, retirer, garde-fous), liste des comptes, code d'invitation (lecture, régénération), initialisation au démarrage (code, premier administrateur) |
+| `MonsutaPotaru/Components/Pages/Admin.razor` | Page « Administration » : code d'invitation, comptes et rôles |
+| `MonsutaPotaru/Data/SiteSetting.cs` | Table des réglages du site (code d'invitation) et rôles des comptes (`SiteRoles`) |
 | `MonsutaPotaru/Services/AccountService.cs` | Comptes : règles du pseudo, inscription, connexion par l'adresse, choix du pseudo des anciens comptes, changement d'adresse ; réglages d'Identity, messages d'Identity en français |
 | `MonsutaPotaru/Components/Account/Pages/` | Pages du compte : connexion, inscription, « Choisis ton pseudo », « Mon compte » (`Manage/` : profil, adresse, mot de passe, données personnelles) |
 | `MonsutaPotaru/Components/Account/Shared/PseudoGuard.razor` | Renvoie un compte sans pseudo sur « Choisis ton pseudo » (autour du contenu de `MainLayout`) |
@@ -592,7 +616,7 @@ l'IP du VPS.
 | `Dockerfile` | Image de l'application |
 | `docker-compose.yml` | Application + Caddy, volume de données `monsuta-potaru_monsuta-potaru-data` |
 | `Caddyfile` | Réglages de Caddy (le domaine vient de `.env`) |
-| `.env.example` | Modèle des réglages : `DOMAIN` et `INVITE_CODE` (le vrai `.env` est créé sur le serveur) |
+| `.env.example` | Modèle des réglages : `DOMAIN`, `INVITE_CODE` (code de départ) et `ADMIN_PSEUDO` (premier administrateur) ; le vrai `.env` est créé sur le serveur |
 | `deploy/publier.cmd` (`publier.ps1`) | Depuis Windows : envoie le code sur le VPS et le met à jour |
 | `deploy/installer-serveur.sh` | Sur le VPS, une seule fois : pare-feu, Docker, `.env`, sauvegarde nocturne, démarrage |
 | `deploy/sauvegarder.sh` | Sauvegarde du volume de données (lancée chaque nuit par cron, gardée 14 jours) |
@@ -604,11 +628,16 @@ l'IP du VPS.
 
 1. Depuis Windows, dans le dossier du projet : `deploy\publier.cmd ubuntu@IP_DU_VPS`
 2. Sur le VPS (`ssh ubuntu@IP_DU_VPS`) : `bash ~/monsuta-potaru/deploy/installer-serveur.sh`
-   (demande le nom de domaine, génère le code d'invitation et l'affiche à la fin).
+   (demande le nom de domaine et le pseudo de ton compte, futur administrateur ; génère le code d'invitation de départ et
+   l'affiche à la fin). Inscris-toi ensuite avec ce pseudo : le compte devient administrateur.
 3. Depuis Windows : `deploy\images-serveur.cmd ubuntu@IP_DU_VPS` (images, voir plus bas).
 
 **Mises à jour** : par GitHub (« CI/CD » ci-dessous), ou `deploy\publier.cmd ubuntu@IP_DU_VPS` depuis Windows. Les
 migrations de la base s'appliquent au démarrage ; les données restent dans le volume Docker.
+
+**Serveur installé avant les rôles** (une seule fois) : ajouter `ADMIN_PSEUDO=<ton pseudo>` au `.env` du serveur
+(`~/monsuta-potaru/.env`) avant le déploiement. Si ton compte n'a pas encore choisi son pseudo, il devient administrateur
+quand il le choisit.
 
 **Changement de nom du serveur** (une seule fois, pour un serveur installé sous le nom « PokeBank ») : Docker préfixe ses
 volumes du nom du projet, le nouveau nom repartirait donc d'une base vide. Après avoir poussé le code renommé :

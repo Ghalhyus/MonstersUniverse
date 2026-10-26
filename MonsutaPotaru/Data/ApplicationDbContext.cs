@@ -16,10 +16,14 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<SyncPairingCode> SyncPairingCodes => Set<SyncPairingCode>();
     public DbSet<SyncSaveLocation> SyncSaveLocations => Set<SyncSaveLocation>();
     public DbSet<LivingDex> LivingDexes => Set<LivingDex>();
+    public DbSet<SiteSetting> SiteSettings => Set<SiteSetting>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
+
+        builder.Entity<Microsoft.AspNetCore.Identity.IdentityRole>().HasData(SiteRoles.All);
+        builder.Entity<SiteSetting>(e => e.HasKey(s => s.Key));
 
         builder.Entity<BankPokemon>(e =>
         {

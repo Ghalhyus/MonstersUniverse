@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using MonsutaPotaru.Data;
@@ -6,11 +7,15 @@ using MonsutaPotaru.Services;
 
 namespace MonsutaPotaru.Tests;
 
-/// <summary>Comptes : pseudo (règles, unicité, choix pour les anciens comptes), connexion par l'adresse mail, changement d'adresse.</summary>
+/// <summary>
+/// Comptes : pseudo (règles, unicité, choix pour les anciens comptes), connexion par l'adresse mail, changement d'adresse,
+/// rôle Standard et premier administrateur (pseudo de <c>Bank:AdminPseudo</c>).
+/// </summary>
 public sealed class AccountServiceTests : IDisposable
 {
     private const string Invite = "pokeamis";
     private const string Password = "Pikachu-25";
+    private const string AdminPseudo = "Pierre";
 
     private readonly TestDatabase _db = new();
     private readonly ServiceProvider _provider;
@@ -24,9 +29,11 @@ public sealed class AccountServiceTests : IDisposable
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddSingleton<IConfiguration>(new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?> { ["Bank:InviteCode"] = Invite }).Build());
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["Bank:AdminPseudo"] = AdminPseudo }).Build());
         services.AddScoped(_ => _db.NewContext());
+        services.AddSingleton(_db.Factory);
         services.AddIdentityCore<ApplicationUser>(AccountService.ConfigureIdentity)
+            .AddRoles<IdentityRole>()
             .AddEntityFrameworkStores<ApplicationDbContext>()
             .AddErrorDescriber<FrenchIdentityErrorDescriber>();
         services.AddScoped<AccountService>();
@@ -34,6 +41,17 @@ public sealed class AccountServiceTests : IDisposable
         _scope = _provider.CreateScope();
         _accounts = _scope.ServiceProvider.GetRequiredService<AccountService>();
         _users = _scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+
+        // Code d'invitation en base, comme après le premier démarrage (AdminService.InitializeAsync).
+        using var db = _db.NewContext();
+        db.SiteSettings.Add(new SiteSetting { Key = SiteSetting.InviteCodeKey, Value = Invite });
+        db.SaveChanges();
+    }
+
+    private async Task<string[]> RolesOf(string userId)
+    {
+        await using var db = _db.NewContext();
+        return await db.UserRoles.Where(r => r.UserId == userId).Select(r => r.RoleId).ToArrayAsync();
     }
 
     public void Dispose()
@@ -69,11 +87,13 @@ public sealed class AccountServiceTests : IDisposable
     public async Task Register_ThenLogIn_WithTheEmail_NotThePseudo()
     {
         Assert.Equal("Code d'invitation invalide.", (await _accounts.RegisterAsync("Sacha", "sacha@kanto.fr", Password, "mauvais")).Message);
+        Assert.Equal("Code d'invitation invalide.", (await _accounts.RegisterAsync("Sacha", "sacha@kanto.fr", Password, "")).Message);
 
-        var created = await _accounts.RegisterAsync("  Sacha  ", "sacha@kanto.fr", Password, $" {Invite} ");
+        var created = await _accounts.RegisterAsync("  Sacha  ", "sacha@kanto.fr", Password, " Poke-Amis "); // majuscules, tirets, espaces : peu importe
         Assert.True(created.Ok, created.Message);
         Assert.Equal(("Sacha", "sacha@kanto.fr"), (created.User!.UserName, created.User.Email));
         Assert.True(AccountService.HasPseudo(created.User.UserName));
+        Assert.Equal([SiteRoles.StandardId], await RolesOf(created.User.Id));
 
         Assert.Equal(created.User.Id, (await _accounts.FindForLoginAsync(" SACHA@kanto.fr ", Password))?.Id);
         Assert.Null(await _accounts.FindForLoginAsync("Sacha", Password)); // le pseudo ne sert pas à se connecter
@@ -108,6 +128,7 @@ public sealed class AccountServiceTests : IDisposable
         Assert.Equal("Le pseudo « SACHA » est déjà pris.", (await _accounts.ChoosePseudoAsync(old, "SACHA")).Message);
         var chosen = await _accounts.ChoosePseudoAsync(old, "Pierre");
         Assert.True(chosen.Ok, chosen.Message);
+        Assert.Equal([SiteRoles.AdminId], await RolesOf(old.Id)); // le pseudo de Bank:AdminPseudo, et pas encore d'administrateur
         Assert.Equal("Pierre", (await _users.FindByIdAsync(old.Id))!.UserName);
         Assert.Equal(old.Id, (await _accounts.FindForLoginAsync("pierre@argenta.fr", Password))?.Id); // toujours par l'adresse
 
@@ -131,5 +152,20 @@ public sealed class AccountServiceTests : IDisposable
         Assert.Equal(sacha.Id, (await _accounts.FindForLoginAsync("sacha@johto.fr", Password))?.Id);
         Assert.Null(await _accounts.FindForLoginAsync("sacha@kanto.fr", Password));
         Assert.Equal("Sacha", (await _users.FindByIdAsync(sacha.Id))!.UserName); // le pseudo ne bouge pas
+    }
+    [Fact]
+    public async Task TheAdminPseudo_BecomesAdmin_OnlyWhileThereIsNone()
+    {
+        var pierre = (await _accounts.RegisterAsync("pierre", "pierre@argenta.fr", Password, Invite)).User!; // majuscules indifférentes
+        Assert.Equal([SiteRoles.AdminId], await RolesOf(pierre.Id));
+        Assert.True(await _db.Admin().IsAdminAsync(pierre.Id));
+
+        var sacha = (await _accounts.RegisterAsync("Sacha", "sacha@kanto.fr", Password, Invite)).User!;
+        Assert.Equal([SiteRoles.StandardId], await RolesOf(sacha.Id));
+
+        // Un administrateur existe déjà : le pseudo de la configuration ne donne plus rien.
+        await using var db = _db.NewContext();
+        Assert.False(await AdminService.PromoteFirstAdminAsync(db, _scope.ServiceProvider.GetRequiredService<IConfiguration>(), sacha.Id, AdminPseudo));
+        Assert.Equal([SiteRoles.StandardId], await RolesOf(sacha.Id));
     }
 }

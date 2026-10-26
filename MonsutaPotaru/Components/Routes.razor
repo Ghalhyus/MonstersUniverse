@@ -3,7 +3,16 @@
     <Found Context="routeData">
         <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)">
             <NotAuthorized>
-                <RedirectToLogin />
+                @if (context.User.Identity?.IsAuthenticated == true)
+                {
+                    @* Connecté, mais sans le rôle demandé (page « Administration ») *@
+                    <h1 class="text-danger">Accès refusé</h1>
+                    <p>Tu n'as pas accès à cette page.</p>
+                }
+                else
+                {
+                    <RedirectToLogin />
+                }
             </NotAuthorized>
         </AuthorizeRouteView>
         <FocusOnNavigate RouteData="routeData" Selector="h1" />

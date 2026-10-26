@@ -64,7 +64,7 @@ public sealed class SyncService(
     public const int PairingCodeLength = 8;
 
     /// <summary>Sans 0/O ni 1/I/L, qui se confondent à l'écran ; 31⁸ ≈ 850 milliards de codes.</summary>
-    private const string PairingAlphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+    public const string PairingAlphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 
     public const int MaxDeviceNameLength = 40;
     public const int MaxFileNameLength = 100;

@@ -7,7 +7,10 @@ services:
     build: .
     restart: unless-stopped
     environment:
+      # Code d'invitation de départ : gardé en base au premier démarrage, puis géré depuis la page « Administration ».
       - Bank__InviteCode=${INVITE_CODE:?INVITE_CODE manquant dans .env}
+      # Pseudo du premier administrateur (tant que le site n'en a aucun).
+      - Bank__AdminPseudo=${ADMIN_PSEUDO:-}
       # Caddy transmet l'adresse et le protocole (https) d'origine : l'application les prend en compte
       # (cookies marqués « sécurisés »...). Sans risque : l'application n'est joignable qu'à travers Caddy.
       - ASPNETCORE_FORWARDEDHEADERS_ENABLED=true

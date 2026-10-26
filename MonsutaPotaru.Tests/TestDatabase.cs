@@ -46,6 +46,8 @@ public sealed class TestDatabase : IDisposable
     public SyncService Sync() =>
         new(Factory, StoredSaves(), NullLogger<SyncService>.Instance);
 
+    public AdminService Admin() => new(Factory, NullLogger<AdminService>.Instance);
+
     public void Dispose()
     {
         _connection.Dispose();

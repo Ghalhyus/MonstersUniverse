@@ -1,5 +1,6 @@
 using System.Text;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using MonsutaPotaru.Data;
 
 namespace MonsutaPotaru.Services;
@@ -13,7 +14,8 @@ public sealed record AccountResult(bool Ok, string Message, ApplicationUser? Use
 /// qu'affichent le menu et la 3DS. Il est définitif. Un compte d'avant le pseudo a son adresse pour nom d'utilisateur
 /// (« @ », interdit dans un pseudo) : le site lui demande d'en choisir un (<see cref="HasPseudo"/>).
 /// </summary>
-public sealed class AccountService(UserManager<ApplicationUser> userManager, IConfiguration configuration, ILogger<AccountService> logger)
+public sealed class AccountService(UserManager<ApplicationUser> userManager, IDbContextFactory<ApplicationDbContext> dbFactory,
+    IConfiguration configuration, ILogger<AccountService> logger)
 {
     public const int PseudoMinLength = 3;
     public const int PseudoMaxLength = 20;
@@ -48,12 +50,14 @@ public sealed class AccountService(UserManager<ApplicationUser> userManager, ICo
         return null;
     }
 
-    /// <summary>Crée un compte, si le code d'invitation est le bon.</summary>
+    /// <summary>Crée un compte (rôle Standard), si le code d'invitation est le bon (en base : page « Administration »).</summary>
     public async Task<AccountResult> RegisterAsync(string pseudo, string email, string password, string inviteCode)
     {
-        var expected = configuration["Bank:InviteCode"];
-        if (string.IsNullOrEmpty(expected) || !string.Equals(inviteCode.Trim(), expected, StringComparison.Ordinal))
-            return new(false, "Code d'invitation invalide.");
+        await using (var db = await dbFactory.CreateDbContextAsync())
+        {
+            if (!AdminService.InviteCodeMatches(await AdminService.ReadInviteCodeAsync(db), inviteCode))
+                return new(false, "Code d'invitation invalide.");
+        }
 
         pseudo = NormalizePseudo(pseudo);
         if (CheckPseudo(pseudo) is { } error)
@@ -63,7 +67,11 @@ public sealed class AccountService(UserManager<ApplicationUser> userManager, ICo
         var result = await userManager.CreateAsync(user, password);
         if (!result.Succeeded)
             return new(false, Describe(result));
+        result = await userManager.AddToRoleAsync(user, SiteRoles.Standard);
+        if (!result.Succeeded) // le compte existe : il recevra son rôle d'un administrateur
+            logger.LogError("Compte {User} créé sans rôle : {Errors}", user.Id, Describe(result));
         logger.LogInformation("Compte {User} créé.", user.Id);
+        await PromoteIfFirstAdminAsync(user, pseudo);
         return new(true, $"Bienvenue, {pseudo} !", user);
     }
 
@@ -90,6 +98,7 @@ public sealed class AccountService(UserManager<ApplicationUser> userManager, ICo
         if (!result.Succeeded)
             return new(false, Describe(result));
         logger.LogInformation("Compte {User} : pseudo choisi.", user.Id);
+        await PromoteIfFirstAdminAsync(user, pseudo);
         return new(true, $"Bienvenue, {pseudo} !", user);
     }
 
@@ -110,6 +119,14 @@ public sealed class AccountService(UserManager<ApplicationUser> userManager, ICo
             return new(false, Describe(result));
         logger.LogInformation("Compte {User} : adresse mail changée.", user.Id);
         return new(true, "Ton adresse mail a été changée : utilise-la pour te connecter.", user);
+    }
+
+    /// <summary>Premier administrateur du site, s'il porte le pseudo de <c>Bank:AdminPseudo</c> (voir <see cref="AdminService"/>).</summary>
+    private async Task PromoteIfFirstAdminAsync(ApplicationUser user, string pseudo)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+        if (await AdminService.PromoteFirstAdminAsync(db, configuration, user.Id, pseudo))
+            logger.LogInformation("Compte {User} ({Pseudo}) : administrateur (Bank:AdminPseudo).", user.Id, pseudo);
     }
 
     public static string Describe(IdentityResult result) => string.Join(" ", result.Errors.Select(e => e.Description));

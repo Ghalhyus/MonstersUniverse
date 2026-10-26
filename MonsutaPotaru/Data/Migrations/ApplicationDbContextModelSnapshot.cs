@@ -41,6 +41,22 @@ namespace MonsutaPotaru.Migrations
                         .HasDatabaseName("RoleNameIndex");
 
                     b.ToTable("AspNetRoles", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Id = "standard",
+                            ConcurrencyStamp = "standard",
+                            Name = "Standard",
+                            NormalizedName = "STANDARD"
+                        },
+                        new
+                        {
+                            Id = "administrateur",
+                            ConcurrencyStamp = "administrateur",
+                            Name = "Administrateur",
+                            NormalizedName = "ADMINISTRATEUR"
+                        });
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
@@ -430,6 +446,23 @@ namespace MonsutaPotaru.Migrations
                     b.HasKey("IdentityKey");
 
                     b.ToTable("SaveModifications");
+                });
+
+            modelBuilder.Entity("MonsutaPotaru.Data.SiteSetting", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Key");
+
+                    b.ToTable("SiteSettings");
                 });
 
             modelBuilder.Entity("MonsutaPotaru.Data.StoredSave", b =>

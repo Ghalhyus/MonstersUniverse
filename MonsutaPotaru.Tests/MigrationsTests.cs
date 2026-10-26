@@ -115,4 +115,27 @@ public sealed class MigrationsTests : IDisposable
             Assert.Equal(2, await db.Users.CountAsync());
         }
     }
+    [Fact]
+    public async Task RolesAndInviteCode_GivesTheStandardRole_ToExistingAccounts()
+    {
+        const string before = "20261026171901_RemovePhoneAndTwoFactor"; // juste avant RolesAndInviteCode
+        using (var db = NewContext())
+        {
+            await db.GetService<IMigrator>().MigrateAsync(before);
+            db.Users.AddRange(new ApplicationUser { Id = "sacha", UserName = "Sacha" }, new ApplicationUser { Id = "ondine", UserName = "ondine@azuria.fr" });
+            await db.SaveChangesAsync();
+        }
+
+        using (var db = NewContext())
+        {
+            await db.Database.MigrateAsync();
+            Assert.Equal([SiteRoles.Admin, SiteRoles.Standard], await db.Roles.OrderBy(r => r.Name).Select(r => r.Name!).ToListAsync());
+            Assert.Equal([("ondine", SiteRoles.StandardId), ("sacha", SiteRoles.StandardId)],
+                (await db.UserRoles.OrderBy(r => r.UserId).ToListAsync()).Select(r => (r.UserId, r.RoleId)).ToList());
+
+            await db.GetService<IMigrator>().MigrateAsync(before); // et retour
+            Assert.Empty(await db.UserRoles.ToListAsync());
+            Assert.Empty(await db.Roles.ToListAsync());
+        }
+    }
 }
