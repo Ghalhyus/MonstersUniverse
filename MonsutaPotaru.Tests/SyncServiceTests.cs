@@ -283,6 +283,43 @@ public sealed class SyncServiceTests : IDisposable
         Assert.NotEqual(SyncCompareVerdict.UpToDate, (await _sync.CompareAsync(console, id, virtualConsole)).Verdict);
     }
 
+    private static byte[] RedEmulatorSave() => File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Sauvegardes", "rouge.sav"));
+
+    [Fact]
+    public async Task Upload_TheVirtualConsoleCopy_OfAnEmulatorGameBoySave_IsUnchanged_AndKeepsTheSiteFile()
+    {
+        var console = await Linked();
+        var emulator = RedEmulatorSave();
+        Assert.True((await _saves.AddAsync("sacha", "rouge.sav", emulator)).Ok);
+
+        var sent = await _sync.UploadAsync(console, "rouge.sav", emulator[..0x8000], Cle);
+        Assert.Equal(SyncUploadStatus.Unchanged, sent.Status);
+        Assert.Equal(SaveModification.Hash(emulator), Assert.Single(await _sync.ListForDeviceAsync(console)).Hash);
+    }
+
+    [Fact]
+    public async Task AfterAWithdrawal_TheSiteVersion_BackFromTheVirtualConsole_IsAccepted()
+    {
+        var console = await Linked();
+        var emulator = RedEmulatorSave();
+        Assert.True((await _saves.AddAsync("sacha", "rouge.sav", emulator)).Ok);
+        var id = Assert.Single(await _saves.ListAsync("sacha")).Id;
+        Assert.True((await _db.Inventory().WithdrawFromSaveAsync("sacha", id, 1)).Ok);
+
+        var site = (await _sync.DownloadAsync(console, id, Cle))!.Value.Data;
+        var virtualConsole = site[..0x8000]; // la console n'écrit que la mémoire du jeu
+
+        // Renvoyée telle quelle depuis la console : rien à faire, pas « l'ancienne sauvegarde de ton jeu ».
+        Assert.Equal(SyncUploadStatus.Unchanged, (await _sync.UploadAsync(console, "rouge.sav", virtualConsole, Cle)).Status);
+        // Mise à jour depuis le site avec ce fichier : acceptée aussi.
+        var updated = await _saves.UpdateAsync("sacha", id, "rouge.sav", virtualConsole);
+        Assert.True(updated.Ok, updated.Message);
+
+        // L'ancienne sauvegarde du jeu, d'avant le retrait, reste refusée.
+        var old = await _saves.UpdateAsync("sacha", id, "rouge.sav", emulator[..0x8000]);
+        Assert.Equal(StoreStatus.ModifiedOnServer, old.Status);
+    }
+
     [Theory]
     [InlineData("rouge.sav", "gb", "RB")]
     [InlineData("bleu.sav", "gb", "RB")]

@@ -93,7 +93,7 @@ public sealed class StoredSaveService(
 
         // Partie déjà modifiée par le serveur, puis supprimée : on ne peut la renvoyer que dans la version rendue ou plus avancée.
         var modification = await db.SaveModifications.FindAsync(identity.Key);
-        if (CheckServerModification(modification, identity, data) is { } refused)
+        if (CheckServerModification(modification, identity, data, current: null) is { } refused)
             return refused;
 
         var pokemon = ReadAllPokemon(sav).ToList();
@@ -154,7 +154,7 @@ public sealed class StoredSaveService(
             if (!save.DownloadedSinceModification)
                 return new(StoreStatus.ModifiedOnServer,
                     $"{Capitalize(DescribeServerChanges(modification))} a modifié cette sauvegarde sur le serveur : télécharge-la et remplace celle de ton jeu avant de la mettre à jour.");
-            if (CheckServerModification(modification, identity, data) is { } refused)
+            if (CheckServerModification(modification, identity, data, save.Data) is { } refused)
                 return refused;
         }
         else if (identity.PlayTimeSeconds < save.PlayTimeSeconds && !acceptOlder)
@@ -213,12 +213,14 @@ public sealed class StoredSaveService(
     /// c'est alors l'ancienne sauvegarde du jeu, qui n'a pas ces changements (argent ou objets retirés encore là, objets
     /// déposés absents). Seule exception, la version modifiée elle-même, rendue au joueur par « Télécharger » ou la
     /// suppression : même temps de jeu et fichier identique (même argent ou moins pour les traces sans empreinte).
+    /// <paramref name="current"/> : fichier stocké, qui reste la version modifiée tant que la trace existe (null après une
+    /// suppression).
     /// </summary>
-    private static StoreResult? CheckServerModification(SaveModification? modification, SaveIdentity identity, byte[] data)
+    private static StoreResult? CheckServerModification(SaveModification? modification, SaveIdentity identity, byte[] data, byte[]? current)
     {
         if (modification is null || identity.PlayTimeSeconds > modification.PlayTimeSeconds)
             return null;
-        if (identity.PlayTimeSeconds == modification.PlayTimeSeconds && IsServerVersion(modification, data))
+        if (identity.PlayTimeSeconds == modification.PlayTimeSeconds && IsServerVersion(modification, data, current))
             return null;
         return new(StoreStatus.ModifiedOnServer,
             $"{Capitalize(DescribeServerChanges(modification))} a modifié cette partie sur le serveur, et ce fichier n'est pas plus avancé " +
@@ -226,10 +228,23 @@ public sealed class StoredSaveService(
             "sauvegarde de ton jeu, qui n'a pas ces changements. Utilise la version rendue par Monsuta Potaru (« Télécharger » ou suppression), joue un peu, puis réessaie.");
     }
 
-    private static bool IsServerVersion(SaveModification modification, byte[] data) =>
-        modification.DataHash is { } hash
+    private static bool IsServerVersion(SaveModification modification, byte[] data, byte[]? current) =>
+        current is not null && SameGameBoyMemory(current, data) // la version du site, passée par la Console virtuelle (ou l'inverse)
+        || (modification.DataHash is { } hash
             ? hash == SaveModification.Hash(data)
-            : TryRead(data, "", out var sav) && sav.Money <= modification.MoneyAfter; // trace posée avant l'empreinte (argent seulement)
+            : TryRead(data, "", out var sav) && sav.Money <= modification.MoneyAfter); // trace posée avant l'empreinte (argent seulement)
+
+    /// <summary>
+    /// Deux sauvegardes Game Boy dont la mémoire du jeu (les 32 premiers Ko) est identique : l'une vient d'un émulateur,
+    /// qui ajoute quelques octets à la fin (32 792 octets pour une Rouge), l'autre de la Console virtuelle (32 Ko tout
+    /// juste), où la console n'écrit que ces 32 Ko.
+    /// </summary>
+    public static bool SameGameBoyMemory(byte[] a, byte[] b)
+    {
+        const int memory = 0x8000;
+        static bool GameBoySize(int length) => length is >= memory and <= 0x8100;
+        return GameBoySize(a.Length) && GameBoySize(b.Length) && a.AsSpan(0, memory).SequenceEqual(b.AsSpan(0, memory));
+    }
 
     /// <summary>Ce que le serveur a changé dans la partie : « un retrait de 5 000 ₽ », « un transfert d'objets », ou les deux.</summary>
     public static string DescribeServerChanges(long withdrawn, bool ballsChanged)

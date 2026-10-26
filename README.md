@@ -128,7 +128,8 @@ avec « Mes sauvegardes » (ouvert de lui-même sur l'une des deux pages) :
 - La liste des consoles reliées montre leur nom (envoyé par la console), la date de liaison et la dernière connexion.
   **Retirer** une console rend son jeton inutilisable ; les sauvegardes déjà envoyées restent.
 - Un **envoi** ajoute une partie nouvelle, ou met à jour la partie déjà stockée **par ce compte**, avec toutes les règles
-  ci-dessus. Un fichier identique à la version stockée est ignoré (« déjà à jour ») ; sous un autre nom (la console a reconnu la
+  ci-dessus. Un fichier identique à la version stockée est ignoré (« déjà à jour » ; en Game Boy, la même mémoire du jeu suffit et le
+  fichier du site est gardé) ; sous un autre nom (la console a reconnu la
   version exacte du jeu), seul le nom de la sauvegarde stockée change. Rien n'est jamais forcé : moins de
   temps de jeu, partie modifiée sur le serveur et pas encore téléchargée, partie d'un autre compte, collection pleine sont
   refusés avec le message du site, que la console affiche. Le nom de fichier envoyé est nettoyé (sans dossier, 100
@@ -139,7 +140,7 @@ avec « Mes sauvegardes » (ouvert de lui-même sur l'une des deux pages) :
   connus sur cette console). Avant de remplacer sa sauvegarde, elle la fait **comparer** par le site (PKHeX) :
   refusé si ce n'est pas la même partie (autre dresseur) ou si celle de la console a **plus de temps de jeu** (sa
   progression serait perdue) ; identique (en Game Boy : même mémoire du jeu, les 32 premiers Ko, une sauvegarde d'émulateur ayant quelques octets
-  de plus, `SyncService.SameGameBoyMemory`) : « à jour » ; même temps de jeu mais contenu différent (retrait d'argent,
+  de plus, `StoredSaveService.SameGameBoyMemory`) : « à jour » ; même temps de jeu mais contenu différent (retrait d'argent,
   transfert d'objets du site) ou moins de temps de jeu : récupérable. Le téléchargement par la console vaut
   « Télécharger » (lève le blocage de « Mettre à jour ») et note l'emplacement où elle l'écrit. Cas sans issue pour
   l'instant : la console a joué **après** une modification du site sans la récupérer (envoi refusé, récupération aussi).
@@ -266,7 +267,8 @@ Pierre Lune »). Règles (`Services/SaveBag.cs`) :
 Après un retrait (argent ou objets) ou un dépôt, le jeu du joueur n'a pas ces changements : la sauvegarde est donc marquée
 « modifiée sur le serveur ». Sa mise à jour est bloquée tant qu'elle n'a pas été téléchargée (bouton « Télécharger » de
 « Mes sauvegardes »), puis n'accepte qu'un fichier avec **plus** de temps de jeu ; à temps de jeu égal, seul le fichier
-exact rendu par le serveur passe (empreinte SHA-256 dans `SaveModification`), l'ancienne sauvegarde du jeu est refusée.
+exact rendu par le serveur passe (empreinte SHA-256 dans `SaveModification` ; en Game Boy, la même mémoire du jeu, les 32
+premiers Ko, la Console virtuelle n'ayant pas les octets ajoutés par un émulateur), l'ancienne sauvegarde du jeu est refusée.
 Dissuasif, pas infaillible : rien n'oblige le joueur à remplacer réellement sa sauvegarde.
 
 ### Parc

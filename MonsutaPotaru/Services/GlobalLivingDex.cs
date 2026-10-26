@@ -91,10 +91,6 @@ public static class GlobalLivingDex
         || slot.Species == 809 && slot.Gigamax
         || slot.FormKey == "Large";
 
-    private static readonly Lazy<IReadOnlyList<GlobalSlot>> ShinyNational = new(() => NationalSlots.Value.Where(s => !ShinyLocked(s)).ToList());
-    private static readonly Lazy<IReadOnlyList<GlobalSlot>> ShinyComplete = new(() => CompleteSlots.Value.Where(s => !ShinyLocked(s)).ToList());
-    private static readonly Lazy<IReadOnlyList<GlobalSlot>> ShinyUltimate = new(() => UltimateSlots.Value.Where(s => !ShinyLocked(s)).ToList());
-
     private const ushort Pikachu = 25, Eevee = 133, Raticate = 20, Marowak = 105, Mothim = 414, Arceus = 493, Genesect = 649,
         Greninja = 658, Floette = 670, Furfrou = 676, Zygarde = 718, Rockruff = 744, Silvally = 773, Mimikyu = 778, Necrozma = 800,
         Toxtricity = 849, Alcremie = 869, Zacian = 888, Zamazenta = 889, Koraidon = 1007, Miraidon = 1008, Scatterbug = 664,
@@ -277,6 +273,10 @@ public static class GlobalLivingDex
         }
         return Ordered(result);
     });
+
+    private static readonly Lazy<IReadOnlyList<GlobalSlot>> ShinyNational = new(() => NationalSlots.Value.Where(s => !ShinyLocked(s)).ToList());
+    private static readonly Lazy<IReadOnlyList<GlobalSlot>> ShinyComplete = new(() => CompleteSlots.Value.Where(s => !ShinyLocked(s)).ToList());
+    private static readonly Lazy<IReadOnlyList<GlobalSlot>> ShinyUltimate = new(() => UltimateSlots.Value.Where(s => !ShinyLocked(s)).ToList());
 
     /// <summary>Formes jamais dans une boîte, ou jamais obtenables (voir <see cref="UltimateSlots"/>).</summary>
     private static bool Excluded(ushort species, byte form, string key) => (species, form) switch
