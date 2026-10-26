@@ -1,0 +1,251 @@
+@page "/amis"
+@attribute [Authorize]
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Authorization
+@using MonsutaPotaru.Data
+@using MonsutaPotaru.Services
+@inject FriendService FriendStore
+@inject NavigationManager Navigation
+
+<PageTitle>Amis</PageTitle>
+
+@* Multijoueurs → Amis : la liste de mes amis (avec une recherche par pseudo), et les demandes (mon code ami, la saisie
+   du code d'un autre joueur, les demandes reçues et envoyées). Onglet gardé dans l'adresse (?onglet=demandes). *@
+
+<h1 class="mb-3">Amis</h1>
+
+@if (message is not null)
+{
+    <div class="alert @(messageIsError ? "alert-danger" : "alert-success") alert-dismissible" role="alert">
+        @message
+        <button type="button" class="btn-close" aria-label="Fermer" @onclick="() => message = null"></button>
+    </div>
+}
+
+<ul class="nav nav-tabs mb-3" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button type="button" role="tab" class="nav-link @(requestsTab ? "" : "active")" aria-selected="@(requestsTab ? "false" : "true")"
+                @onclick="() => ShowTab(false)">
+            Amis <span class="badge text-bg-light ms-1">@(overview?.Friends.Count ?? 0)</span>
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button type="button" role="tab" class="nav-link @(requestsTab ? "active" : "")" aria-selected="@(requestsTab ? "true" : "false")"
+                @onclick="() => ShowTab(true)">
+            Demandes
+            @if (overview?.Received.Count > 0)
+            {
+                <span class="badge bg-danger ms-1" title="Demandes reçues">@overview.Received.Count</span>
+            }
+        </button>
+    </li>
+</ul>
+
+@if (overview is null)
+{
+    <p class="text-muted">Chargement…</p>
+}
+else if (!requestsTab)
+{
+    @* ---------- Amis ---------- *@
+    @if (overview.Friends.Count == 0)
+    {
+        <p class="text-muted">
+            Tu n'as pas encore d'ami. Trouve un joueur dans <a href="joueurs">Rechercher un joueur</a>, ou tape son code ami dans
+            l'onglet <a href="amis?onglet=demandes">Demandes</a>.
+        </p>
+    }
+    else
+    {
+        <input type="search" class="form-control mb-3 friend-search" placeholder="Chercher un ami par son pseudo…" aria-label="Chercher un ami"
+               @bind="search" @bind:event="oninput" />
+        var shown = overview.Friends.Where(Matches).ToList();
+        @if (shown.Count == 0)
+        {
+            <p class="text-muted small">Aucun ami ne correspond à « @search.Trim() ».</p>
+        }
+        <div class="list-group">
+            @foreach (var friend in shown)
+            {
+                var f = friend;
+                <div class="list-group-item d-flex flex-wrap align-items-center gap-2">
+                    @if (f.Pseudo is { } pseudo)
+                    {
+                        <a class="fw-semibold" href="@PlayerService.Link(pseudo)">@pseudo</a>
+                    }
+                    else
+                    {
+                        <em class="text-muted">@FriendService.NoPseudo</em>
+                    }
+                    <span class="small text-muted">ami depuis le @f.At.ToLocalTime().ToString("dd/MM/yyyy")</span>
+                    @if (confirmRemove == f.UserId)
+                    {
+                        <span class="ms-auto small">Le retirer de tes amis ?</span>
+                        <button type="button" class="btn btn-sm btn-danger" @onclick="() => Remove(f)" disabled="@busy">Retirer</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => confirmRemove = null">Annuler</button>
+                    }
+                    else
+                    {
+                        <button type="button" class="btn btn-sm btn-outline-danger ms-auto" @onclick="() => confirmRemove = f.UserId">Retirer</button>
+                    }
+                </div>
+            }
+        </div>
+    }
+}
+else
+{
+    @* ---------- Demandes ---------- *@
+    <div class="card mb-3">
+        <div class="card-body">
+            <h2 class="h6">Ajouter un ami avec son code</h2>
+            <form class="d-flex flex-wrap gap-2" @onsubmit="SendCode" @onsubmit:preventDefault>
+                <input class="form-control friend-code-input" placeholder="ABCD-EFGH" aria-label="Code ami" maxlength="12"
+                       autocomplete="off" @bind="codeInput" @bind:event="oninput" />
+                <button type="submit" class="btn btn-primary" disabled="@(busy || string.IsNullOrWhiteSpace(codeInput))">Envoyer une demande</button>
+            </form>
+            <p class="small text-muted mt-3 mb-1">
+                Mon code ami, à donner à qui je veux : même si mon profil est introuvable, il lui permet de m'envoyer une demande.
+            </p>
+            <div class="d-flex flex-wrap align-items-center gap-3">
+                <span class="font-monospace fw-bold fs-4">@myCode</span>
+                @if (confirmRegenerate)
+                {
+                    <span class="small">L'ancien code ne marchera plus.</span>
+                    <button type="button" class="btn btn-sm btn-warning" @onclick="RegenerateCode" disabled="@busy">Tirer un nouveau code</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => confirmRegenerate = false">Annuler</button>
+                }
+                else
+                {
+                    <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => confirmRegenerate = true">Régénérer</button>
+                }
+            </div>
+        </div>
+    </div>
+
+    <h2 class="h5">Demandes reçues</h2>
+    @if (overview.Received.Count == 0)
+    {
+        <p class="text-muted small">Aucune demande reçue.</p>
+    }
+    else
+    {
+        <div class="list-group mb-3">
+            @foreach (var request in overview.Received)
+            {
+                var r = request;
+                <div class="list-group-item d-flex flex-wrap align-items-center gap-2">
+                    <span class="fw-semibold">@PseudoOf(r)</span>
+                    <span class="small text-muted">le @r.At.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</span>
+                    <button type="button" class="btn btn-sm btn-primary ms-auto" @onclick="() => Accept(r)" disabled="@busy">Accepter</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => Decline(r)" disabled="@busy">Refuser</button>
+                </div>
+            }
+        </div>
+    }
+
+    <h2 class="h5">Demandes envoyées</h2>
+    @if (overview.Sent.Count == 0)
+    {
+        <p class="text-muted small">Aucune demande en attente.</p>
+    }
+    else
+    {
+        <div class="list-group">
+            @foreach (var request in overview.Sent)
+            {
+                var r = request;
+                <div class="list-group-item d-flex flex-wrap align-items-center gap-2">
+                    <span class="fw-semibold">@PseudoOf(r)</span>
+                    <span class="small text-muted">le @r.At.ToLocalTime().ToString("dd/MM/yyyy HH:mm"), en attente</span>
+                    <button type="button" class="btn btn-sm btn-outline-secondary ms-auto" @onclick="() => Cancel(r)" disabled="@busy">Annuler</button>
+                </div>
+            }
+        </div>
+    }
+}
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = default!;
+    [SupplyParameterFromQuery(Name = "onglet")] private string? TabFromQuery { get; set; }
+
+    private string userId = "";
+    private FriendsOverview? overview;
+    private string myCode = "";
+    private bool requestsTab;
+    private string search = "";
+    private string codeInput = "";
+    private string? confirmRemove; // ami dont on confirme le retrait
+    private bool confirmRegenerate;
+    private bool busy;
+    private string? message;
+    private bool messageIsError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        userId = (await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
+        myCode = await FriendStore.CodeAsync(userId);
+        await Reload();
+    }
+
+    protected override void OnParametersSet() => requestsTab = TabFromQuery == "demandes";
+
+    private void ShowTab(bool requests)
+    {
+        requestsTab = requests;
+        Navigation.NavigateTo(Navigation.GetUriWithQueryParameter("onglet", requests ? "demandes" : null), replace: true);
+    }
+
+    private bool Matches(FriendEntry f)
+    {
+        var key = BankPokemon.SortKey(search.Trim());
+        return key.Length == 0 || (f.Pseudo is { } p && BankPokemon.SortKey(p).Contains(key, StringComparison.Ordinal));
+    }
+
+    private static string PseudoOf(FriendEntry e) => e.Pseudo ?? FriendService.NoPseudo;
+
+    private Task SendCode() => Run(async () =>
+    {
+        var result = await FriendStore.RequestByCodeAsync(userId, codeInput);
+        if (result.Ok)
+            codeInput = "";
+        return result;
+    });
+
+    private Task RegenerateCode() => Run(async () =>
+    {
+        confirmRegenerate = false;
+        var result = await FriendStore.RegenerateCodeAsync(userId);
+        myCode = await FriendStore.CodeAsync(userId);
+        return result;
+    });
+
+    private Task Accept(FriendEntry r) => Run(() => FriendStore.AcceptAsync(userId, r.RequestId));
+    private Task Decline(FriendEntry r) => Run(() => FriendStore.DeclineAsync(userId, r.RequestId));
+    private Task Cancel(FriendEntry r) => Run(() => FriendStore.CancelAsync(userId, r.RequestId));
+
+    private Task Remove(FriendEntry f) => Run(async () =>
+    {
+        confirmRemove = null;
+        return await FriendStore.RemoveAsync(userId, f.UserId);
+    });
+
+    /// <summary>Une action, son message, puis les listes relues (et le compteur du menu, à la prochaine navigation).</summary>
+    private async Task Run(Func<Task<AccountResult>> action)
+    {
+        busy = true;
+        try
+        {
+            var result = FriendStore.Notify(await action());
+            message = result.Message;
+            messageIsError = !result.Ok;
+            await Reload();
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task Reload() => overview = await FriendStore.ListAsync(userId);
+}

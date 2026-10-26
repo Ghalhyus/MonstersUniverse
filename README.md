@@ -89,14 +89,31 @@ liste sans trou, tassée à l'écriture comme le fait le jeu (un Pokémon dépos
 ### Multijoueurs
 
 Menu « Multijoueurs » → **Rechercher un joueur** (`/joueurs`, `Pages/PlayerSearch.razor`) : une partie du pseudo (2
-caractères au moins, majuscules et accents ignorés), parmi les profils publics. Profil d'un joueur : `/joueurs/{pseudo}`
-(`Pages/PlayerProfilePage.razor`, `Shared/PlayerHeader.razor`), un onglet par page publique. Les pages Collection, Parc,
+caractères au moins, majuscules et accents ignorés), parmi les profils trouvables (« Tout le monde » et « Amis seulement »). Profil d'un joueur : `/joueurs/{pseudo}`
+(`Pages/PlayerProfilePage.razor`, `Shared/PlayerHeader.razor`) : un onglet « Profil » (son accueil, avec « Demander en ami »),
+puis un onglet par page visible. Les pages Collection, Parc,
 Inventaire et Living dex ont une seconde adresse (`/joueurs/{pseudo}/collection`...) qui les affiche pour ce joueur en
 **lecture seule** : aucun bouton qui modifie, copie ou télécharge (et les actions refusent un visiteur), ni journal de
 l'inventaire, ni noms de fichiers, ni ID de dresseur (`PokemonCard.HideTrainerId`) ; le porte-monnaie reste visible.
-« Mon compte » → **Visibilité** : profil public (défaut, les 4 pages) ou privé, pages publiques une à une (colonnes
-`ProfilePrivate`, `PublicPages`, migration `ProfileVisibility`). Un profil privé ou une page non publique répond comme un
-joueur inexistant, pour tous, administrateurs compris (`Services/PlayerService.cs`).
+« Mon compte » → **Visibilité** (colonnes `Audience` et `PublicPages`, migrations `ProfileVisibility` puis `Friends`) :
+« Qui peut voir mes pages ? », trois boutons radio, et les pages cochées une à une (les quatre par défaut) :
+- **Tout le monde** (défaut) : trouvable, pages cochées visibles de tous ;
+- **Amis seulement** : trouvable (on peut lui demander d'être ami), pages cochées visibles de ses amis seulement ; un
+  autre joueur ne voit que son pseudo et « Demander en ami » ;
+- **Personne** : introuvable, aucune page visible, même de ses amis ; ami par son code seulement (l'ancien profil
+  privé devient « Personne »).
+
+Un profil introuvable ou une page non visible répond comme un joueur inexistant, pour tous, administrateurs compris
+(`Services/PlayerService.cs`) ; le joueur voit ses propres pages comme un ami.
+
+**Amis** (Multijoueurs → Amis, `/amis`, `Pages/Friends.razor`, `Services/FriendService.cs`) : compteur rouge des demandes
+reçues dans le menu (sur « Multijoueurs » replié aussi). Onglet **Amis** : la liste, cherchable par pseudo, avec un lien
+vers chaque profil et « Retirer » (des deux côtés). Onglet **Demandes** (`?onglet=demandes`) : mon **code ami**
+(`ABCD-EFGH`, permanent, régénérable : l'ancien ne marche plus ; colonne `FriendCode`), la saisie du code d'un autre
+joueur (majuscules, tirets et espaces ignorés), les demandes reçues (accepter, refuser) et envoyées (annuler). Une
+demande se fait aussi depuis le profil d'un joueur trouvable (« Demander en ami ») ; le code marche même pour un profil
+« Personne ». Une demande qui croise celle de l'autre est acceptée d'emblée. Tables `FriendRequests` (une par sens et
+par paire) et `Friendships` (deux lignes par amitié) ; supprimées avec le compte.
 
 ### Thèmes
 
@@ -584,7 +601,10 @@ est incompatible (espèce, attaques ou objets inexistants dans le jeu, conversio
 | `MonsutaPotaru/Services/SaveSession.cs` | Sauvegarde chargée + dépôts/retraits en attente (PKHeX) |
 | `MonsutaPotaru/Services/AdminService.cs` | Administration : rôles (donner, retirer, garde-fous), liste des comptes, code d'invitation (lecture, régénération), initialisation au démarrage (code, premier administrateur) |
 | `MonsutaPotaru/Components/Pages/Admin.razor` | Page « Administration » : code d'invitation, comptes et rôles |
-| `MonsutaPotaru/Services/PlayerService.cs` | Multijoueurs : recherche par pseudo, joueur consultable (profil public, page publique), visibilité du profil |
+| `MonsutaPotaru/Services/PlayerService.cs` | Multijoueurs : recherche par pseudo, joueur consultable selon sa visibilité et le lien avec le visiteur, visibilité du profil |
+| `MonsutaPotaru/Services/FriendService.cs` | Amis : code ami, demandes (par pseudo ou par code), acceptation, refus, annulation, retrait, listes, compteur du menu |
+| `MonsutaPotaru/Components/Pages/Friends.razor` | « Multijoueurs » → « Amis » : onglets Amis (recherche, retrait) et Demandes (code ami, reçues, envoyées) |
+| `MonsutaPotaru/Data/Friendship.cs` | Tables des amitiés (deux lignes par amitié) et des demandes d'ami |
 | `MonsutaPotaru/Components/Pages/PlayerSearch.razor` | « Multijoueurs » → « Rechercher un joueur » (`/joueurs`) |
 | `MonsutaPotaru/Components/Pages/PlayerProfilePage.razor` | Profil d'un joueur (`/joueurs/{pseudo}`) : ses pages publiques en onglets |
 | `MonsutaPotaru/Components/Shared/PlayerHeader.razor`, `PlayerHidden.razor` | En-tête des pages d'un joueur (pseudo, onglets, « lecture seule ») ; réponse d'un profil privé ou introuvable |

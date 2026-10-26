@@ -169,6 +169,9 @@ namespace MonsutaPotaru.Migrations
                     b.Property<int>("AccessFailedCount")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int>("Audience")
+                        .HasColumnType("INTEGER");
+
                     b.Property<int>("CollectionLimit")
                         .HasColumnType("INTEGER");
 
@@ -182,6 +185,10 @@ namespace MonsutaPotaru.Migrations
 
                     b.Property<bool>("EmailConfirmed")
                         .HasColumnType("INTEGER");
+
+                    b.Property<string>("FriendCode")
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
 
                     b.Property<bool>("LockoutEnabled")
                         .HasColumnType("INTEGER");
@@ -206,9 +213,6 @@ namespace MonsutaPotaru.Migrations
                     b.Property<bool>("PhoneNumberConfirmed")
                         .HasColumnType("INTEGER");
 
-                    b.Property<bool>("ProfilePrivate")
-                        .HasColumnType("INTEGER");
-
                     b.Property<int>("PublicPages")
                         .HasColumnType("INTEGER");
 
@@ -227,6 +231,9 @@ namespace MonsutaPotaru.Migrations
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("FriendCode")
+                        .IsUnique();
 
                     b.HasIndex("NormalizedEmail")
                         .HasDatabaseName("EmailIndex");
@@ -363,6 +370,51 @@ namespace MonsutaPotaru.Migrations
                     b.HasIndex("OwnerId", "Fingerprint");
 
                     b.ToTable("BankPokemon");
+                });
+
+            modelBuilder.Entity("MonsutaPotaru.Data.FriendRequest", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FromId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ToId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ToId");
+
+                    b.HasIndex("FromId", "ToId")
+                        .IsUnique();
+
+                    b.ToTable("FriendRequests");
+                });
+
+            modelBuilder.Entity("MonsutaPotaru.Data.Friendship", b =>
+                {
+                    b.Property<string>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FriendId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("Since")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("UserId", "FriendId");
+
+                    b.HasIndex("FriendId");
+
+                    b.ToTable("Friendships");
                 });
 
             modelBuilder.Entity("MonsutaPotaru.Data.LivingDex", b =>
@@ -745,6 +797,44 @@ namespace MonsutaPotaru.Migrations
                     b.Navigation("Owner");
 
                     b.Navigation("StoredSave");
+                });
+
+            modelBuilder.Entity("MonsutaPotaru.Data.FriendRequest", b =>
+                {
+                    b.HasOne("MonsutaPotaru.Data.ApplicationUser", "From")
+                        .WithMany()
+                        .HasForeignKey("FromId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("MonsutaPotaru.Data.ApplicationUser", "To")
+                        .WithMany()
+                        .HasForeignKey("ToId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("From");
+
+                    b.Navigation("To");
+                });
+
+            modelBuilder.Entity("MonsutaPotaru.Data.Friendship", b =>
+                {
+                    b.HasOne("MonsutaPotaru.Data.ApplicationUser", "Friend")
+                        .WithMany()
+                        .HasForeignKey("FriendId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("MonsutaPotaru.Data.ApplicationUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Friend");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("MonsutaPotaru.Data.LivingDex", b =>

@@ -531,7 +531,7 @@ else if (panel == SidePanel.Detail && detail is { } d)
     {
         if (Visitor)
         {
-            player = await Players.FindAsync(Pseudo, PublicPages.Inventory);
+            player = await Players.FindAsync((await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier), Pseudo, PublicPages.Inventory);
             playerChecked = true;
             if (player is null)
                 return;

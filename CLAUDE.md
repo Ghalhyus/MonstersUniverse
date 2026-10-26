@@ -52,7 +52,12 @@ Ce fichier ne garde que ce que le README ne dit pas.
   téléchargement. Une nouvelle action ou une nouvelle donnée sur ces pages : décider ce qu'en voit un visiteur.
 - Le premier rendu d'un visiteur a lieu avant que le joueur soit trouvé : ce qui touche aux éléments de la page dans
   `OnAfterRenderAsync` (parc, grille de l'inventaire) attend que le contenu soit affiché (`engineStarted`, `contentStarted`).
-- Profil privé, page non publique, compte sans pseudo : même réponse (`PlayerHidden`), administrateurs compris.
+- Visibilité à trois valeurs (`ProfileAudience` : tout le monde, amis seulement, personne). `PlayerService.FindAsync` prend
+  le compte qui regarde : un ami (ou le joueur lui-même) voit les pages d'un profil « Amis seulement » ; « Personne »
+  reste introuvable, même des amis. Profil caché, page non visible, compte sans pseudo : même réponse (`PlayerHidden`),
+  administrateurs compris.
+- Amis : `FriendService` ; les amitiés sont en double (une ligne par compte). Une action de la page qui change les
+  demandes passe par `FriendService.Notify` pour que le menu relise son compteur.
 - Le panneau du navigateur de test, masqué, ne remplit pas les listes virtualisées (« Ma collection ») : faire une
   capture d'écran pour qu'elles se chargent.
 

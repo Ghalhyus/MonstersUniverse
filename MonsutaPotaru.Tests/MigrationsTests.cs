@@ -161,7 +161,31 @@ public sealed class MigrationsTests : IDisposable
         {
             await db.Database.MigrateAsync();
             var sacha = await db.Users.SingleAsync(u => u.Id == "sacha");
-            Assert.Equal((false, PublicPages.All), (sacha.ProfilePrivate, sacha.PublicPages));
+            Assert.Equal((ProfileAudience.Everyone, PublicPages.All), (sacha.Audience, sacha.PublicPages));
+        }
+    }
+
+    [Fact]
+    public async Task Friends_TurnsPrivateProfiles_IntoNobody()
+    {
+        const string before = "20261026185115_ProfileVisibility"; // juste avant Friends
+        using (var db = NewContext())
+        {
+            await db.GetService<IMigrator>().MigrateAsync(before);
+            await AddUserAsync(db, "sacha", "Sacha");
+            await AddUserAsync(db, "ondine", "Ondine");
+            await db.Database.ExecuteSqlRawAsync("UPDATE AspNetUsers SET ProfilePrivate = 1 WHERE Id = 'ondine';");
+        }
+
+        using (var db = NewContext())
+        {
+            await db.Database.MigrateAsync();
+            Assert.Equal([("ondine", ProfileAudience.Nobody), ("sacha", ProfileAudience.Everyone)],
+                (await db.Users.OrderBy(u => u.Id).Select(u => new { u.Id, u.Audience }).ToListAsync()).Select(u => (u.Id, u.Audience)).ToList());
+            await db.Database.ExecuteSqlRawAsync("UPDATE AspNetUsers SET Audience = 1 WHERE Id = 'sacha';"); // amis seulement
+
+            await db.GetService<IMigrator>().MigrateAsync(before); // et retour : amis seulement et personne redeviennent privés
+            Assert.Equal(2, await db.Database.SqlQueryRaw<int>("SELECT COUNT(*) AS Value FROM AspNetUsers WHERE ProfilePrivate = 1").SingleAsync());
         }
     }
 }

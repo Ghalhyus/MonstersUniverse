@@ -1,14 +1,17 @@
 @page "/joueurs/{Pseudo}"
 @attribute [Authorize]
+@using System.Security.Claims
 @using Microsoft.AspNetCore.Authorization
 @using MonsutaPotaru.Components.Shared
 @using MonsutaPotaru.Data
 @using MonsutaPotaru.Services
 @inject PlayerService Players
+@inject FriendService Friends
 
 <PageTitle>@(player?.Pseudo ?? (loaded ? "Joueur introuvable" : "Joueur"))</PageTitle>
 
-@* Accueil d'un joueur (Multijoueurs) : ses pages publiques en onglets ; un profil privé répond comme un joueur inexistant. *@
+@* Accueil d'un joueur (Multijoueurs) : son lien avec moi (demande d'ami) et ses pages visibles en onglets ; un profil
+   introuvable (« Personne ») répond comme un joueur inexistant. *@
 
 @if (!loaded)
 {
@@ -21,21 +24,71 @@ else if (player is null)
 else
 {
     <PlayerHeader Player="player" />
+
+    @if (message is not null)
+    {
+        <div class="alert @(messageIsError ? "alert-danger" : "alert-success") alert-dismissible" role="alert">
+            @message
+            <button type="button" class="btn-close" aria-label="Fermer" @onclick="() => message = null"></button>
+        </div>
+    }
+
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+        @switch (player.Relation)
+        {
+            case PlayerRelation.Self:
+                <span class="text-muted">C'est ton profil, tel que les autres le voient. Règle-le dans <a href="Account/Manage/Visibility">Visibilité</a>.</span>
+                break;
+            case PlayerRelation.Friend:
+                <span class="badge text-bg-success">✓ Ami</span>
+                <a class="small" href="amis">Mes amis</a>
+                break;
+            case PlayerRelation.RequestSent:
+                <span class="text-muted">Demande d'ami envoyée, en attente de réponse.</span>
+                <a class="small" href="amis?onglet=demandes">Mes demandes</a>
+                break;
+            case PlayerRelation.RequestReceived:
+                <span>@player.Pseudo t'a demandé en ami.</span>
+                <button type="button" class="btn btn-primary btn-sm" @onclick="Request" disabled="@busy">Accepter</button>
+                break;
+            default:
+                <button type="button" class="btn btn-primary" @onclick="Request" disabled="@busy">Demander en ami</button>
+                break;
+        }
+    </div>
+
     @if (player.Pages != PublicPages.None)
     {
-        <p>Choisis une page ci-dessus.</p>
+        <p>Choisis une page dans les onglets ci-dessus.</p>
     }
 }
 
 @code {
+    [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = default!;
     [Parameter] public string Pseudo { get; set; } = "";
 
+    private string userId = "";
     private PlayerProfile? player;
     private bool loaded;
+    private bool busy;
+    private string? message;
+    private bool messageIsError;
 
     protected override async Task OnParametersSetAsync()
     {
-        player = await Players.FindAsync(Pseudo);
+        userId = (await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
+        player = await Players.FindAsync(userId, Pseudo);
         loaded = true;
+    }
+
+    /// <summary>Demande d'ami ; si le joueur m'en avait déjà fait une, nous voilà amis.</summary>
+    private async Task Request()
+    {
+        busy = true;
+        var result = Friends.Notify(await Friends.RequestAsync(userId, Pseudo));
+        message = result.Message;
+        messageIsError = !result.Ok;
+        player = await Players.FindAsync(userId, Pseudo); // pages visibles d'un ami « Amis seulement »
+        busy = false;
     }
 }

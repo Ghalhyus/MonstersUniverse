@@ -4,6 +4,7 @@
 @using MonsutaPotaru.Services
 @inject NavigationManager NavigationManager
 @inject WalletState Wallet
+@inject FriendService Friends
 
 <div class="top-row ps-3 navbar navbar-dark">
     <div class="container-fluid">
@@ -72,10 +73,21 @@
             <details open="@playersOpen">
                 <summary class="nav-link">
                     <span class="bi bi-person-badge-nav-menu" aria-hidden="true"></span> Multijoueurs
+                    @if (pendingRequests > 0 && !playersOpen)
+                    {
+                        <span class="badge bg-danger ms-2" title="Demandes d'ami reçues">@pendingRequests</span>
+                    }
                 </summary>
                 <div class="nav-subitems">
                     <NavLink class="nav-link" href="joueurs">
                         <span class="bi bi-person-nav-menu" aria-hidden="true"></span> Rechercher un joueur
+                    </NavLink>
+                    <NavLink class="nav-link" href="amis">
+                        <span class="bi bi-person-fill-nav-menu" aria-hidden="true"></span> Amis
+                        @if (pendingRequests > 0)
+                        {
+                            <span class="badge bg-danger ms-2" title="Demandes d'ami reçues">@pendingRequests</span>
+                        }
                     </NavLink>
                 </div>
             </details>
@@ -131,31 +143,50 @@
     private bool savesOpen => currentUrl is { } url && (url == "sauvegardes" || url.StartsWith("sauvegardes/") || url.StartsWith("sauvegardes?"));
 
     /// <summary>Menu « Multijoueurs » ouvert : sur la recherche ou les pages d'un joueur.</summary>
-    private bool playersOpen => currentUrl is { } url && (url == "joueurs" || url.StartsWith("joueurs/") || url.StartsWith("joueurs?"));
+    private bool playersOpen => currentUrl is { } url
+        && (url == "joueurs" || url.StartsWith("joueurs/") || url.StartsWith("joueurs?") || url == "amis" || url.StartsWith("amis?"));
+
+    private string? userId;
+    private int pendingRequests; // demandes d'ami reçues, relues à chaque navigation
 
     protected override async Task OnInitializedAsync()
     {
         currentUrl = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
         NavigationManager.LocationChanged += OnLocationChanged;
         Wallet.Changed += OnWalletChanged;
+        Friends.Changed += OnFriendsChanged;
 
         // Solde du porte-monnaie pour l'utilisateur connecté (rafraîchi par « Inventaire » après un retrait).
-        if (AuthState is not null && (await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier) is { } userId)
+        userId = AuthState is null ? null : (await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (userId is not null)
+        {
             await Wallet.RefreshAsync(userId);
+            pendingRequests = await Friends.PendingCountAsync(userId);
+        }
     }
 
     private void OnWalletChanged() => InvokeAsync(StateHasChanged);
 
-    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    private void OnFriendsChanged() => InvokeAsync(async () =>
+    {
+        if (userId is not null)
+            pendingRequests = await Friends.PendingCountAsync(userId);
+        StateHasChanged();
+    });
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e) => InvokeAsync(async () =>
     {
         currentUrl = NavigationManager.ToBaseRelativePath(e.Location);
+        if (userId is not null)
+            pendingRequests = await Friends.PendingCountAsync(userId);
         StateHasChanged();
-    }
+    });
 
     public void Dispose()
     {
         NavigationManager.LocationChanged -= OnLocationChanged;
         Wallet.Changed -= OnWalletChanged;
+        Friends.Changed -= OnFriendsChanged;
     }
 }
 

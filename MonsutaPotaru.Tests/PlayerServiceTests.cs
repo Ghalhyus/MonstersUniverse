@@ -1,18 +1,21 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using MonsutaPotaru.Data;
 using MonsutaPotaru.Services;
 
 namespace MonsutaPotaru.Tests;
 
-/// <summary>Multijoueurs : recherche par pseudo, profils privés, pages publiques.</summary>
+/// <summary>Multijoueurs : recherche par pseudo, visibilité (tout le monde, amis seulement, personne), pages visibles.</summary>
 public sealed class PlayerServiceTests : IDisposable
 {
     private readonly TestDatabase _db = new();
     private readonly PlayerService _players;
+    private readonly FriendService _friends;
 
     public PlayerServiceTests()
     {
         _players = _db.Players();
+        _friends = new FriendService(_db.Factory, NullLogger<FriendService>.Instance);
         using var db = _db.NewContext();
         // Comptes comme Identity les enregistre (nom normalisé) ; un ancien compte sans pseudo (son adresse).
         db.Users.AddRange(
@@ -20,22 +23,24 @@ public sealed class PlayerServiceTests : IDisposable
             User("ondine", "Ondine"),
             User("pierre", "Pierre"),
             User("elo", "Éloïse"),
-            User("cache", "Sachaprivé", isPrivate: true),
+            User("cache", "Sachaprivé", ProfileAudience.Nobody),
+            User("amie", "Sachamie", ProfileAudience.Friends),
             User("ancien", "sacha@kanto.fr"));
         db.SaveChanges();
     }
 
     public void Dispose() => _db.Dispose();
 
-    private static ApplicationUser User(string id, string name, bool isPrivate = false) =>
-        new() { Id = id, UserName = name, NormalizedUserName = name.ToUpperInvariant(), ProfilePrivate = isPrivate };
+    private static ApplicationUser User(string id, string name, ProfileAudience audience = ProfileAudience.Everyone) =>
+        new() { Id = id, UserName = name, NormalizedUserName = name.ToUpperInvariant(), Audience = audience };
 
     [Fact]
-    public async Task Search_FindsPublicPseudos_ByAnyPart_IgnoringCaseAndAccents()
+    public async Task Search_FindsVisiblePseudos_ByAnyPart_IgnoringCaseAndAccents()
     {
         Assert.Empty(await _players.SearchAsync("s")); // trop court : pas d'annuaire de tous les joueurs
         Assert.Empty(await _players.SearchAsync("   "));
-        Assert.Equal(["Sacha du Bourg"], await _players.SearchAsync("SACH")); // ni le profil privé, ni l'adresse d'un ancien compte
+        // « Amis seulement » est trouvable (pour recevoir des demandes) ; ni « Personne », ni l'adresse d'un ancien compte.
+        Assert.Equal(["Sacha du Bourg", "Sachamie"], await _players.SearchAsync("SACH"));
         Assert.Equal(["Sacha du Bourg"], await _players.SearchAsync(" du  bourg "));
         Assert.Equal(["Éloïse"], await _players.SearchAsync("eloi"));
         Assert.Empty(await _players.SearchAsync("kanto"));
@@ -53,38 +58,65 @@ public sealed class PlayerServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task Find_OnlyPublicProfiles_AndPublicPages()
+    public async Task Find_EveryoneProfiles_AndTheirCheckedPages()
     {
-        var sacha = await _players.FindAsync("sacha du bourg"); // majuscules indifférentes
-        Assert.Equal(("sacha", "Sacha du Bourg", PublicPages.All), (sacha?.Id, sacha?.Pseudo, sacha?.Pages));
+        var sacha = await _players.FindAsync("ondine", "sacha du bourg"); // majuscules indifférentes
+        Assert.Equal(("sacha", "Sacha du Bourg", PublicPages.All, PlayerRelation.None), (sacha?.Id, sacha?.Pseudo, sacha?.Pages, sacha?.Relation));
+        Assert.Equal(PlayerRelation.Self, (await _players.FindAsync("sacha", "Sacha du Bourg"))?.Relation);
 
-        Assert.Null(await _players.FindAsync("Sachaprivé"));
-        Assert.Null(await _players.FindAsync("sacha@kanto.fr")); // ancien compte sans pseudo
-        Assert.Null(await _players.FindAsync("Inconnu"));
-        Assert.Null(await _players.FindAsync(""));
+        Assert.Null(await _players.FindAsync("ondine", "sacha@kanto.fr")); // ancien compte sans pseudo
+        Assert.Null(await _players.FindAsync("ondine", "Inconnu"));
+        Assert.Null(await _players.FindAsync("ondine", ""));
 
-        Assert.True((await _players.SetVisibilityAsync("ondine", false, PublicPages.Park | PublicPages.LivingDex)).Ok);
-        Assert.NotNull(await _players.FindAsync("Ondine", PublicPages.Park));
-        Assert.Null(await _players.FindAsync("Ondine", PublicPages.Inventory)); // page non publique : comme un inconnu
-        Assert.Equal(PublicPages.Park | PublicPages.LivingDex, (await _players.FindAsync("Ondine"))!.Pages);
+        Assert.True((await _players.SetVisibilityAsync("ondine", ProfileAudience.Everyone, PublicPages.Park | PublicPages.LivingDex)).Ok);
+        Assert.NotNull(await _players.FindAsync("sacha", "Ondine", PublicPages.Park));
+        Assert.Null(await _players.FindAsync("sacha", "Ondine", PublicPages.Inventory)); // page non cochée : comme un inconnu
+    }
+
+    [Fact]
+    public async Task FriendsOnly_ShowsThePagesToFriends_AndNobody_HidesEverything()
+    {
+        // « Amis seulement » : trouvable, sans pages pour un inconnu ; ses amis (et lui-même) voient les pages cochées.
+        var stranger = await _players.FindAsync("ondine", "Sachamie");
+        Assert.Equal((PublicPages.None, true), (stranger?.Pages, stranger?.FriendsOnly));
+        Assert.Null(await _players.FindAsync("ondine", "Sachamie", PublicPages.Collection));
+        Assert.Equal(PublicPages.All, (await _players.FindAsync("amie", "Sachamie"))?.Pages);
+
+        await BeFriends("ondine", "amie");
+        Assert.Equal(PublicPages.All, (await _players.FindAsync("ondine", "Sachamie"))?.Pages);
+        Assert.NotNull(await _players.FindAsync("ondine", "Sachamie", PublicPages.Collection));
+
+        // « Personne » : introuvable, même par ses amis.
+        await BeFriends("ondine", "cache");
+        Assert.Null(await _players.FindAsync("ondine", "Sachaprivé"));
+        Assert.Empty(await _players.SearchAsync("prive"));
+    }
+
+    private async Task BeFriends(string a, string b)
+    {
+        var code = await _friends.CodeAsync(b);
+        Assert.True((await _friends.RequestByCodeAsync(a, code)).Ok);
+        var request = Assert.Single((await _friends.ListAsync(b)).Received);
+        Assert.True((await _friends.AcceptAsync(b, request.RequestId)).Ok);
     }
 
     [Fact]
     public async Task Visibility_IsSavedOnTheAccount()
     {
-        Assert.Equal(new ProfileVisibility(false, PublicPages.All), await _players.VisibilityAsync("pierre")); // défaut
+        Assert.Equal(new ProfileVisibility(ProfileAudience.Everyone, PublicPages.All), await _players.VisibilityAsync("pierre")); // défaut
 
-        var hidden = await _players.SetVisibilityAsync("pierre", true, PublicPages.Collection);
+        var hidden = await _players.SetVisibilityAsync("pierre", ProfileAudience.Nobody, PublicPages.Collection);
         Assert.True(hidden.Ok);
-        Assert.Contains("privé", hidden.Message);
-        Assert.Equal(new ProfileVisibility(true, PublicPages.Collection), await _players.VisibilityAsync("pierre"));
-        Assert.Null(await _players.FindAsync("Pierre", PublicPages.Collection)); // privé : rien, même la page cochée
+        Assert.Contains("code", hidden.Message);
+        Assert.Equal(new ProfileVisibility(ProfileAudience.Nobody, PublicPages.Collection), await _players.VisibilityAsync("pierre"));
+        Assert.Null(await _players.FindAsync("sacha", "Pierre", PublicPages.Collection)); // personne : rien, même la page cochée
         Assert.Empty(await _players.SearchAsync("pierre"));
 
-        Assert.True((await _players.SetVisibilityAsync("pierre", false, (PublicPages)0xFF)).Ok); // valeurs inconnues ignorées
+        Assert.True((await _players.SetVisibilityAsync("pierre", ProfileAudience.Everyone, (PublicPages)0xFF)).Ok); // valeurs inconnues ignorées
         await using var db = _db.NewContext();
         Assert.Equal(PublicPages.All, await db.Users.Where(u => u.Id == "pierre").Select(u => u.PublicPages).SingleAsync());
-        Assert.False((await _players.SetVisibilityAsync("personne", false, PublicPages.All)).Ok);
+        Assert.False((await _players.SetVisibilityAsync("pierre", (ProfileAudience)7, PublicPages.All)).Ok);
+        Assert.False((await _players.SetVisibilityAsync("personne", ProfileAudience.Everyone, PublicPages.All)).Ok);
     }
 
     [Theory]

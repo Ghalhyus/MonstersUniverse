@@ -16,13 +16,21 @@ public class ApplicationUser : IdentityUser
     public string? Theme { get; set; }
 
     /// <summary>
-    /// Profil privé (« Mon compte » → « Visibilité ») : introuvable dans « Rechercher un joueur », et aucune de ses pages
-    /// n'est visible des autres, même par lien direct (<see cref="Services.PlayerService"/>).
+    /// Qui peut voir les pages cochées (<see cref="PublicPages"/>), « Mon compte » → « Visibilité » : tout le monde, les amis
+    /// seulement (trouvable dans la recherche pour recevoir des demandes), ou personne (introuvable, ami par code
+    /// seulement). Voir <see cref="Services.PlayerService"/>.
     /// </summary>
-    public bool ProfilePrivate { get; set; }
+    public ProfileAudience Audience { get; set; }
 
-    /// <summary>Pages que les autres joueurs peuvent consulter, en lecture seule, quand le profil est public.</summary>
+    /// <summary>Pages que les autres joueurs peuvent consulter, en lecture seule, selon <see cref="Audience"/>.</summary>
     public PublicPages PublicPages { get; set; } = PublicPages.All;
+
+    /// <summary>
+    /// Code ami (« ABCD-EFGH », <see cref="Services.FriendService"/>) : tapé par un autre joueur, il m'envoie une demande
+    /// d'ami, même si mon profil est introuvable. Tiré au premier besoin, régénérable ; null tant qu'il n'a pas servi.
+    /// </summary>
+    [System.ComponentModel.DataAnnotations.MaxLength(16)]
+    public string? FriendCode { get; set; }
 }
 
 /// <summary>Pages d'un joueur que les autres peuvent consulter (profil public), en lecture seule.</summary>
@@ -35,4 +43,15 @@ public enum PublicPages
     Inventory = 4,
     LivingDex = 8,
     All = Collection | Park | Inventory | LivingDex,
+}
+
+/// <summary>Qui peut voir les pages d'un joueur (« Mon compte » → « Visibilité »).</summary>
+public enum ProfileAudience
+{
+    /// <summary>Tout le monde : trouvable, pages cochées visibles de tous.</summary>
+    Everyone = 0,
+    /// <summary>Amis seulement : trouvable (demandes d'ami possibles), pages cochées visibles de ses amis.</summary>
+    Friends = 1,
+    /// <summary>Personne : introuvable, aucune page visible, même des amis ; ami par code seulement.</summary>
+    Nobody = 2,
 }

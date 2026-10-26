@@ -228,7 +228,7 @@ else
     {
         if (Visitor)
         {
-            player = await Players.FindAsync(Pseudo, PublicPages.Collection);
+            player = await Players.FindAsync((await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier), Pseudo, PublicPages.Collection);
             playerChecked = true;
             if (player is null)
                 return;

@@ -68,6 +68,7 @@ builder.Services.AddScoped<WalletState>();
 builder.Services.AddScoped<SaveSession>();
 builder.Services.AddScoped<SyncService>();
 builder.Services.AddScoped<PlayerService>();
+builder.Services.AddScoped<FriendService>();
 builder.Services.AddSyncRateLimits(); // essais de codes de liaison 3DS
 
 var app = builder.Build();

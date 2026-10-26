@@ -212,7 +212,7 @@ else if (view is not null)
     {
         if (Visitor)
         {
-            player = await Players.FindAsync(Pseudo, PublicPages.LivingDex);
+            player = await Players.FindAsync((await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier), Pseudo, PublicPages.LivingDex);
             playerChecked = true;
             if (player is null)
                 return;

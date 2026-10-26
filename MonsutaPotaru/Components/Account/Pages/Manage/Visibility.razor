@@ -13,26 +13,33 @@
 <StatusMessage Message="@message" />
 <p>
     Les autres joueurs peuvent te trouver par ton pseudo (« Multijoueurs » → « Rechercher un joueur ») et consulter, en
-    lecture seule, les pages que tu rends publiques. Ils ne voient jamais ton journal, les noms de tes fichiers de
-    sauvegarde ni les ID de tes dresseurs, et ne peuvent rien modifier ni télécharger.
+    lecture seule, les pages que tu choisis. Ils ne voient jamais ton journal, les noms de tes fichiers de sauvegarde ni
+    les ID de tes dresseurs, et ne peuvent rien modifier ni télécharger.
 </p>
 
 <div class="row">
     <div class="col-xl-6">
         <EditForm Model="Input" FormName="visibility" OnValidSubmit="OnValidSubmitAsync" method="post">
-            <InputRadioGroup @bind-Value="Input.Private">
-                <div class="form-check">
-                    <InputRadio class="form-check-input" id="visibility-public" Value="false" />
-                    <label class="form-check-label" for="visibility-public"><strong>Public</strong> : on peut te trouver et voir les pages cochées.</label>
-                </div>
-                <div class="form-check mb-3">
-                    <InputRadio class="form-check-input" id="visibility-private" Value="true" />
-                    <label class="form-check-label" for="visibility-private"><strong>Privé</strong> : personne ne peut te trouver ni voir tes pages, même par un lien.</label>
-                </div>
-            </InputRadioGroup>
+            <fieldset class="mb-3">
+                <legend class="h6">Qui peut voir mes pages ?</legend>
+                <InputRadioGroup @bind-Value="Input.Audience">
+                    <div class="form-check">
+                        <InputRadio class="form-check-input" id="audience-everyone" Value="ProfileAudience.Everyone" />
+                        <label class="form-check-label" for="audience-everyone"><strong>Tout le monde</strong> : on peut te trouver et voir les pages cochées.</label>
+                    </div>
+                    <div class="form-check">
+                        <InputRadio class="form-check-input" id="audience-friends" Value="ProfileAudience.Friends" />
+                        <label class="form-check-label" for="audience-friends"><strong>Amis seulement</strong> : on peut te trouver pour te demander en ami, mais seuls tes amis voient les pages cochées.</label>
+                    </div>
+                    <div class="form-check">
+                        <InputRadio class="form-check-input" id="audience-nobody" Value="ProfileAudience.Nobody" />
+                        <label class="form-check-label" for="audience-nobody"><strong>Personne</strong> : introuvable, et aucune page visible, même de tes amis. On ne peut te demander en ami qu'avec ton <a href="amis?onglet=demandes">code ami</a>.</label>
+                    </div>
+                </InputRadioGroup>
+            </fieldset>
 
             <fieldset class="mb-3">
-                <legend class="h6">Pages publiques (si ton profil est public)</legend>
+                <legend class="h6">Pages visibles</legend>
                 <div class="form-check">
                     <InputCheckbox class="form-check-input" id="page-collection" @bind-Value="Input.Collection" />
                     <label class="form-check-label" for="page-collection">Collection</label>
@@ -52,9 +59,9 @@
             </fieldset>
             <button type="submit" class="w-100 btn btn-lg btn-primary">Enregistrer</button>
         </EditForm>
-        @if (!isPrivate && AccountService.HasPseudo(pseudo))
+        @if (audience != ProfileAudience.Nobody && AccountService.HasPseudo(pseudo))
         {
-            <p class="small mt-3"><a href="@PlayerService.Link(pseudo!)">Voir mon profil public</a></p>
+            <p class="small mt-3"><a href="@PlayerService.Link(pseudo!)">Voir mon profil tel que les autres le voient</a></p>
         }
     </div>
 </div>
@@ -63,7 +70,7 @@
     private string? message;
     private ApplicationUser user = default!;
     private string? pseudo;
-    private bool isPrivate;
+    private ProfileAudience audience;
 
     [CascadingParameter]
     private HttpContext HttpContext { get; set; } = default!;
@@ -76,10 +83,10 @@
         user = await UserAccessor.GetRequiredUserAsync(HttpContext);
         pseudo = user.UserName;
         var visibility = await Players.VisibilityAsync(user.Id);
-        isPrivate = visibility.Private;
+        audience = visibility.Audience;
         Input ??= new InputModel
         {
-            Private = visibility.Private,
+            Audience = visibility.Audience,
             Collection = visibility.Pages.HasFlag(PublicPages.Collection),
             Park = visibility.Pages.HasFlag(PublicPages.Park),
             Inventory = visibility.Pages.HasFlag(PublicPages.Inventory),
@@ -91,7 +98,7 @@
     {
         var pages = (Input.Collection ? PublicPages.Collection : 0) | (Input.Park ? PublicPages.Park : 0)
             | (Input.Inventory ? PublicPages.Inventory : 0) | (Input.LivingDex ? PublicPages.LivingDex : 0);
-        var result = await Players.SetVisibilityAsync(user.Id, Input.Private, pages);
+        var result = await Players.SetVisibilityAsync(user.Id, Input.Audience, pages);
         if (!result.Ok)
         {
             message = AccountService.AsError(result.Message);
@@ -102,7 +109,7 @@
 
     private sealed class InputModel
     {
-        public bool Private { get; set; }
+        public ProfileAudience Audience { get; set; }
         public bool Collection { get; set; }
         public bool Park { get; set; }
         public bool Inventory { get; set; }

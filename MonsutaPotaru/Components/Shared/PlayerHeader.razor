@@ -1,17 +1,23 @@
 @using MonsutaPotaru.Data
 @using MonsutaPotaru.Services
-@* En-tête des pages d'un autre joueur (Multijoueurs) : son pseudo, un onglet par page publique, et le rappel que tout
-   y est en lecture seule. *@
+@* En-tête des pages d'un autre joueur (Multijoueurs) : son pseudo, l'onglet « Profil » (son accueil : demande d'ami),
+   un onglet par page visible, et le rappel que tout y est en lecture seule. *@
 <div class="mb-3">
     <a class="small" href="joueurs">← Rechercher un joueur</a>
     <h1 class="mb-2">@Player.Pseudo</h1>
     @if (Player.Pages == PublicPages.None)
     {
-        <p class="text-muted">@Player.Pseudo ne montre aucune page pour l'instant.</p>
+        <p class="text-muted">@(Player.FriendsOnly && Player.Relation is not (PlayerRelation.Friend or PlayerRelation.Self)
+            ? $"{Player.Pseudo} ne montre ses pages qu'à ses amis."
+            : $"{Player.Pseudo} ne montre aucune page pour l'instant.")</p>
     }
     else
     {
         <ul class="nav nav-tabs">
+            <li class="nav-item">
+                <a class="nav-link @(Current == PublicPages.None ? "active" : "")" aria-current="@(Current == PublicPages.None ? "page" : null)"
+                   href="@PlayerService.Link(Player.Pseudo)">Profil</a>
+            </li>
             @foreach (var tab in PlayerService.Pages.Where(p => Player.Pages.HasFlag(p.Page)))
             {
                 <li class="nav-item">
@@ -20,7 +26,7 @@
                 </li>
             }
         </ul>
-        <p class="small text-muted mt-2 mb-0">Lecture seule : tu consultes le profil public de @Player.Pseudo.</p>
+        <p class="small text-muted mt-2 mb-0">Lecture seule : tu consultes le profil de @Player.Pseudo.</p>
     }
 </div>
 

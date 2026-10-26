@@ -175,7 +175,7 @@ else
     {
         if (Visitor)
         {
-            player = await Players.FindAsync(Pseudo, PublicPages.Park);
+            player = await Players.FindAsync((await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier), Pseudo, PublicPages.Park);
             playerChecked = true;
             if (player is null)
                 return;

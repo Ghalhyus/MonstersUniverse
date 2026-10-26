@@ -17,6 +17,8 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<SyncSaveLocation> SyncSaveLocations => Set<SyncSaveLocation>();
     public DbSet<LivingDex> LivingDexes => Set<LivingDex>();
     public DbSet<SiteSetting> SiteSettings => Set<SiteSetting>();
+    public DbSet<Friendship> Friendships => Set<Friendship>();
+    public DbSet<FriendRequest> FriendRequests => Set<FriendRequest>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -24,6 +26,22 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
 
         builder.Entity<Microsoft.AspNetCore.Identity.IdentityRole>().HasData(SiteRoles.All);
         builder.Entity<SiteSetting>(e => e.HasKey(s => s.Key));
+        builder.Entity<ApplicationUser>(e => e.HasIndex(u => u.FriendCode).IsUnique());
+
+        builder.Entity<Friendship>(e =>
+        {
+            e.HasKey(f => new { f.UserId, f.FriendId });
+            e.HasOne(f => f.User).WithMany().HasForeignKey(f => f.UserId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(f => f.Friend).WithMany().HasForeignKey(f => f.FriendId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<FriendRequest>(e =>
+        {
+            e.HasIndex(r => new { r.FromId, r.ToId }).IsUnique(); // une demande par sens et par paire
+            e.HasIndex(r => r.ToId);
+            e.HasOne(r => r.From).WithMany().HasForeignKey(r => r.FromId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(r => r.To).WithMany().HasForeignKey(r => r.ToId).OnDelete(DeleteBehavior.Cascade);
+        });
 
         builder.Entity<BankPokemon>(e =>
         {
