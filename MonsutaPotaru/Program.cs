@@ -39,12 +39,13 @@ builder.Services.AddDbContextFactory<ApplicationDbContext>(options =>
     options.UseSqlite(connectionString));
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 
-builder.Services.AddIdentityCore<ApplicationUser>(options => options.SignIn.RequireConfirmedAccount = false)
+// Pseudo, connexion par l'adresse mail, messages en français : AccountService. Ni mails, ni double authentification :
+// pas de fournisseurs de jetons.
+builder.Services.AddIdentityCore<ApplicationUser>(AccountService.ConfigureIdentity)
     .AddEntityFrameworkStores<ApplicationDbContext>()
     .AddSignInManager()
-    .AddDefaultTokenProviders();
-
-builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSender>();
+    .AddErrorDescriber<FrenchIdentityErrorDescriber>();
+builder.Services.AddScoped<AccountService>();
 
 // Clés qui chiffrent les cookies (connexion, formulaires) : gardées avec les données (volume Docker),
 // sinon chaque mise à jour du conteneur en crée de nouvelles et déconnecte tout le monde.

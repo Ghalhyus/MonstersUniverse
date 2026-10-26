@@ -20,6 +20,16 @@ Ce fichier ne garde que ce que le README ne dit pas.
 - **Toute ressource venant d'un autre projet** (bibliothèque, paquet, images, données, table reprise d'un site) est citée
   dans la section « Crédits » du README, avec son usage et sa licence, dès qu'elle entre dans le projet.
 
+## Comptes
+
+- Le pseudo est le `UserName` d'Identity ; on se connecte avec l'adresse (`AccountService.FindForLoginAsync`). Un ancien
+  compte a encore son adresse pour `UserName` : « @ » est interdit dans un pseudo, c'est le repère (`HasPseudo`). Ne
+  jamais afficher l'adresse d'un compte à la place du pseudo.
+- Identity **modifie l'objet du compte avant de valider** (`SetUserNameAsync`, `SetEmailAsync`) : un refus laisse la
+  valeur refusée dessus. D'où les vérifications d'unicité faites avant, dans `AccountService`.
+- Tests : `AccountServiceTests` monte Identity comme `Program.cs` (`AccountService.ConfigureIdentity`) sur la base de test.
+  Les comptes de `TestDatabase` sont créés sans Identity (pas d'adresse) : n'y appeler aucune méthode qui les revalide.
+
 ## Conventions du code
 
 - Services *scoped* à constructeur primaire, accès base par `IDbContextFactory<ApplicationDbContext>`.

@@ -4,62 +4,54 @@
 @using Microsoft.AspNetCore.Authentication
 @using Microsoft.AspNetCore.Identity
 @using MonsutaPotaru.Data
+@using MonsutaPotaru.Services
 
 @inject SignInManager<ApplicationUser> SignInManager
+@inject UserManager<ApplicationUser> UserManager
+@inject AccountService Accounts
 @inject ILogger<Login> Logger
 @inject NavigationManager NavigationManager
 @inject IdentityRedirectManager RedirectManager
 
-<PageTitle>Log in</PageTitle>
+<PageTitle>Connexion</PageTitle>
 
-<h1>Log in</h1>
+<h1>Connexion</h1>
 <div class="row">
     <div class="col-lg-6">
         <section>
             <StatusMessage Message="@errorMessage" />
             <EditForm Model="Input" method="post" OnValidSubmit="LoginUser" FormName="login">
                 <DataAnnotationsValidator />
-                <h2>Use a local account to log in.</h2>
+                <h2>Connecte-toi avec ton adresse mail.</h2>
                 <hr />
                 <ValidationSummary class="text-danger" role="alert" />
                 <div class="form-floating mb-3">
-                    <InputText @bind-Value="Input.Email" id="Input.Email" class="form-control" autocomplete="username" aria-required="true" placeholder="name@example.com" />
-                    <label for="Input.Email" class="form-label">Email</label>
+                    <InputText @bind-Value="Input.Email" id="Input.Email" class="form-control" autocomplete="username" aria-required="true" placeholder="nom@exemple.fr" />
+                    <label for="Input.Email" class="form-label">Adresse mail</label>
                     <ValidationMessage For="() => Input.Email" class="text-danger" />
                 </div>
                 <div class="form-floating mb-3">
-                    <InputText type="password" @bind-Value="Input.Password" id="Input.Password" class="form-control" autocomplete="current-password" aria-required="true" placeholder="password" />
-                    <label for="Input.Password" class="form-label">Password</label>
+                    <InputText type="password" @bind-Value="Input.Password" id="Input.Password" class="form-control" autocomplete="current-password" aria-required="true" placeholder="mot de passe" />
+                    <label for="Input.Password" class="form-label">Mot de passe</label>
                     <ValidationMessage For="() => Input.Password" class="text-danger" />
                 </div>
                 <div class="checkbox mb-3">
                     <label class="form-label">
                         <InputCheckbox @bind-Value="Input.RememberMe" class="darker-border-checkbox form-check-input" />
-                        Remember me
+                        Rester connecté
                     </label>
                 </div>
                 <div>
-                    <button type="submit" class="w-100 btn btn-lg btn-primary">Log in</button>
+                    <button type="submit" class="w-100 btn btn-lg btn-primary">Se connecter</button>
                 </div>
-                <div>
+                <div class="mt-3">
                     <p>
-                        <a href="Account/ForgotPassword">Forgot your password?</a>
+                        <a href="@(NavigationManager.GetUriWithQueryParameters("Account/Register", new Dictionary<string, object?> { ["ReturnUrl"] = ReturnUrl }))">Créer un compte</a>
+                        (code d'invitation requis)
                     </p>
-                    <p>
-                        <a href="@(NavigationManager.GetUriWithQueryParameters("Account/Register", new Dictionary<string, object?> { ["ReturnUrl"] = ReturnUrl }))">Register as a new user</a>
-                    </p>
-                    <p>
-                        <a href="Account/ResendEmailConfirmation">Resend email confirmation</a>
-                    </p>
+                    <p class="text-muted">Mot de passe oublié ? Demande à l'administrateur du site.</p>
                 </div>
             </EditForm>
-        </section>
-    </div>
-    <div class="col-lg-4 col-lg-offset-2">
-        <section>
-            <h3>Use another service to log in.</h3>
-            <hr />
-            <ExternalLoginPicker />
         </section>
     </div>
 </div>
@@ -80,49 +72,42 @@
     {
         if (HttpMethods.IsGet(HttpContext.Request.Method))
         {
-            // Clear the existing external cookie to ensure a clean login process
+            // Repart d'une connexion propre
             await HttpContext.SignOutAsync(IdentityConstants.ExternalScheme);
         }
     }
 
     public async Task LoginUser()
     {
-        // This doesn't count login failures towards account lockout
-        // To enable password failures to trigger account lockout, set lockoutOnFailure: true
-        var result = await SignInManager.PasswordSignInAsync(Input.Email, Input.Password, Input.RememberMe, lockoutOnFailure: false);
-        if (result.Succeeded)
+        // Les échecs ne bloquent pas le compte (pas de verrouillage), comme avant ; pas de double authentification.
+        var user = await Accounts.FindForLoginAsync(Input.Email, Input.Password);
+        if (user is null)
         {
-            Logger.LogInformation("User logged in.");
-            RedirectManager.RedirectTo(ReturnUrl);
+            errorMessage = "Erreur : adresse mail ou mot de passe incorrect.";
+            return;
         }
-        else if (result.RequiresTwoFactor)
+        if (await UserManager.IsLockedOutAsync(user))
         {
-            RedirectManager.RedirectTo(
-                "Account/LoginWith2fa",
-                new() { ["returnUrl"] = ReturnUrl, ["rememberMe"] = Input.RememberMe });
+            Logger.LogWarning("Compte {User} bloqué : connexion refusée.", user.Id);
+            errorMessage = "Erreur : ce compte est bloqué pour l'instant, réessaie plus tard.";
+            return;
         }
-        else if (result.IsLockedOut)
-        {
-            Logger.LogWarning("User account locked out.");
-            RedirectManager.RedirectTo("Account/Lockout");
-        }
-        else
-        {
-            errorMessage = "Error: Invalid login attempt.";
-        }
+
+        await SignInManager.SignInAsync(user, Input.RememberMe);
+        Logger.LogInformation("Compte {User} connecté.", user.Id);
+        RedirectManager.RedirectTo(ReturnUrl);
     }
 
     private sealed class InputModel
     {
-        [Required]
-        [EmailAddress]
+        [Required(ErrorMessage = "L'adresse mail est obligatoire.")]
+        [EmailAddress(ErrorMessage = "Adresse mail invalide.")]
         public string Email { get; set; } = "";
 
-        [Required]
+        [Required(ErrorMessage = "Le mot de passe est obligatoire.")]
         [DataType(DataType.Password)]
         public string Password { get; set; } = "";
 
-        [Display(Name = "Remember me?")]
         public bool RememberMe { get; set; }
     }
 }

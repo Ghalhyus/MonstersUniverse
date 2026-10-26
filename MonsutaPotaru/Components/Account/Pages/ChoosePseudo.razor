@@ -1,0 +1,80 @@
+@page "/Account/Pseudo"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+
+@using System.ComponentModel.DataAnnotations
+@using Microsoft.AspNetCore.Identity
+@using MonsutaPotaru.Data
+@using MonsutaPotaru.Services
+
+@inject AccountService Accounts
+@inject SignInManager<ApplicationUser> SignInManager
+@inject IdentityUserAccessor UserAccessor
+@inject IdentityRedirectManager RedirectManager
+
+@* Comptes créés avant le pseudo : le reste du site attend qu'il soit choisi (PseudoGuard). *@
+
+<PageTitle>Choisis ton pseudo</PageTitle>
+
+<h1>Choisis ton pseudo</h1>
+
+<div class="row">
+    <div class="col-lg-6">
+        <StatusMessage Message="@message" />
+        <p>
+            Ton compte n'a pas encore de pseudo. C'est lui que le site et ta 3DS afficheront à la place de ton adresse mail,
+            qui reste pour te connecter. Tu ne pourras plus le changer.
+        </p>
+        <EditForm Model="Input" method="post" OnValidSubmit="OnValidSubmitAsync" FormName="choose-pseudo">
+            <DataAnnotationsValidator />
+            <ValidationSummary class="text-danger" role="alert" />
+            <div class="form-floating mb-3">
+                <InputText @bind-Value="Input.Pseudo" id="Input.Pseudo" class="form-control" autocomplete="nickname" aria-required="true"
+                           maxlength="@AccountService.PseudoMaxLength" placeholder="pseudo" />
+                <label for="Input.Pseudo">Pseudo</label>
+                <div class="form-text">
+                    @AccountService.PseudoMinLength à @AccountService.PseudoMaxLength caractères : lettres, chiffres, espaces, tirets, points
+                    et tirets bas.
+                </div>
+                <ValidationMessage For="() => Input.Pseudo" class="text-danger" />
+            </div>
+            <button type="submit" class="w-100 btn btn-lg btn-primary">Valider</button>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    private string? message;
+    private ApplicationUser user = default!;
+
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    [SupplyParameterFromForm]
+    private InputModel Input { get; set; } = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        user = await UserAccessor.GetRequiredUserAsync(HttpContext);
+        if (AccountService.HasPseudo(user.UserName))
+            RedirectManager.RedirectTo("");
+    }
+
+    private async Task OnValidSubmitAsync()
+    {
+        var result = await Accounts.ChoosePseudoAsync(user, Input.Pseudo);
+        if (!result.Ok)
+        {
+            message = AccountService.AsError(result.Message);
+            return;
+        }
+
+        await SignInManager.RefreshSignInAsync(user); // le menu affiche le pseudo
+        RedirectManager.RedirectTo("");
+    }
+
+    private sealed class InputModel
+    {
+        [Required(ErrorMessage = "Le pseudo est obligatoire.")]
+        public string Pseudo { get; set; } = "";
+    }
+}

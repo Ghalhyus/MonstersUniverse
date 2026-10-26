@@ -64,6 +64,27 @@ liste sans trou, tassée à l'écriture comme le fait le jeu (un Pokémon dépos
    sauvegarde est écrite dans `Data/backups/<id utilisateur>/`, et la sauvegarde modifiée est téléchargée.
 4. L'utilisateur **remplace** sa sauvegarde par ce fichier.
 
+### Comptes
+
+`Services/AccountService.cs`, pages dans `Components/Account` (ASP.NET Identity, tout en français) :
+
+- **Inscription** : pseudo, adresse mail, mot de passe et **code d'invitation** (obligatoire, `Bank:InviteCode`).
+  Le **pseudo** (3 à 20 caractères : lettres, accents compris, chiffres, espaces, tirets, points, tirets bas ; espaces en
+  trop retirés) est unique sans tenir compte des majuscules et **définitif**. C'est le nom d'utilisateur d'Identity : le
+  menu (lien vers « Mon compte ») et la 3DS (`compte` de l'API) l'affichent ; l'adresse mail n'est montrée à personne.
+- **Connexion** par l'**adresse mail** (unique, `RequireUniqueEmail`) et le mot de passe, pas par le pseudo. Pas de
+  verrouillage après des échecs, pas de double authentification (`SignInAsync` direct, même si elle était restée active).
+- **Comptes d'avant le pseudo** : leur nom d'utilisateur est encore leur adresse (« @ », interdit dans un pseudo :
+  `AccountService.HasPseudo`). `Shared/PseudoGuard.razor` (autour du contenu de `MainLayout`) les renvoie sur
+  « Choisis ton pseudo » (`/Account/Pseudo`) tant qu'ils n'en ont pas ; la 3DS continue de marcher.
+- **Mon compte** : Profil (pseudo et adresse, en lecture), Adresse mail (changée **directement** avec le mot de passe :
+  le site n'envoie aucun mail), Mot de passe, Données personnelles (téléchargement en JSON : identifiant, pseudo, adresse ;
+  suppression du compte et de tout ce qu'il contient).
+- **Retirés** : téléphone, double authentification, connexions externes, mot de passe oublié et confirmation par mail
+  (rien n'était envoyé). Migration `RemovePhoneAndTwoFactor` : numéros effacés, double authentification coupée, clés et
+  codes de secours supprimés. Un mot de passe oublié passe par l'administrateur.
+- Messages d'Identity en français : `FrenchIdentityErrorDescriber` (même fichier).
+
 ### Sauvegardes stockées (consultation)
 
 Dans « Mes sauvegardes », l'utilisateur peut aussi **stocker** une sauvegarde complète : le fichier reste sur le serveur
@@ -150,7 +171,7 @@ API (JSON, messages en français prêts à afficher ; `MonsutaPotaru/Api/SyncEnd
 | Requête | Réponse |
 |---|---|
 | `POST /api/sync/liaison` `{"code", "nom"}` | `{"jeton", "compte", "message"}` ; 400 si le code est faux ou expiré, 429 au-delà de 10 essais par minute depuis la même adresse IP (celle transmise par Caddy) |
-| `GET /api/sync/compte` | `{"compte", "console"}` : vérifie le jeton |
+| `GET /api/sync/compte` | `{"compte", "console"}` : vérifie le jeton (`compte` : le pseudo, ou l'adresse d'un compte qui ne l'a pas encore choisi) |
 | `POST /api/sync/sauvegardes?fichier=nom.sav&cle=...`, corps = fichier brut (4 Mo au plus) | `{"statut", "raison", "message"}` ; `statut` : `ajoutee`, `mise-a-jour`, `inchangee` ou `refusee` (`raison` : `StoreStatus`) |
 | `GET /api/sync/sauvegardes` | `{"sauvegardes": [{"id", "jeu", "dresseur", "idDresseur", "fichier", "empreinte", "tempsDeJeu", "modifieeSurSite", "console", "famille", "cles"}]}` ; `console` : `3ds`, `ds`, `gba`, `gb` ou `autre` ; `famille` en DS : `DP`, `Pt`, `HGSS`, `B`, `W`, `BW`, `B2`, `W2`, `B2W2` ; en Game Boy : `RB` (Rouge, Bleu, Vert), `YW` (Jaune), `GS` (Or, Argent), `C` (Cristal), suivis de `-JP` ou `-KO` (versions japonaise et coréenne, de disposition différente) (`SyncService.DescribeForConsole`) |
 | `POST /api/sync/sauvegardes/{id}/comparer`, corps = sauvegarde de la console | `{"verdict", "raison", "modifieeSurSite", "message"}` ; `verdict` : `recuperable`, `a-jour` ou `refusee` ; `raison` d'un refus : `autre-partie` (la console cherche alors une autre place), `plus-avancee`, `illisible`, `absente` |
@@ -507,6 +528,9 @@ est incompatible (espèce, attaques ou objets inexistants dans le jeu, conversio
 | Fichier | Rôle |
 |---|---|
 | `MonsutaPotaru/Services/SaveSession.cs` | Sauvegarde chargée + dépôts/retraits en attente (PKHeX) |
+| `MonsutaPotaru/Services/AccountService.cs` | Comptes : règles du pseudo, inscription, connexion par l'adresse, choix du pseudo des anciens comptes, changement d'adresse ; réglages d'Identity, messages d'Identity en français |
+| `MonsutaPotaru/Components/Account/Pages/` | Pages du compte : connexion, inscription, « Choisis ton pseudo », « Mon compte » (`Manage/` : profil, adresse, mot de passe, données personnelles) |
+| `MonsutaPotaru/Components/Account/Shared/PseudoGuard.razor` | Renvoie un compte sans pseudo sur « Choisis ton pseudo » (autour du contenu de `MainLayout`) |
 | `MonsutaPotaru/Services/BankService.cs` | Accès base, validation transactionnelle, copies de sécurité |
 | `MonsutaPotaru/Services/PokemonFingerprint.cs` | Empreinte d'un Pokémon et recherche de ses doublons dans le compte (vieille copie d'une sauvegarde) |
 | `MonsutaPotaru/Services/PokemonInfo.cs` | Noms français (dont « Rouge / Bleu », « Or / Argent », « Diamant / Perle », « Or HeartGold / Argent SoulSilver » pour les groupes de jeux : une sauvegarde de ces jeux ne dit pas lequel des deux ; migrations `GameNames` et `GameGroupNames` pour les noms déjà enregistrés), sprites, légalité |

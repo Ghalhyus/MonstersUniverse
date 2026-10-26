@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Identity;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -83,6 +84,35 @@ public sealed class MigrationsTests : IDisposable
             Assert.Equal(["HGSS", "RS", "Platine"], await db.StoredSaves.OrderBy(s => s.Id).Select(s => s.GameName).ToListAsync());
             Assert.Equal(["HGSS — Ghal\nsoulsilver.sav", "RSE — Ghal", "Platine — Lucas"],
                 await db.WalletOperations.OrderBy(o => o.Id).Select(o => o.SaveLabel).ToListAsync());
+        }
+    }
+    [Fact]
+    public async Task RemovePhoneAndTwoFactor_ClearsPhoneNumbers_AndTwoFactorData()
+    {
+        const string before = "20261025202449_SyncSaveLocations"; // juste avant RemovePhoneAndTwoFactor
+        using (var db = NewContext())
+        {
+            await db.GetService<IMigrator>().MigrateAsync(before);
+            db.Users.AddRange(
+                new ApplicationUser { Id = "sacha", UserName = "sacha@kanto.fr", PhoneNumber = "0612345678", PhoneNumberConfirmed = true, TwoFactorEnabled = true },
+                new ApplicationUser { Id = "ondine", UserName = "ondine@azuria.fr" });
+            db.UserTokens.AddRange(
+                new IdentityUserToken<string> { UserId = "sacha", LoginProvider = "[AspNetUserStore]", Name = "AuthenticatorKey", Value = "cle" },
+                new IdentityUserToken<string> { UserId = "sacha", LoginProvider = "[AspNetUserStore]", Name = "RecoveryCodes", Value = "codes" },
+                new IdentityUserToken<string> { UserId = "sacha", LoginProvider = "Autre", Name = "AuthenticatorKey", Value = "garde" });
+            await db.SaveChangesAsync();
+        }
+
+        using (var db = NewContext())
+        {
+            await db.Database.MigrateAsync();
+            var sacha = await db.Users.SingleAsync(u => u.Id == "sacha");
+            Assert.Equal((null, false, false), (sacha.PhoneNumber, sacha.PhoneNumberConfirmed, sacha.TwoFactorEnabled));
+            Assert.Equal("sacha@kanto.fr", sacha.UserName); // le reste ne bouge pas
+            Assert.Equal("garde", Assert.Single(await db.UserTokens.ToListAsync()).Value);
+
+            await db.GetService<IMigrator>().MigrateAsync(before); // retour : rien à remettre
+            Assert.Equal(2, await db.Users.CountAsync());
         }
     }
 }

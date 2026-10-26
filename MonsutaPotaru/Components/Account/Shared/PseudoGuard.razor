@@ -1,0 +1,26 @@
+@using MonsutaPotaru.Services
+@inject NavigationManager NavigationManager
+
+@* Un compte créé avant le pseudo n'a accès qu'à la page qui le lui fait choisir (voir AccountService.HasPseudo). *@
+<AuthorizeView>
+    <Authorized>
+        @if (AccountService.HasPseudo(context.User.Identity?.Name) || OnPseudoPage)
+        {
+            @ChildContent
+        }
+        else
+        {
+            <RedirectToPseudo />
+        }
+    </Authorized>
+    <NotAuthorized>
+        @ChildContent
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private bool OnPseudoPage =>
+        NavigationManager.ToBaseRelativePath(NavigationManager.Uri).StartsWith("Account/Pseudo", StringComparison.OrdinalIgnoreCase);
+}
