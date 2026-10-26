@@ -19,6 +19,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<SiteSetting> SiteSettings => Set<SiteSetting>();
     public DbSet<Friendship> Friendships => Set<Friendship>();
     public DbSet<FriendRequest> FriendRequests => Set<FriendRequest>();
+    public DbSet<TradeRecord> TradeRecords => Set<TradeRecord>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -33,6 +34,12 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             e.HasKey(f => new { f.UserId, f.FriendId });
             e.HasOne(f => f.User).WithMany().HasForeignKey(f => f.UserId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(f => f.Friend).WithMany().HasForeignKey(f => f.FriendId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<TradeRecord>(e =>
+        {
+            e.HasIndex(t => t.FirstId);
+            e.HasIndex(t => t.SecondId);
         });
 
         builder.Entity<FriendRequest>(e =>

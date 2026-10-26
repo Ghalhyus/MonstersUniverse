@@ -1,0 +1,48 @@
+@page "/statistiques"
+@attribute [Authorize]
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Authorization
+@using MonsutaPotaru.Services
+@inject TradeService Trades
+
+<PageTitle>Statistiques</PageTitle>
+
+@* Statistiques du joueur (menu de son pseudo), base des futurs succès : pour l'instant, les échanges. *@
+
+<h1 class="mb-3">Statistiques</h1>
+
+<h2 class="h5">Échanges</h2>
+@if (stats is null)
+{
+    <p class="text-muted">Chargement…</p>
+}
+else
+{
+    <div class="stat-tiles">
+        <div class="card">
+            <div class="card-body">
+                <div class="small text-muted">Échanges réussis</div>
+                <div class="stat-value">@stats.Total</div>
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-body">
+                <div class="small text-muted">Partenaires différents</div>
+                <div class="stat-value">@stats.Partners</div>
+            </div>
+        </div>
+    </div>
+    @if (stats.Total == 0)
+    {
+        <p class="text-muted small mt-3">Aucun échange pour l'instant : propose-en un à un ami dans <a href="echanges">Échanges</a>.</p>
+    }
+}
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = default!;
+
+    private TradeStats? stats;
+
+    protected override async Task OnInitializedAsync() =>
+        stats = await Trades.StatsAsync((await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "");
+}

@@ -5,6 +5,7 @@
 @inject NavigationManager NavigationManager
 @inject WalletState Wallet
 @inject FriendService Friends
+@inject TradeHub Trades
 
 <div class="top-row ps-3 navbar navbar-dark">
     <div class="container-fluid">
@@ -73,9 +74,9 @@
             <details open="@playersOpen">
                 <summary class="nav-link">
                     <span class="bi bi-person-badge-nav-menu" aria-hidden="true"></span> Multijoueurs
-                    @if (pendingRequests > 0 && !playersOpen)
+                    @if (pendingRequests + tradeRequests > 0 && !playersOpen)
                     {
-                        <span class="badge bg-danger ms-2" title="Demandes d'ami reçues">@pendingRequests</span>
+                        <span class="badge bg-danger ms-2" title="Demandes d'ami et d'échange reçues">@(pendingRequests + tradeRequests)</span>
                     }
                 </summary>
                 <div class="nav-subitems">
@@ -87,6 +88,13 @@
                         @if (pendingRequests > 0)
                         {
                             <span class="badge bg-danger ms-2" title="Demandes d'ami reçues">@pendingRequests</span>
+                        }
+                    </NavLink>
+                    <NavLink class="nav-link" href="echanges">
+                        <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Échanges
+                        @if (tradeRequests > 0)
+                        {
+                            <span class="badge bg-danger ms-2" title="Demandes d'échange reçues">@tradeRequests</span>
                         }
                     </NavLink>
                 </div>
@@ -103,10 +111,21 @@
                         </NavLink>
                     </div>
                 }
-                <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="Account/Manage">
-                        <span class="bi bi-person-fill-nav-menu" aria-hidden="true"></span> @context.User.Identity?.Name
-                    </NavLink>
+                @* Le pseudo : menu repliable, réglages du compte et statistiques. *@
+                <div class="nav-item nav-group px-3">
+                    <details open="@accountOpen">
+                        <summary class="nav-link">
+                            <span class="bi bi-person-fill-nav-menu" aria-hidden="true"></span> @context.User.Identity?.Name
+                        </summary>
+                        <div class="nav-subitems">
+                            <NavLink class="nav-link" href="Account/Manage">
+                                <span class="bi bi-person-nav-menu" aria-hidden="true"></span> Paramètres du profil
+                            </NavLink>
+                            <NavLink class="nav-link" href="statistiques">
+                                <span class="bi bi-grid-nav-menu" aria-hidden="true"></span> Statistiques
+                            </NavLink>
+                        </div>
+                    </details>
                 </div>
                 <div class="nav-item px-3">
                     <form action="Account/Logout" method="post">
@@ -144,10 +163,15 @@
 
     /// <summary>Menu « Multijoueurs » ouvert : sur la recherche ou les pages d'un joueur.</summary>
     private bool playersOpen => currentUrl is { } url
-        && (url == "joueurs" || url.StartsWith("joueurs/") || url.StartsWith("joueurs?") || url == "amis" || url.StartsWith("amis?"));
+        && (url == "joueurs" || url.StartsWith("joueurs/") || url.StartsWith("joueurs?") || url == "amis" || url.StartsWith("amis?")
+            || url == "echanges" || url.StartsWith("echanges?"));
+
+    /// <summary>Menu du pseudo ouvert : sur les paramètres du profil ou les statistiques.</summary>
+    private bool accountOpen => currentUrl is { } url && (url.StartsWith("Account/Manage", StringComparison.OrdinalIgnoreCase) || url == "statistiques");
 
     private string? userId;
     private int pendingRequests; // demandes d'ami reçues, relues à chaque navigation
+    private int tradeRequests; // demandes d'échange reçues (en direct, TradeHub)
 
     protected override async Task OnInitializedAsync()
     {
@@ -155,6 +179,7 @@
         NavigationManager.LocationChanged += OnLocationChanged;
         Wallet.Changed += OnWalletChanged;
         Friends.Changed += OnFriendsChanged;
+        Trades.RequestsChanged += OnTradeRequestsChanged;
 
         // Solde du porte-monnaie pour l'utilisateur connecté (rafraîchi par « Inventaire » après un retrait).
         userId = AuthState is null ? null : (await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -162,7 +187,19 @@
         {
             await Wallet.RefreshAsync(userId);
             pendingRequests = await Friends.PendingCountAsync(userId);
+            tradeRequests = Trades.Incoming(userId).Count;
         }
+    }
+
+    private void OnTradeRequestsChanged(string user)
+    {
+        if (user != userId)
+            return;
+        InvokeAsync(() =>
+        {
+            tradeRequests = Trades.Incoming(user).Count;
+            StateHasChanged();
+        });
     }
 
     private void OnWalletChanged() => InvokeAsync(StateHasChanged);
@@ -187,6 +224,7 @@
         NavigationManager.LocationChanged -= OnLocationChanged;
         Wallet.Changed -= OnWalletChanged;
         Friends.Changed -= OnFriendsChanged;
+        Trades.RequestsChanged -= OnTradeRequestsChanged;
     }
 }
 

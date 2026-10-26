@@ -502,6 +502,9 @@ namespace MonsutaPotaru.Migrations
                     b.Property<int>("PlayTimeSeconds")
                         .HasColumnType("INTEGER");
 
+                    b.Property<bool>("PokemonTraded")
+                        .HasColumnType("INTEGER");
+
                     b.Property<long>("Withdrawn")
                         .HasColumnType("INTEGER");
 
@@ -673,6 +676,44 @@ namespace MonsutaPotaru.Migrations
                         .IsUnique();
 
                     b.ToTable("SyncSaveLocations");
+                });
+
+            modelBuilder.Entity("MonsutaPotaru.Data.TradeRecord", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("At")
+                        .HasColumnType("TEXT");
+
+                    b.Property<ushort>("FirstGave")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<ushort?>("FirstGaveEvolvedTo")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("FirstId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<ushort>("SecondGave")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<ushort?>("SecondGaveEvolvedTo")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SecondId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FirstId");
+
+                    b.HasIndex("SecondId");
+
+                    b.ToTable("TradeRecords");
                 });
 
             modelBuilder.Entity("MonsutaPotaru.Data.Wallet", b =>

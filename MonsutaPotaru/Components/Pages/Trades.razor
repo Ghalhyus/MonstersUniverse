@@ -1,0 +1,408 @@
+@page "/echanges"
+@attribute [Authorize]
+@implements IDisposable
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Authorization
+@using MonsutaPotaru.Components.Shared
+@using MonsutaPotaru.Services
+@inject TradeHub Hub
+@inject TradeService TradeStore
+@inject FriendService FriendStore
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>Échanges</PageTitle>
+
+@* Multijoueurs → Échanges : avec un ami, entre deux sauvegardes stockées de même génération. Demande (valable
+   TradeHub.RequestLifetime), puis chacun choisit le Pokémon de l'autre qu'il veut, les deux valident, et le site échange
+   les deux Pokémon dans les deux sauvegardes (TradeService). En direct : les deux pages suivent la même TradeSession.
+   Quitter la page pendant un échange demande confirmation, puis l'annule pour les deux. *@
+<NavigationLock ConfirmExternalNavigation="InTrade" OnBeforeInternalNavigation="BeforeLeaving" />
+
+<h1 class="mb-3">Échanges</h1>
+
+@if (message is not null)
+{
+    <div class="alert @(messageIsError ? "alert-danger" : "alert-success") alert-dismissible" role="alert">
+        @message
+        <button type="button" class="btn-close" aria-label="Fermer" @onclick="() => message = null"></button>
+    </div>
+}
+
+@if (session is { } s)
+{
+    var me = s.Me(userId);
+    var other = s.Other(userId);
+    <div class="d-flex flex-wrap align-items-start gap-2 mb-3">
+        <div>
+            <h2 class="h5 mb-1">Échange avec @other.Pseudo</h2>
+            <div class="small text-muted">Ta sauvegarde : @me.SaveLabel · Sa sauvegarde : @other.SaveLabel</div>
+        </div>
+        @if (!s.IsOver && s.Stage != TradeStage.Trading)
+        {
+            <button type="button" class="btn btn-outline-danger ms-auto" @onclick="CancelTrade">Annuler l'échange</button>
+        }
+    </div>
+
+    @if (s.Notice is { } notice && s.Stage != TradeStage.Cancelled)
+    {
+        <div class="alert alert-warning">@notice</div>
+    }
+
+    @switch (s.Stage)
+    {
+        case TradeStage.Requested:
+            <p>En attente de la réponse de @other.Pseudo… La demande vaut jusqu'à @s.ExpiresAt.ToLocalTime().ToString("HH:mm"), tant que tu restes sur cette page.</p>
+            break;
+
+        case TradeStage.Choosing:
+        case TradeStage.Confirming:
+            var wants = s.Wants(userId);
+            var wantedFromMe = s.WantedFromMe(userId);
+            <div class="row g-3 mb-3">
+                <div class="col-md-6">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <div class="small text-muted mb-1">Tu reçois</div>
+                            @if (wants is null)
+                            {
+                                <em>Choisis ci-dessous le Pokémon de @other.Pseudo que tu veux.</em>
+                            }
+                            else
+                            {
+                                <TradePokemon Pokemon="wants" />
+                            }
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <div class="small text-muted mb-1">Tu donnes (choisi par @other.Pseudo)</div>
+                            @if (wantedFromMe is null)
+                            {
+                                <em>@other.Pseudo n'a pas encore choisi.</em>
+                            }
+                            else
+                            {
+                                <TradePokemon Pokemon="wantedFromMe" />
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            @if (s.Stage == TradeStage.Confirming)
+            {
+                <div class="alert alert-info d-flex flex-wrap align-items-center gap-2">
+                    <span>Tu donnes <strong>@wantedFromMe!.Name</strong> et tu reçois <strong>@wants!.Name</strong>.</span>
+                    @if (s.Confirmed(userId))
+                    {
+                        <span class="ms-auto">✓ Validé, en attente de @other.Pseudo…</span>
+                    }
+                    else
+                    {
+                        @if (s.OtherConfirmed(userId))
+                        {
+                            <span class="small">@other.Pseudo a validé.</span>
+                        }
+                        <button type="button" class="btn btn-primary ms-auto" @onclick="() => Confirm(true)" disabled="@busy">Valider l'échange</button>
+                        <button type="button" class="btn btn-outline-secondary" @onclick="() => Confirm(false)" disabled="@busy">Refuser</button>
+                    }
+                </div>
+            }
+
+            <h3 class="h6 mt-3">Pokémon de @other.Pseudo que ta sauvegarde peut recevoir</h3>
+            @if (theirs is null)
+            {
+                <p class="text-muted small">Chargement…</p>
+            }
+            else if (theirs.Count == 0)
+            {
+                <p class="text-muted small">Aucun : @other.Pseudo n'a rien que ton jeu puisse recevoir dans cette sauvegarde.</p>
+            }
+            else
+            {
+                <div class="trade-candidates">
+                    @foreach (var candidate in theirs)
+                    {
+                        var c = candidate;
+                        <button type="button" class="trade-candidate @(wants?.Slot == c.Slot ? "selected" : "")" title="@c.Location"
+                                @onclick="() => Choose(c)" disabled="@(busy || s.Confirmed(userId))">
+                            <img src="@c.SpriteUrl" alt="" loading="lazy" onerror="this.src='images/pokemon/inconnu.png'" />
+                            <span class="trade-candidate-name">@c.Name@(c.IsShiny ? " ✨" : "")</span>
+                            <span class="small text-muted">@(c.IsEgg ? "Œuf" : $"N.{c.Level}") · @c.Location</span>
+                        </button>
+                    }
+                </div>
+            }
+            break;
+
+        case TradeStage.Trading:
+            <p>Échange en cours…</p>
+            break;
+
+        case TradeStage.Done:
+            <div class="alert alert-success">@(s.IsFirst(userId) ? s.Outcome!.FirstMessage : s.Outcome!.SecondMessage)</div>
+            <div class="d-flex flex-wrap gap-2">
+                <a class="btn btn-primary" href="sauvegardes">Mes sauvegardes</a>
+                <button type="button" class="btn btn-outline-secondary" @onclick="NewTrade">Nouvel échange</button>
+            </div>
+            break;
+
+        case TradeStage.Cancelled:
+            <div class="alert alert-secondary">@s.Notice</div>
+            <div class="d-flex flex-wrap gap-2">
+                <a class="btn btn-primary" href="">Retour à l'accueil</a>
+                <button type="button" class="btn btn-outline-secondary" @onclick="NewTrade">Nouvel échange</button>
+            </div>
+            break;
+    }
+}
+else
+{
+    @* ---------- Demandes reçues ---------- *@
+    var incoming = Hub.Incoming(userId);
+    @if (incoming.Count > 0)
+    {
+        <h2 class="h5">Demandes reçues</h2>
+        <div class="list-group mb-4">
+            @foreach (var request in incoming)
+            {
+                var r = request;
+                <div class="list-group-item d-flex flex-wrap align-items-center gap-2">
+                    <span>
+                        <strong>@r.First.Pseudo</strong> te propose un échange : sa sauvegarde « @r.First.SaveLabel » contre ta sauvegarde « @r.Second.SaveLabel ».
+                        <span class="d-block small text-muted">Jusqu'à @r.ExpiresAt.ToLocalTime().ToString("HH:mm").</span>
+                    </span>
+                    <button type="button" class="btn btn-sm btn-primary ms-auto" @onclick="() => Accept(r)">Accepter</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => Hub.Cancel(r, userId)">Refuser</button>
+                </div>
+            }
+        </div>
+    }
+
+    @* ---------- Nouvel échange : l'ami, puis la paire de sauvegardes ---------- *@
+    <h2 class="h5">Nouvel échange</h2>
+    <p class="small text-muted">
+        L'échange se fait en direct, avec un ami connecté, entre deux sauvegardes stockées de même génération. Il porte sur la
+        version stockée de ta sauvegarde : si tu as joué depuis, mets-la d'abord à jour dans <a href="sauvegardes">Mes sauvegardes</a>.
+        Après l'échange, chacun télécharge sa sauvegarde et la remet dans son jeu.
+    </p>
+    @if (friends is null)
+    {
+        <p class="text-muted">Chargement…</p>
+    }
+    else if (friends.Count == 0)
+    {
+        <p class="text-muted">Il te faut un ami pour échanger : ajoute-en dans <a href="amis">Amis</a>.</p>
+    }
+    else
+    {
+        <select class="form-select mb-3 trade-friend" aria-label="Ami" value="@friendId" @onchange="FriendChosen">
+            <option value="">Choisis un ami…</option>
+            @foreach (var f in friends)
+            {
+                <option value="@f.UserId">@(f.Pseudo ?? FriendService.NoPseudo)</option>
+            }
+        </select>
+        @if (pairs is not null)
+        {
+            @if (pairs.Count == 0)
+            {
+                <p class="text-muted">Vous n'avez aucune sauvegarde stockée de la même génération.</p>
+            }
+            else
+            {
+                <div class="list-group">
+                    @foreach (var pair in pairs)
+                    {
+                        var p = pair;
+                        <div class="list-group-item d-flex flex-wrap align-items-center gap-2">
+                            <span>
+                                Ta sauvegarde : <strong>@p.Mine.Label</strong>
+                                <span class="d-block small text-muted">
+                                    Version stockée du @p.Mine.UpdatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
+                                    @if (p.Mine.MustDownloadBeforeUpdate)
+                                    {
+                                        <span class="text-warning-emphasis"> · modifiée par le site (@p.Mine.ServerChanges), pas encore téléchargée</span>
+                                    }
+                                </span>
+                            </span>
+                            <span class="mx-2">↔</span>
+                            <span>Sa sauvegarde : <strong>@p.Theirs.Label</strong></span>
+                            <button type="button" class="btn btn-sm btn-primary ms-auto" @onclick="() => Propose(p)" disabled="@busy">Proposer l'échange</button>
+                        </div>
+                    }
+                </div>
+            }
+        }
+    }
+}
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = default!;
+
+    private string userId = "";
+    private string pseudo = "";
+    private TradeSession? session;
+    private TradeStage? shownStage; // pour recharger les Pokémon de l'autre à chaque retour au choix
+    private List<TradeCandidate>? theirs;
+    private List<FriendEntry>? friends;
+    private string friendId = "";
+    private List<TradeSavePair>? pairs;
+    private bool busy;
+    private string? message;
+    private bool messageIsError;
+
+    /// <summary>Un échange est en cours : quitter la page l'annulerait.</summary>
+    private bool InTrade => session is { IsOver: false };
+
+    protected override async Task OnInitializedAsync()
+    {
+        var user = (await AuthState).User;
+        userId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
+        pseudo = user.Identity?.Name ?? "";
+        Hub.RequestsChanged += OnRequestsChanged;
+        if (Hub.Active(userId) is { } active) // page rechargée pendant un échange
+            await Join(active);
+        friends = (await FriendStore.ListAsync(userId)).Friends.ToList();
+    }
+
+    private async Task Join(TradeSession joined)
+    {
+        if (session is not null)
+            session.Changed -= OnSessionChanged;
+        session = joined;
+        session.Changed += OnSessionChanged;
+        await Refresh();
+    }
+
+    /// <summary>Au retour à l'étape du choix, relit les Pokémon de l'autre (une sauvegarde a pu changer).</summary>
+    private async Task Refresh()
+    {
+        if (session is null)
+            return;
+        if (session.Stage != shownStage && shownStage is not null)
+            message = null; // « Demande envoyée... » n'a plus lieu d'être
+        if (session.Stage == TradeStage.Choosing && shownStage is not (TradeStage.Choosing or TradeStage.Confirming))
+        {
+            theirs = null;
+            var other = session.Other(userId);
+            theirs = await TradeStore.CandidatesAsync(other.UserId, other.SaveId, userId, session.Me(userId).SaveId);
+        }
+        shownStage = session.Stage;
+    }
+
+    private void OnSessionChanged() => InvokeAsync(async () =>
+    {
+        await Refresh();
+        StateHasChanged();
+    });
+
+    private void OnRequestsChanged(string user)
+    {
+        if (user == userId)
+            InvokeAsync(StateHasChanged);
+    }
+
+    private async Task FriendChosen(ChangeEventArgs e)
+    {
+        friendId = e.Value?.ToString() ?? "";
+        pairs = null;
+        if (friendId.Length > 0)
+            pairs = await TradeStore.SavePairsAsync(userId, friendId);
+    }
+
+    private async Task Propose(TradeSavePair pair)
+    {
+        var friend = friends?.FirstOrDefault(f => f.UserId == friendId);
+        if (friend is null)
+            return;
+        var (created, text) = Hub.Request(new TradeParty(userId, pseudo, pair.Mine.Id, pair.Mine.Label),
+            new TradeParty(friend.UserId, friend.Pseudo ?? FriendService.NoPseudo, pair.Theirs.Id, pair.Theirs.Label));
+        message = text;
+        messageIsError = created is null;
+        if (created is not null)
+            await Join(created);
+    }
+
+    private async Task Accept(TradeSession request)
+    {
+        if (Hub.Accept(request, userId) is { } error)
+        {
+            message = error;
+            messageIsError = true;
+            return;
+        }
+        message = null;
+        await Join(request);
+    }
+
+    private void Choose(TradeCandidate wanted)
+    {
+        if (session is not null)
+            Hub.Choose(session, userId, wanted);
+    }
+
+    /// <summary>Validation ; le second à valider fait l'échange des deux sauvegardes.</summary>
+    private async Task Confirm(bool accept)
+    {
+        if (session is not { } s || !Hub.Confirm(s, userId, accept))
+            return;
+        busy = true;
+        try
+        {
+            var outcome = await TradeStore.ExecuteAsync(new TradeSide(s.First.UserId, s.First.SaveId, s.SecondWants!),
+                new TradeSide(s.Second.UserId, s.Second.SaveId, s.FirstWants!));
+            Hub.Complete(s, outcome);
+        }
+        catch (Exception)
+        {
+            Hub.Complete(s, TradeOutcome.Failed("Erreur du serveur pendant l'échange : rien n'a été modifié, l'échange est annulé.", retry: false));
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    /// <summary>« Annuler l'échange » : annulé pour les deux, retour à l'accueil.</summary>
+    private void CancelTrade()
+    {
+        if (session is not null)
+            Hub.Cancel(session, userId);
+        Navigation.NavigateTo("");
+    }
+
+    private async Task BeforeLeaving(LocationChangingContext context)
+    {
+        if (!InTrade)
+            return;
+        if (!await JS.InvokeAsync<bool>("confirm", "Quitter cette page annule l'échange en cours, pour toi et pour ton ami. Continuer ?"))
+        {
+            context.PreventNavigation();
+            return;
+        }
+        Hub.Cancel(session!, userId, $"{pseudo} a quitté l'échange.");
+    }
+
+    private void NewTrade()
+    {
+        if (session is not null)
+            session.Changed -= OnSessionChanged;
+        session = null;
+        shownStage = null;
+        theirs = null;
+        message = null;
+    }
+
+    public void Dispose()
+    {
+        Hub.RequestsChanged -= OnRequestsChanged;
+        if (session is null)
+            return;
+        session.Changed -= OnSessionChanged;
+        Hub.Cancel(session, userId, $"{pseudo} a quitté l'échange."); // onglet fermé, connexion perdue : sans effet si fini
+    }
+}

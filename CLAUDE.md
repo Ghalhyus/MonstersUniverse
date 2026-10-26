@@ -58,6 +58,11 @@ Ce fichier ne garde que ce que le README ne dit pas.
   administrateurs compris.
 - Amis : `FriendService` ; les amitiés sont en double (une ligne par compte). Une action de la page qui change les
   demandes passe par `FriendService.Notify` pour que le menu relise son compteur.
+- Échanges : `TradeService` (mécanique, testée sans navigateur) et `TradeHub` (déroulé en direct, singleton : tout
+  changement passe par ses méthodes sous verrou, les pages s'abonnent à `TradeSession.Changed`). C'est la page du second à
+  valider qui écrit les deux sauvegardes. Pour essayer à deux dans le navigateur intégré (cookies partagés entre onglets),
+  ouvrir un joueur sur `localhost:5299` et l'autre sur `127.0.0.1:5299` : un cookie est propre au nom d'hôte. La
+  confirmation de départ (`NavigationLock`) se teste en remplaçant `window.confirm` dans la page.
 - Le panneau du navigateur de test, masqué, ne remplit pas les listes virtualisées (« Ma collection ») : faire une
   capture d'écran pour qu'elles se chargent.
 

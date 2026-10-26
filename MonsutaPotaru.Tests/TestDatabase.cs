@@ -50,6 +50,8 @@ public sealed class TestDatabase : IDisposable
 
     public PlayerService Players() => new(Factory);
 
+    public TradeService Trades() => new(Factory, StoredSaves(), new PokemonInfo(), NullLogger<TradeService>.Instance);
+
     public void Dispose()
     {
         _connection.Dispose();

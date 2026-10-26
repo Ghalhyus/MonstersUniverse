@@ -1,0 +1,17 @@
+@using MonsutaPotaru.Services
+@* Pokémon choisi dans un échange : image, nom, niveau et place dans la sauvegarde. *@
+<div class="d-flex align-items-center gap-2">
+    <img src="@Pokemon.SpriteUrl" alt="" width="56" height="56" class="trade-pokemon-sprite" onerror="this.src='images/pokemon/inconnu.png'" />
+    <div>
+        <strong>@Pokemon.Name@(Pokemon.IsShiny ? " ✨" : "")</strong>
+        @if (!Pokemon.IsEgg && Pokemon.SpeciesName != Pokemon.Name)
+        {
+            <span class="text-muted"> (@Pokemon.SpeciesName)</span>
+        }
+        <div class="small text-muted">@(Pokemon.IsEgg ? "Œuf" : $"N.{Pokemon.Level}") · @Pokemon.Location</div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public TradeCandidate Pokemon { get; set; } = default!;
+}

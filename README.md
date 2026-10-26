@@ -115,6 +115,36 @@ demande se fait aussi depuis le profil d'un joueur trouvable (« Demander en ami
 « Personne ». Une demande qui croise celle de l'autre est acceptée d'emblée. Tables `FriendRequests` (une par sens et
 par paire) et `Friendships` (deux lignes par amitié) ; supprimées avec le compte.
 
+### Échanges
+
+Multijoueurs → **Échanges** (`/echanges`, `Pages/Trades.razor`), avec un ami, **en direct** (les deux connectés), entre
+deux sauvegardes stockées du **même contexte de jeu** de PKHeX (même génération : Noire ↔ Noire 2, Platine ↔ HeartGold ;
+pas Let's Go ↔ Soleil, ni Épée ↔ Diamant Étincelant). Compteur rouge des demandes reçues dans le menu.
+
+1. **Demande** : l'ami, puis la paire de sauvegardes (avec la date de la version stockée et un rappel si elle a été
+   modifiée par le site sans être téléchargée : l'échange porte sur la version stockée). Elle vaut 10 minutes, tant que
+   son auteur reste sur la page ; l'ami l'accepte ou la refuse. Un joueur ne fait qu'un échange à la fois.
+2. **Choix**, en direct sur les deux pages : chacun choisit, parmi les Pokémon de l'autre (équipe et boîtes, hors cases
+   verrouillées), **celui qu'il veut recevoir** ; seuls ceux que sa sauvegarde peut recevoir sont proposés
+   (`SaveFile.IsCompatiblePKM` après conversion de format). Les œufs aussi (espèce cachée).
+3. **Validation** : « tu donnes X, tu reçois Y », par les deux ; un refus ramène au choix.
+4. **Échange** (`Services/TradeService.cs`) : chaque Pokémon prend la place de celui qui part, au format de l'autre
+   jeu, avec le joueur comme dresseur actuel et dans son Pokédex (`EntityImportSettings.All`) ; **évolution par échange**
+   selon l'arbre des évolutions du jeu (PKHeX) : simple (Kadabra), objet tenu consommé (Onix + Peau Métal), Carabing ↔
+   Escargaume entre eux ; ni œuf, ni Pierre Stase. Refusé si un Pokémon a changé depuis le choix (empreinte), ou si une
+   équipe ne garderait que des œufs. Les deux sauvegardes sont écrites dans une même transaction (copies de sécurité
+   `echange-avant` / `echange-apres`), leurs Pokémon relus dans la collection, et marquées **modifiées sur le serveur**
+   (`SaveModification.PokemonTraded`, migration `Trades`) : à télécharger avant de les mettre à jour, comme après un retrait.
+
+**Annuler l'échange** ramène à l'accueil ; **quitter la page** pendant un échange demande confirmation
+(`NavigationLock`), puis l'annule ; l'autre joueur en est prévenu. Le déroulé est en mémoire (`Services/TradeHub.cs`,
+singleton) : un redémarrage du serveur annule les échanges en cours.
+
+**Statistiques** (`/statistiques`, `Pages/Statistics.razor`) : nombre d'échanges réussis et de partenaires différents
+(table `TradeRecords`, sans clé étrangère : les statistiques d'un joueur survivent à la suppression du compte de son
+partenaire), base des futurs succès. Le **pseudo** du menu est un menu repliable : « Paramètres du profil » (Mon compte)
+et « Statistiques ».
+
 ### Thèmes
 
 « Mon compte » → **Thèmes** (`Account/Pages/Manage/Themes.razor`) : une carte par thème, avec une miniature dessinée en
@@ -605,6 +635,12 @@ est incompatible (espèce, attaques ou objets inexistants dans le jeu, conversio
 | `MonsutaPotaru/Services/FriendService.cs` | Amis : code ami, demandes (par pseudo ou par code), acceptation, refus, annulation, retrait, listes, compteur du menu |
 | `MonsutaPotaru/Components/Pages/Friends.razor` | « Multijoueurs » → « Amis » : onglets Amis (recherche, retrait) et Demandes (code ami, reçues, envoyées) |
 | `MonsutaPotaru/Data/Friendship.cs` | Tables des amitiés (deux lignes par amitié) et des demandes d'ami |
+| `MonsutaPotaru/Services/TradeService.cs` | Échanges : sauvegardes compatibles, Pokémon proposés, évolution par échange, écriture des deux sauvegardes, statistiques |
+| `MonsutaPotaru/Services/TradeHub.cs` | Échanges en direct (singleton, en mémoire) : demande, choix, validation, annulation, expiration |
+| `MonsutaPotaru/Components/Pages/Trades.razor` | « Multijoueurs » → « Échanges » : demandes, choix de l'ami et des sauvegardes, échange en direct |
+| `MonsutaPotaru/Components/Shared/TradePokemon.razor` | Pokémon choisi dans un échange (image, nom, place) |
+| `MonsutaPotaru/Components/Pages/Statistics.razor` | Statistiques du joueur (menu du pseudo) : échanges |
+| `MonsutaPotaru/Data/TradeRecord.cs` | Table des échanges réussis (statistiques, succès) |
 | `MonsutaPotaru/Components/Pages/PlayerSearch.razor` | « Multijoueurs » → « Rechercher un joueur » (`/joueurs`) |
 | `MonsutaPotaru/Components/Pages/PlayerProfilePage.razor` | Profil d'un joueur (`/joueurs/{pseudo}`) : ses pages publiques en onglets |
 | `MonsutaPotaru/Components/Shared/PlayerHeader.razor`, `PlayerHidden.razor` | En-tête des pages d'un joueur (pseudo, onglets, « lecture seule ») ; réponse d'un profil privé ou introuvable |

@@ -402,3 +402,18 @@ button.livingdex-slot:hover { border-color: var(--bs-primary); box-shadow: 0 0 0
 .theme-preview-pokedex .theme-preview-content { background: #fff; }
 .theme-preview-pokedex .theme-preview-row { background: #e8eef2; border: 2px solid #2b3a44; }
 .theme-preview-pokedex .theme-preview-button { background: #c2323d; }
+
+/* ---------- Échanges et statistiques (Multijoueurs) ---------- */
+.trade-friend { max-width: 22rem; }
+.trade-candidates { display: grid; grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr)); gap: .5rem; }
+.trade-candidate {
+    display: flex; flex-direction: column; align-items: center; gap: .1rem; padding: .4rem; color: inherit; text-align: center;
+    border: 2px solid var(--bs-border-color); border-radius: .6rem; background: var(--bs-body-bg); cursor: pointer;
+}
+.trade-candidate:hover:not(:disabled) { border-color: var(--bs-primary); }
+.trade-candidate.selected { border-color: var(--bs-primary); box-shadow: 0 0 0 .2rem rgba(var(--bs-primary-rgb), .25); }
+.trade-candidate:disabled { cursor: default; opacity: .7; }
+.trade-candidate img, .trade-pokemon-sprite { width: 56px; height: 56px; object-fit: contain; image-rendering: pixelated; }
+.trade-candidate-name { font-weight: 600; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stat-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr)); gap: 1rem; max-width: 40rem; }
+.stat-value { font-size: 2rem; font-weight: 600; line-height: 1.2; }

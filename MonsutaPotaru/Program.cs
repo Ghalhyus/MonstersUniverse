@@ -69,6 +69,8 @@ builder.Services.AddScoped<SaveSession>();
 builder.Services.AddScoped<SyncService>();
 builder.Services.AddScoped<PlayerService>();
 builder.Services.AddScoped<FriendService>();
+builder.Services.AddScoped<TradeService>();
+builder.Services.AddSingleton<TradeHub>(); // échanges en cours, partagés entre les deux joueurs
 builder.Services.AddSyncRateLimits(); // essais de codes de liaison 3DS
 
 var app = builder.Build();

@@ -10,7 +10,7 @@ namespace MonsutaPotaru.Services;
 public sealed record StoredSaveInfo(
     int Id, string FileName, string GameName, byte Generation, string TrainerName, string TrainerId,
     int PlayTimeSeconds, int PokemonCount, DateTime UploadedAt, DateTime UpdatedAt,
-    bool ModifiedOnServer, bool MustDownloadBeforeUpdate, long WithdrawnOnServer, bool ItemsChangedOnServer)
+    bool ModifiedOnServer, bool MustDownloadBeforeUpdate, long WithdrawnOnServer, bool ItemsChangedOnServer, bool PokemonTradedOnServer = false)
 {
     public string Label => $"{GameName} — {TrainerName}";
 
@@ -18,7 +18,7 @@ public sealed record StoredSaveInfo(
     public string LabelAndFile => $"{Label} · {FileName}";
 
     /// <summary>« un retrait de 5 000 ₽ et un transfert d'objets » (voir <see cref="StoredSaveService.DescribeServerChanges"/>).</summary>
-    public string ServerChanges => StoredSaveService.DescribeServerChanges(WithdrawnOnServer, ItemsChangedOnServer);
+    public string ServerChanges => StoredSaveService.DescribeServerChanges(WithdrawnOnServer, ItemsChangedOnServer, PokemonTradedOnServer);
 }
 
 public enum StoreStatus { Ok, Invalid, AlreadyStored, NotFound, WrongTrainer, OlderPlayTime, ModifiedOnServer, Conflict, CollectionFull, Duplicate }
@@ -57,7 +57,8 @@ public sealed class StoredSaveService(
                 orderby s.UploadedAt
                 select new StoredSaveInfo(s.Id, s.FileName, s.GameName, s.Generation, s.TrainerName, s.TrainerId,
                     s.PlayTimeSeconds, s.PokemonCount, s.UploadedAt, s.UpdatedAt,
-                    m != null, m != null && !s.DownloadedSinceModification, m != null ? m.Withdrawn : 0, m != null && m.ItemsChanged))
+                    m != null, m != null && !s.DownloadedSinceModification, m != null ? m.Withdrawn : 0, m != null && m.ItemsChanged,
+                    m != null && m.PokemonTraded))
             .ToListAsync();
     }
 
@@ -246,19 +247,29 @@ public sealed class StoredSaveService(
         return GameBoySize(a.Length) && GameBoySize(b.Length) && a.AsSpan(0, memory).SequenceEqual(b.AsSpan(0, memory));
     }
 
-    /// <summary>Ce que le serveur a changé dans la partie : « un retrait de 5 000 ₽ », « un transfert d'objets », ou les deux.</summary>
-    public static string DescribeServerChanges(long withdrawn, bool ballsChanged)
+    /// <summary>
+    /// Ce que le serveur a changé dans la partie : « un retrait de 5 000 ₽ », « un transfert d'objets », « un échange de
+    /// Pokémon », ou plusieurs (« un retrait de 5 000 ₽, un transfert d'objets et un échange de Pokémon »).
+    /// </summary>
+    public static string DescribeServerChanges(long withdrawn, bool ballsChanged, bool pokemonTraded = false)
     {
-        var parts = new List<string>(2);
+        var parts = new List<string>(3);
         if (withdrawn > 0)
             parts.Add($"un retrait de {InventoryService.FormatMoney(withdrawn)}");
         if (ballsChanged)
             parts.Add("un transfert d'objets");
-        return parts.Count == 0 ? "une modification" : string.Join(" et ", parts);
+        if (pokemonTraded)
+            parts.Add("un échange de Pokémon");
+        return parts.Count switch
+        {
+            0 => "une modification",
+            1 => parts[0],
+            _ => $"{string.Join(", ", parts.SkipLast(1))} et {parts[^1]}",
+        };
     }
 
     private static string DescribeServerChanges(SaveModification modification) =>
-        DescribeServerChanges(modification.Withdrawn, modification.ItemsChanged);
+        DescribeServerChanges(modification.Withdrawn, modification.ItemsChanged, modification.PokemonTraded);
 
     private static string Capitalize(string text) => text.Length == 0 ? text : char.ToUpperInvariant(text[0]) + text[1..];
 
@@ -431,6 +442,32 @@ public sealed class StoredSaveService(
             db.BankPokemon.Add(entry);
         }
         save.PokemonCount = position;
+    }
+
+    /// <summary>
+    /// Nouvelle version d'une sauvegarde stockée écrite par le serveur (échange de Pokémon), dans la transaction de
+    /// l'appelant : fichier remplacé, Pokémon de la collection relus, trace de modification posée (règle anti-copie,
+    /// comme un retrait : le joueur doit la télécharger avant de la mettre à jour). Le temps de jeu ne change pas.
+    /// L'appelant enregistre (jeton de concurrence <see cref="StoredSave.Version"/>) et fait les copies de sécurité.
+    /// </summary>
+    internal async Task ApplyServerVersionAsync(ApplicationDbContext db, StoredSave save, SaveFile sav, byte[] data,
+        Action<SaveModification> describe, DateTime now)
+    {
+        await db.BankPokemon.Where(p => p.StoredSaveId == save.Id).ExecuteDeleteAsync();
+        save.Data = data;
+        save.DownloadedSinceModification = false; // la version que le joueur a pu télécharger n'est plus la bonne
+        save.Version++;
+        AddPokemon(db, save, ReadAllPokemon(sav).ToList(), save.OwnerId, now);
+
+        // Trace rattachée à la partie (et non à la sauvegarde stockée) : elle survit à une suppression.
+        var modification = await db.SaveModifications.FindAsync(save.IdentityKey);
+        if (modification is null)
+            db.SaveModifications.Add(modification = new SaveModification { IdentityKey = save.IdentityKey });
+        modification.PlayTimeSeconds = save.PlayTimeSeconds;
+        modification.MoneyAfter = sav.Money;
+        modification.DataHash = SaveModification.Hash(data);
+        modification.ModifiedAt = now;
+        describe(modification);
     }
 
     internal async Task WriteBackupAsync(string ownerId, StoredSave save, string suffix)
