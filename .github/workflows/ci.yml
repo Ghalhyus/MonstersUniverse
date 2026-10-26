@@ -1,9 +1,11 @@
 # Intégration continue de Monsuta Potaru (README, section « CI/CD ») : les tests, à chaque push, sur une machine Ubuntu
 # propre. Les images (hors du dépôt) sont copiées depuis le VPS. Le déploiement est à part (cd.yml) : il lit le
 # résultat de ce workflow sur son commit, sans relancer les tests.
+# Revue de la qualité du code par SonarCloud (organisation ghalhyus, projet de clé ghalhyus_monsuta-potaru), avec la couverture des
+# tests : pour information, elle ne fait jamais échouer la CI (seuls les tests décident, donc le déploiement).
 # Dépôt public : les journaux des Actions sont visibles de tous, n'y afficher ni secret ni donnée du site.
 # Secrets du dépôt : VPS_HOST (adresse IP), VPS_USER (debian), VPS_SSH_KEY (clé privée réservée à GitHub),
-# VPS_KNOWN_HOSTS (empreinte du serveur, ssh-keyscan).
+# VPS_KNOWN_HOSTS (empreinte du serveur, ssh-keyscan), SONAR_TOKEN (jeton SonarCloud).
 name: CI
 
 on:
@@ -19,6 +21,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # historique complet : SonarCloud attribue chaque ligne à son commit (nouveau code)
 
       - uses: actions/setup-dotnet@v6
         with:
@@ -49,5 +53,35 @@ jobs:
           tar -xzf "$RUNNER_TEMP/images.tgz" -C MonsutaPotaru/wwwroot/images
           echo "$(find MonsutaPotaru/wwwroot/images -type f | wc -l) images récupérées"
 
+      # Début de l'analyse : la compilation des tests qui suit est observée par le scanner. En cas d'échec (jeton absent,
+      # SonarCloud injoignable), l'étape est marquée en avertissement et les tests tournent sans analyse.
+      - name: SonarCloud (début de l'analyse)
+        id: sonar
+        continue-on-error: true
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          if [ -z "$SONAR_TOKEN" ]; then
+            echo "::warning::Secret SONAR_TOKEN manquant : pas d'analyse SonarCloud (voir la section « CI/CD » du README)."
+            exit 1
+          fi
+          dotnet tool install --global dotnet-sonarscanner
+          dotnet sonarscanner begin /k:"ghalhyus_monsuta-potaru" /o:"ghalhyus" /d:sonar.host.url="https://sonarcloud.io" \
+            /d:sonar.token="$SONAR_TOKEN" \
+            /d:sonar.cs.opencover.reportsPaths="**/TestResults/**/coverage.opencover.xml" \
+            /d:sonar.exclusions="**/Data/Migrations/**,**/wwwroot/lib/**,**/wwwroot/images/**" \
+            /d:sonar.coverage.exclusions="outils/**,deploy/**,**/wwwroot/**"
+
+      # Couverture des tests au format OpenCover (coverlet.collector), lue par SonarCloud.
       - name: Tests
-        run: dotnet test MonsutaPotaru.Tests/MonsutaPotaru.Tests.csproj
+        run: >
+          dotnet test MonsutaPotaru.Tests/MonsutaPotaru.Tests.csproj --collect:"XPlat Code Coverage"
+          -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover
+
+      # Envoi, même si des tests ont échoué (l'analyse reste utile) ; un échec ici ne change pas le résultat de la CI.
+      - name: SonarCloud (envoi de l'analyse)
+        if: ${{ !cancelled() && steps.sonar.outcome == 'success' }}
+        continue-on-error: true
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: dotnet sonarscanner end /d:sonar.token="$SONAR_TOKEN"

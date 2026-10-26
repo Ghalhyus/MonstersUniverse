@@ -621,7 +621,7 @@ l'IP du VPS.
 | `deploy/installer-serveur.sh` | Sur le VPS, une seule fois : pare-feu, Docker, `.env`, sauvegarde nocturne, démarrage |
 | `deploy/sauvegarder.sh` | Sauvegarde du volume de données (lancée chaque nuit par cron, gardée 14 jours) |
 | `deploy/renommer-serveur.cmd` (`.ps1`, `.sh`) | Une seule fois : passage du serveur de « PokeBank » à « Monsuta Potaru » (voir plus bas) |
-| `.github/workflows/ci.yml` | GitHub Actions, CI : tests à chaque push (voir « CI/CD ») |
+| `.github/workflows/ci.yml` | GitHub Actions, CI : tests à chaque push, et analyse SonarCloud (voir « CI/CD ») |
 | `.github/workflows/cd.yml` | GitHub Actions, CD : déploiement par un bouton, après lecture du résultat de la CI (voir « CI/CD ») |
 
 **Première installation**
@@ -659,6 +659,14 @@ partent au bout de 14 jours, comme les nouvelles.
   copiées depuis `~/monsuta-potaru-images` du VPS par SSH (exigées par les tests d'images), puis `dotnet test`. Résultat dans
   l'onglet « Actions » du dépôt et à côté de chaque commit. Attention : Linux distingue majuscules et minuscules dans les
   noms de fichiers, Windows non.
+- **Qualité du code** : dans le même job, [SonarCloud](https://sonarcloud.io) (organisation `ghalhyus`, projet
+  `Monsuta-Potaru`, clé `ghalhyus_monsuta-potaru`) analyse le code pendant la compilation des tests (`dotnet-sonarscanner` : début avant les tests,
+  envoi après), avec la **couverture** des tests (coverlet, format OpenCover). Exclus : `Data/Migrations` (généré),
+  `wwwroot/lib` (Bootstrap) et `wwwroot/images` (copiées du VPS) ; pas de couverture comptée pour `outils`, `deploy` et
+  `wwwroot`. **Pour information seulement** : un échec de l'analyse (jeton absent, SonarCloud injoignable, Quality Gate
+  non passée) est signalé en avertissement, la CI reste verte si les tests passent, et le déploiement n'en dépend pas.
+  Dans SonarCloud, l'**analyse automatique** doit rester désactivée (Administration → Analysis Method) : sinon l'envoi
+  de la CI est refusé.
 - **CD, déploiement** : onglet « Actions » → « CD » → « Run workflow » sur `main`. Il **ne relance pas les tests** : il lit
   le résultat de la CI déjà passée sur ce commit (API de GitHub, quelques secondes) et refuse de déployer si elle a
   échoué, n'a pas fini ou n'a jamais tourné, avec le motif en rouge ; la case **« Forcer »** du bouton déploie quand
@@ -680,6 +688,7 @@ Mise en place (une fois), avec une clé SSH réservée à GitHub (révocable san
    `VPS_HOST` (IP du VPS), `VPS_USER` (`ubuntu`, `debian`...), `VPS_SSH_KEY` (tout le contenu de
    `$HOME\.ssh\monsuta-potaru-github`, la clé **privée**, lignes `-----BEGIN/END` comprises), `VPS_KNOWN_HOSTS` (les lignes
    de l'étape 3).
+5. Pour SonarCloud : `SONAR_TOKEN` (jeton créé dans SonarCloud, « My Account » → « Security »).
 
 Pour retirer l'accès de GitHub : effacer la ligne `github-actions-monsuta-potaru` de `~/.ssh/authorized_keys` sur le VPS
 (`github-actions-pokebank` pour la clé créée avant le changement de nom : elle reste valable, rien à refaire).
@@ -730,7 +739,8 @@ Monsuta Potaru s'appuie sur le travail d'autres projets :
 | [Bootstrap](https://getbootstrap.com) | Mise en page et composants de l'interface (`wwwroot/lib/bootstrap`) | MIT |
 | [ASP.NET Core, Blazor, Identity, Entity Framework Core](https://dotnet.microsoft.com) (Microsoft) | Site, comptes, accès à la base | MIT |
 | [SQLite](https://sqlite.org) | Base de données | Domaine public |
-| [xUnit](https://xunit.net), [coverlet](https://github.com/coverlet-coverage/coverlet) | Tests | Apache-2.0, MIT |
+| [xUnit](https://xunit.net), [coverlet](https://github.com/coverlet-coverage/coverlet) | Tests, couverture des tests (envoyée à SonarCloud) | Apache-2.0, MIT |
+| [SonarScanner for .NET](https://github.com/SonarSource/sonar-scanner-msbuild) (SonarSource), [SonarCloud](https://sonarcloud.io) | Revue de la qualité du code dans la CI (`.github/workflows/ci.yml`), service en ligne gratuit pour les projets publics | LGPL-3.0 (scanner) |
 | [Caddy](https://caddyserver.com), [Docker](https://www.docker.com) | Mise en ligne (HTTPS, conteneurs) | Apache-2.0 |
 | [GitHub Actions](https://github.com/features/actions) : [actions/checkout](https://github.com/actions/checkout), [actions/setup-dotnet](https://github.com/actions/setup-dotnet) | Tests et déploiement (`.github/workflows/ci.yml`, `cd.yml`) | MIT |
 | [Bulbapedia](https://bulbapedia.bulbagarden.net) | Référence consultée pour vérifier l'ordre des Noigrumes d'Or/Argent/Cristal | — |

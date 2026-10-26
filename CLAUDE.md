@@ -52,7 +52,9 @@ Ce fichier ne garde que ce que le README ne dit pas.
 
 ## CI/CD
 
-`.github/workflows/ci.yml` et `cd.yml` (README, « CI/CD »), séparés : tests sur Ubuntu à chaque push ; déploiement par
+`.github/workflows/ci.yml` et `cd.yml` (README, « CI/CD »), séparés : tests sur Ubuntu à chaque push, avec l'analyse
+SonarCloud (organisation `ghalhyus`, projet de clé `ghalhyus_monsuta-potaru`, secret `SONAR_TOKEN` ; pour information, elle ne fait jamais
+échouer la CI : `continue-on-error`) ; déploiement par
 le bouton « Run workflow » de « CD », qui ne relance pas les tests mais lit le résultat de la CI du commit (case
 « Forcer » pour passer outre). Le CLI `gh` n'est pas installé : les résultats de GitHub ne sont pas lisibles d'ici, l'utilisateur copie le
 message d'un échec. Les tests y tournent sous **Linux** : noms de fichiers sensibles à la casse, séparateur `/`, culture
