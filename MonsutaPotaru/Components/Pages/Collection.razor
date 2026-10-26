@@ -1,4 +1,5 @@
 @page "/collection"
+@page "/joueurs/{Pseudo}/collection"
 @attribute [Authorize]
 @implements IAsyncDisposable
 @using System.Security.Claims
@@ -12,14 +13,30 @@
 @inject PokemonInfo Info
 @inject NavigationManager Nav
 @inject IJSRuntime JS
+@inject PlayerService Players
 
-<PageTitle>Ma collection</PageTitle>
+<PageTitle>@(!Visitor ? "Ma collection" : player is null ? "Joueur introuvable" : $"Collection de {player.Pseudo}")</PageTitle>
 
 @* Tous les Pokémon de l'utilisateur sur une seule page, sans boîtes : ceux du stockage interne et ceux des sauvegardes
    stockées (lecture seule, gérées dans « Mes sauvegardes »). Seules les lignes visibles à l'écran (plus une petite marge) sont rendues et lues
    en base : les autres arrivent au fil du défilement. *@
 
-<h1 class="mb-3">Ma collection <span class="badge bg-primary fs-6 align-middle">@total</span></h1>
+@* Collection d'un autre joueur (Multijoueurs, /joueurs/{pseudo}/collection) : lecture seule, sans jauge ni achat,
+   sans noms de fichiers, ID de dresseur ni téléchargement. *@
+@if (Visitor && player is null)
+{
+    @if (playerChecked)
+    {
+        <PlayerHidden />
+    }
+}
+else
+{
+@if (player is not null)
+{
+    <PlayerHeader Player="player" Current="PublicPages.Collection" />
+}
+<h1 class="mb-3 @(Visitor ? "h3" : "")">@(Visitor ? "Collection" : "Ma collection") <span class="badge bg-primary fs-6 align-middle">@total</span></h1>
 
 @if (message is not null)
 {
@@ -30,7 +47,10 @@
 }
 
 @* ---------- Taille de la collection (stockage interne + sauvegardes stockées) ---------- *@
-<CollectionGauge Usage="usage" OnPurchase="OnPurchase" />
+@if (!Visitor)
+{
+    <CollectionGauge Usage="usage" OnPurchase="OnPurchase" />
+}
 
 <div class="collection-toolbar">
     <input class="form-control form-control-sm" placeholder="Rechercher (espèce ou surnom)…"
@@ -41,7 +61,7 @@
         <option value="@BankSource">Stockage interne</option>
         @foreach (var s in saves)
         {
-            <option value="@s.Id">💾 @s.LabelAndFile</option>
+            <option value="@s.Id">💾 @(Visitor ? s.Label : s.LabelAndFile)</option>
         }
     </select>
     @* Tri : critère, puis sens (les œufs restent à la fin). *@
@@ -54,7 +74,10 @@
         </select>
         <button type="button" class="btn btn-sm btn-outline-secondary text-nowrap" title="Inverser l'ordre" @onclick="ReverseSort">@OrderLabel</button>
     </div>
-    <a class="small" href="sauvegardes">Gérer mes sauvegardes</a>
+    @if (!Visitor)
+    {
+        <a class="small" href="sauvegardes">Gérer mes sauvegardes</a>
+    }
     <label class="collection-columns small">
         Colonnes
         <input type="range" class="form-range" min="@GridColumns.Min" max="@GridColumns.Max"
@@ -83,7 +106,7 @@ else
                         var item = p;
                         var stored = item.StoredSaveId is { } sid ? saves.FirstOrDefault(x => x.Id == sid) : null;
                         <PokemonSlot Sprite="@item.SpriteUrl"
-                                     Title="@($"{item.Nickname} ({item.SpeciesName}) N.{item.Level}{(stored is null ? "" : $" — sauvegarde {stored.LabelAndFile}")}")"
+                                     Title="@($"{item.Nickname} ({item.SpeciesName}) N.{item.Level}{(stored is null ? "" : $" — sauvegarde {(Visitor ? stored.Label : stored.LabelAndFile)}")}")"
                                      Level="item.Level"
                                      Shiny="item.IsShiny"
                                      Marker="@(item.StoredSaveId is null ? null : "💾")"
@@ -109,7 +132,7 @@ else
 {
     <div class="collection-backdrop" @onclick="Close"></div>
     <div class="collection-dialog" role="dialog" aria-modal="true" aria-label="@selectedView.Nickname">
-        <PokemonCard Pokemon="@selectedView">
+        <PokemonCard Pokemon="@selectedView" HideTrainerId="Visitor">
             <div class="d-flex flex-wrap align-items-center gap-2">
                 @if (selected.StoredSaveId is { } sid)
                 {
@@ -117,7 +140,7 @@ else
                     var save = saves.FirstOrDefault(s => s.Id == sid);
                     <small class="text-muted">
                         💾 @(save?.Label ?? "Sauvegarde stockée") · @selected.Location
-                        @if (save is not null)
+                        @if (save is not null && !Visitor)
                         {
                             <span class="d-block">@save.FileName</span>
                         }
@@ -126,18 +149,29 @@ else
                 else
                 {
                     <small class="text-muted">Déposé le @selected.DepositedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</small>
-                    <button class="btn btn-outline-secondary btn-sm ms-auto" @onclick="DownloadPkm">Télécharger le fichier .@selected.Extension</button>
+                    @if (!Visitor)
+                    {
+                        <button class="btn btn-outline-secondary btn-sm ms-auto" @onclick="DownloadPkm">Télécharger le fichier .@selected.Extension</button>
+                    }
                 }
-                <button class="btn btn-secondary btn-sm @(selected.StoredSaveId is null ? "" : "ms-auto")" @onclick="Close">Fermer</button>
+                <button class="btn btn-secondary btn-sm @(selected.StoredSaveId is null && !Visitor ? "" : "ms-auto")" @onclick="Close">Fermer</button>
             </div>
         </PokemonCard>
     </div>
+}
 }
 
 @code {
     private const string BankSource = "banque";
 
     [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = default!;
+
+    /// <summary>Pseudo d'un autre joueur (adresse /joueurs/{pseudo}/collection) : sa collection, en lecture seule.</summary>
+    [Parameter] public string? Pseudo { get; set; }
+
+    private bool Visitor => Pseudo is not null;
+    private PlayerProfile? player; // joueur consulté, si sa collection est publique
+    private bool playerChecked;
 
     /// <summary>
     /// Nombre de colonnes choisi au curseur, gardé dans l'adresse (?colonnes=12) pour survivre à un rechargement.
@@ -192,7 +226,16 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        userId = (await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
+        if (Visitor)
+        {
+            player = await Players.FindAsync(Pseudo, PublicPages.Collection);
+            playerChecked = true;
+            if (player is null)
+                return;
+            userId = player.Id;
+        }
+        else
+            userId = (await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
         saves = await Saves.ListAsync(userId);
         usage = await BankStore.GetUsageAsync(userId);
         abilities = await BankStore.ListAbilitiesAsync(userId);
@@ -344,6 +387,8 @@ else
     /// <summary>Fin d'un achat d'emplacements (fenêtre de la jauge).</summary>
     private async Task OnPurchase(PurchaseResult result)
     {
+        if (Visitor)
+            return;
         message = result.Message;
         messageIsError = !result.Ok;
         usage = await BankStore.GetUsageAsync(userId);
@@ -368,6 +413,8 @@ else
 
     private async Task DownloadPkm()
     {
+        if (Visitor)
+            return; // pas de copie des Pokémon d'un autre joueur
         if (selected is null || selected.StoredSaveId is not null) return; // lecture seule pour les sauvegardes stockées
         await Download($"{selected.Species:000} - {selected.Nickname}.{selected.Extension}", selected.Data);
     }

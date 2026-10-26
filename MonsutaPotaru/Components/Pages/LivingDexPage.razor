@@ -1,4 +1,5 @@
 @page "/livingdex/{Id:int}"
+@page "/joueurs/{Pseudo}/livingdex/{Id:int}"
 @attribute [Authorize]
 @implements IAsyncDisposable
 @using System.Security.Claims
@@ -11,26 +12,39 @@
 @inject PokemonInfo Info
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
+@inject PlayerService Players
 
-<PageTitle>@(view?.Game.Name ?? "Living dex")</PageTitle>
+<PageTitle>@(Visitor && playerChecked && player is null ? "Joueur introuvable" : view?.Game.Name ?? "Living dex")</PageTitle>
 
 @* Un living dex : les Pokémon du mode choisi dans l'ordre du Pokédex, avec les sprites du jeu ; en couleur s'il est dans
    la sauvegarde, en silhouette noire sinon. Un clic sur un Pokémon possédé ouvre sa fiche. *@
 
-@if (notFound)
+@* Living dex d'un autre joueur (Multijoueurs) : consultation seule, sans suppression ni nom de fichier. *@
+@if (Visitor && player is null)
 {
-    <p class="text-muted">Ce living dex n'existe plus. <a href="livingdex">Retour aux living dex</a></p>
+    @if (playerChecked)
+    {
+        <PlayerHidden />
+    }
+}
+else if (notFound)
+{
+    <p class="text-muted">Ce living dex n'existe plus. <a href="@ListLink">Retour aux living dex</a></p>
 }
 else if (view is not null)
 {
+    @if (player is not null)
+    {
+        <PlayerHeader Player="player" Current="PublicPages.LivingDex" />
+    }
     <div class="livingdex-header mb-3">
         <LivingDexCover Game="view.Game" Class="livingdex-cover" Alt="@(Global ? view.Game.Name : $"Jaquette de {view.Game.Name}")" />
         <div class="flex-grow-1">
-            <a class="small" href="livingdex">← Living dex</a>
-            <h1 class="mb-0">@view.Game.Name</h1>
-            <div class="small text-muted mb-2">@(!Global ? $"Sauvegarde : {view.SaveLabel}"
-                : view.Game.Game == LivingDexGame.GlobalShiny ? "Pokémon chromatiques de ton stockage interne, tous jeux confondus"
-                : "Pokémon de ton stockage interne, tous jeux confondus (sans les chromatiques)")</div>
+            <a class="small" href="@ListLink">← Living dex</a>
+            <h1 class="mb-0 @(Visitor ? "h3" : "")">@view.Game.Name</h1>
+            <div class="small text-muted mb-2">@(!Global ? $"Sauvegarde : {(Visitor ? view.PublicSaveLabel : view.SaveLabel)}"
+                : view.Game.Game == LivingDexGame.GlobalShiny ? $"Pokémon chromatiques {StorageOf}, tous jeux confondus"
+                : $"Pokémon {StorageOf}, tous jeux confondus (sans les chromatiques)")</div>
             @if (view.Modes.Count > 1)
             {
                 <div class="btn-group btn-group-sm mb-2 livingdex-choice" role="group" aria-label="Mode">
@@ -68,9 +82,12 @@ else if (view is not null)
                    @bind="columns" @bind:event="oninput" @onchange="RememberColumns" />
             <span class="fw-semibold">@columns</span>
         </label>
-        <button type="button" class="btn btn-sm btn-outline-danger ms-auto" @onclick="() => confirmDelete = true">Supprimer ce living dex</button>
+        @if (!Visitor)
+        {
+            <button type="button" class="btn btn-sm btn-outline-danger ms-auto" @onclick="() => confirmDelete = true">Supprimer ce living dex</button>
+        }
     </div>
-    @if (confirmDelete)
+    @if (confirmDelete && !Visitor)
     {
         <div class="alert alert-danger small">
             Le living dex sera supprimé ; @(Global ? "les Pokémon du stockage interne restent." : "la sauvegarde et ses Pokémon restent.")
@@ -126,7 +143,7 @@ else if (view is not null)
 {
     <div class="collection-backdrop" @onclick="CloseDetail"></div>
     <div class="collection-dialog" role="dialog" aria-modal="true" aria-label="@selectedView.Nickname">
-        <PokemonCard Pokemon="@selectedView">
+        <PokemonCard Pokemon="@selectedView" HideTrainerId="Visitor">
             <div class="d-flex flex-wrap align-items-center gap-2">
                 <span class="small text-muted">@selectedLocation</span>
                 <button type="button" class="btn btn-secondary btn-sm ms-auto" @onclick="CloseDetail">Fermer</button>
@@ -137,6 +154,18 @@ else if (view is not null)
 
 @code {
     [Parameter] public int Id { get; set; }
+
+    /// <summary>Pseudo d'un autre joueur (adresse /joueurs/{pseudo}/livingdex/{id}) : son living dex, en lecture seule.</summary>
+    [Parameter] public string? Pseudo { get; set; }
+
+    private bool Visitor => Pseudo is not null;
+    private PlayerProfile? player; // joueur consulté, si ses living dex sont publics
+    private bool playerChecked;
+
+    /// <summary>Liste des living dex : les miens, ou ceux du joueur consulté.</summary>
+    private string ListLink => player is null ? "livingdex" : PlayerService.Link(player.Pseudo, "livingdex");
+
+    private string StorageOf => player is null ? "de ton stockage interne" : $"du stockage interne de {player.Pseudo}";
     [SupplyParameterFromQuery(Name = "mode")] private string? ModeFromQuery { get; set; }
     [SupplyParameterFromQuery(Name = "filtre")] private string? FilterFromQuery { get; set; }
     /// <summary>Colonnes choisies au curseur (?colonnes=12) ; absent : selon la largeur de la fenêtre (<see cref="GridColumns"/>).</summary>
@@ -181,7 +210,16 @@ else if (view is not null)
 
     protected override async Task OnParametersSetAsync()
     {
-        userId = (await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
+        if (Visitor)
+        {
+            player = await Players.FindAsync(Pseudo, PublicPages.LivingDex);
+            playerChecked = true;
+            if (player is null)
+                return;
+            userId = player.Id;
+        }
+        else
+            userId = (await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
         // National par défaut ; un mode que le jeu ne propose pas redevient le National (GetAsync).
         view = await Dexes.GetAsync(userId, Id, LivingDexGames.ModeFromSlug(ModeFromQuery));
         filter = FilterSlugs.FirstOrDefault(f => f.Value == FilterFromQuery) is { Value: not null } found ? found.Key : Filter.All;
@@ -253,6 +291,8 @@ else if (view is not null)
 
     private async Task Delete()
     {
+        if (Visitor)
+            return;
         await Dexes.DeleteAsync(userId, Id);
         Navigation.NavigateTo("livingdex");
     }

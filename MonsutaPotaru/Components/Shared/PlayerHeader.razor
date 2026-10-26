@@ -1,0 +1,32 @@
+@using MonsutaPotaru.Data
+@using MonsutaPotaru.Services
+@* En-tête des pages d'un autre joueur (Multijoueurs) : son pseudo, un onglet par page publique, et le rappel que tout
+   y est en lecture seule. *@
+<div class="mb-3">
+    <a class="small" href="joueurs">← Rechercher un joueur</a>
+    <h1 class="mb-2">@Player.Pseudo</h1>
+    @if (Player.Pages == PublicPages.None)
+    {
+        <p class="text-muted">@Player.Pseudo ne montre aucune page pour l'instant.</p>
+    }
+    else
+    {
+        <ul class="nav nav-tabs">
+            @foreach (var tab in PlayerService.Pages.Where(p => Player.Pages.HasFlag(p.Page)))
+            {
+                <li class="nav-item">
+                    <a class="nav-link @(tab.Page == Current ? "active" : "")" aria-current="@(tab.Page == Current ? "page" : null)"
+                       href="@PlayerService.Link(Player.Pseudo, tab.Slug)">@tab.Title</a>
+                </li>
+            }
+        </ul>
+        <p class="small text-muted mt-2 mb-0">Lecture seule : tu consultes le profil public de @Player.Pseudo.</p>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public PlayerProfile Player { get; set; } = default!;
+
+    /// <summary>Page affichée (onglet actif) ; <see cref="PublicPages.None"/> sur l'accueil du joueur.</summary>
+    [Parameter] public PublicPages Current { get; set; }
+}

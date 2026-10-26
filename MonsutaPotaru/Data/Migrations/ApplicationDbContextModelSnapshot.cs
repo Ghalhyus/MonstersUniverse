@@ -206,6 +206,12 @@ namespace MonsutaPotaru.Migrations
                     b.Property<bool>("PhoneNumberConfirmed")
                         .HasColumnType("INTEGER");
 
+                    b.Property<bool>("ProfilePrivate")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("PublicPages")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("SecurityStamp")
                         .HasColumnType("TEXT");
 

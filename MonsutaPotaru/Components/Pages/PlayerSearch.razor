@@ -1,0 +1,55 @@
+@page "/joueurs"
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Authorization
+@using MonsutaPotaru.Services
+@inject PlayerService Players
+
+<PageTitle>Rechercher un joueur</PageTitle>
+
+@* Multijoueurs : recherche par pseudo (une partie suffit), parmi les profils publics ; rien ne s'affiche avant
+   PlayerService.MinSearchLength caractères (pas d'annuaire de tous les joueurs). *@
+
+<h1 class="mb-2">Rechercher un joueur</h1>
+<p class="small text-muted">
+    Tape une partie de son pseudo, puis ouvre son profil pour consulter ses pages publiques (lecture seule). Les profils
+    privés n'apparaissent pas ; le tien se règle dans « Mon compte » → <a href="Account/Manage/Visibility">Visibilité</a>.
+</p>
+
+<input type="search" class="form-control mb-3 player-search" placeholder="Pseudo…" aria-label="Pseudo du joueur"
+       @bind="query" @bind:event="oninput" @bind:after="Search" />
+
+@if (AccountService.NormalizePseudo(query).Length < PlayerService.MinSearchLength)
+{
+    <p class="text-muted small">Au moins @PlayerService.MinSearchLength caractères.</p>
+}
+else if (results.Count == 0)
+{
+    <p class="text-muted small">Aucun joueur trouvé.</p>
+}
+else
+{
+    <div class="list-group player-results">
+        @foreach (var pseudo in results)
+        {
+            <a class="list-group-item list-group-item-action" href="@PlayerService.Link(pseudo)">@pseudo</a>
+        }
+    </div>
+    @if (results.Count == PlayerService.MaxSearchResults)
+    {
+        <p class="small text-muted mt-2">Les @PlayerService.MaxSearchResults premiers seulement : précise ta recherche.</p>
+    }
+}
+
+@code {
+    private string query = "";
+    private List<string> results = [];
+    private int searchVersion; // seule la dernière recherche lancée s'affiche
+
+    private async Task Search()
+    {
+        var version = ++searchVersion;
+        var found = await Players.SearchAsync(query);
+        if (version == searchVersion)
+            results = found;
+    }
+}

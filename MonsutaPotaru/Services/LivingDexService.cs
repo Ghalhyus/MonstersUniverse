@@ -116,11 +116,18 @@ public sealed record LivingDexEntry(int Number, ushort Species, byte Form, strin
 /// <summary>Carte de la vue générale : progression dans un mode.</summary>
 /// <param name="Mode">Mode compté : celui demandé, ou le National si le jeu ne le propose pas (1re génération).</param>
 public sealed record LivingDexSummary(int Id, LivingDexGameInfo Game, string SaveLabel, int Owned, int Total,
-    LivingDexMode Mode = LivingDexMode.National);
+    LivingDexMode Mode = LivingDexMode.National)
+{
+    /// <summary>Sauvegarde sans son nom de fichier, pour les autres joueurs (Multijoueurs).</summary>
+    public string PublicSaveLabel { get; init; } = SaveLabel;
+}
 
 public sealed record LivingDexView(int Id, LivingDexGameInfo Game, string SaveLabel, IReadOnlyList<LivingDexMode> Modes,
     LivingDexMode Mode, IReadOnlyList<LivingDexEntry> Entries)
 {
+    /// <summary>Sauvegarde sans son nom de fichier, pour les autres joueurs (Multijoueurs).</summary>
+    public string PublicSaveLabel { get; init; } = SaveLabel;
+
     public int Owned => Entries.Count(e => e.Owned);
 }
 
@@ -1209,7 +1216,8 @@ public sealed class LivingDexService(
             var entries = d.StoredSaveId is { } saveId ? await EntriesAsync(db, game, saveId, shown)
                 : await GlobalEntriesAsync(db, ownerId, shown, d.Game == LivingDexGame.GlobalShiny);
             summaries.Add(new(d.Id, game, d.StoredSaveId is null ? GlobalLabelOf(d.Game) : SaveLabel(d.TrainerName, d.FileName),
-                entries.Count(e => e.Owned), entries.Count, shown));
+                entries.Count(e => e.Owned), entries.Count, shown)
+            { PublicSaveLabel = d.StoredSaveId is null ? GlobalLabelOf(d.Game) : d.TrainerName });
         }
         return summaries;
     }
@@ -1310,7 +1318,8 @@ public sealed class LivingDexService(
             mode = LivingDexMode.National;
         var entries = dex.StoredSaveId is { } saveId ? await EntriesAsync(db, game, saveId, mode)
             : await GlobalEntriesAsync(db, ownerId, mode, dex.Game == LivingDexGame.GlobalShiny);
-        return new(dex.Id, game, dex.StoredSaveId is null ? GlobalLabelOf(dex.Game) : SaveLabel(dex.TrainerName, dex.FileName), modes, mode, entries);
+        return new(dex.Id, game, dex.StoredSaveId is null ? GlobalLabelOf(dex.Game) : SaveLabel(dex.TrainerName, dex.FileName), modes, mode, entries)
+        { PublicSaveLabel = dex.StoredSaveId is null ? GlobalLabelOf(dex.Game) : dex.TrainerName };
     }
 
     private const string GlobalLabel = "Stockage interne";

@@ -86,6 +86,18 @@ liste sans trou, tassée à l'écriture comme le fait le jeu (un Pokémon dépos
   codes de secours supprimés. Un mot de passe oublié passe par l'administrateur.
 - Messages d'Identity en français : `FrenchIdentityErrorDescriber` (même fichier).
 
+### Multijoueurs
+
+Menu « Multijoueurs » → **Rechercher un joueur** (`/joueurs`, `Pages/PlayerSearch.razor`) : une partie du pseudo (2
+caractères au moins, majuscules et accents ignorés), parmi les profils publics. Profil d'un joueur : `/joueurs/{pseudo}`
+(`Pages/PlayerProfilePage.razor`, `Shared/PlayerHeader.razor`), un onglet par page publique. Les pages Collection, Parc,
+Inventaire et Living dex ont une seconde adresse (`/joueurs/{pseudo}/collection`...) qui les affiche pour ce joueur en
+**lecture seule** : aucun bouton qui modifie, copie ou télécharge (et les actions refusent un visiteur), ni journal de
+l'inventaire, ni noms de fichiers, ni ID de dresseur (`PokemonCard.HideTrainerId`) ; le porte-monnaie reste visible.
+« Mon compte » → **Visibilité** : profil public (défaut, les 4 pages) ou privé, pages publiques une à une (colonnes
+`ProfilePrivate`, `PublicPages`, migration `ProfileVisibility`). Un profil privé ou une page non publique répond comme un
+joueur inexistant, pour tous, administrateurs compris (`Services/PlayerService.cs`).
+
 ### Thèmes
 
 « Mon compte » → **Thèmes** (`Account/Pages/Manage/Themes.razor`) : une carte par thème, avec une miniature dessinée en
@@ -572,6 +584,11 @@ est incompatible (espèce, attaques ou objets inexistants dans le jeu, conversio
 | `MonsutaPotaru/Services/SaveSession.cs` | Sauvegarde chargée + dépôts/retraits en attente (PKHeX) |
 | `MonsutaPotaru/Services/AdminService.cs` | Administration : rôles (donner, retirer, garde-fous), liste des comptes, code d'invitation (lecture, régénération), initialisation au démarrage (code, premier administrateur) |
 | `MonsutaPotaru/Components/Pages/Admin.razor` | Page « Administration » : code d'invitation, comptes et rôles |
+| `MonsutaPotaru/Services/PlayerService.cs` | Multijoueurs : recherche par pseudo, joueur consultable (profil public, page publique), visibilité du profil |
+| `MonsutaPotaru/Components/Pages/PlayerSearch.razor` | « Multijoueurs » → « Rechercher un joueur » (`/joueurs`) |
+| `MonsutaPotaru/Components/Pages/PlayerProfilePage.razor` | Profil d'un joueur (`/joueurs/{pseudo}`) : ses pages publiques en onglets |
+| `MonsutaPotaru/Components/Shared/PlayerHeader.razor`, `PlayerHidden.razor` | En-tête des pages d'un joueur (pseudo, onglets, « lecture seule ») ; réponse d'un profil privé ou introuvable |
+| `MonsutaPotaru/Components/Account/Pages/Manage/Visibility.razor` | « Mon compte » → « Visibilité » : profil public ou privé, pages publiques |
 | `MonsutaPotaru/Services/SiteThemes.cs` | Thèmes du site (clé, nom, description) et thème par défaut |
 | `MonsutaPotaru/Components/Account/Pages/Manage/Themes.razor` | « Mon compte » → « Thèmes » : choix du thème, miniatures en CSS |
 | `MonsutaPotaru/wwwroot/themes/pokedex.css` | Thème Pokédex, sous `[data-theme="pokedex"]` : menu, barre du haut, contenu de toutes les pages |

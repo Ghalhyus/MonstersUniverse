@@ -1,0 +1,41 @@
+@page "/joueurs/{Pseudo}"
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Authorization
+@using MonsutaPotaru.Components.Shared
+@using MonsutaPotaru.Data
+@using MonsutaPotaru.Services
+@inject PlayerService Players
+
+<PageTitle>@(player?.Pseudo ?? (loaded ? "Joueur introuvable" : "Joueur"))</PageTitle>
+
+@* Accueil d'un joueur (Multijoueurs) : ses pages publiques en onglets ; un profil privé répond comme un joueur inexistant. *@
+
+@if (!loaded)
+{
+    <p class="text-muted">Chargement…</p>
+}
+else if (player is null)
+{
+    <PlayerHidden />
+}
+else
+{
+    <PlayerHeader Player="player" />
+    @if (player.Pages != PublicPages.None)
+    {
+        <p>Choisis une page ci-dessus.</p>
+    }
+}
+
+@code {
+    [Parameter] public string Pseudo { get; set; } = "";
+
+    private PlayerProfile? player;
+    private bool loaded;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        player = await Players.FindAsync(Pseudo);
+        loaded = true;
+    }
+}

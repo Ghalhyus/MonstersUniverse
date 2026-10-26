@@ -67,6 +67,19 @@
                 </div>
             </details>
         </div>
+        @* Multijoueurs : trouver un joueur par son pseudo et consulter ses pages publiques (lecture seule). *@
+        <div class="nav-item nav-group px-3">
+            <details open="@playersOpen">
+                <summary class="nav-link">
+                    <span class="bi bi-person-badge-nav-menu" aria-hidden="true"></span> Multijoueurs
+                </summary>
+                <div class="nav-subitems">
+                    <NavLink class="nav-link" href="joueurs">
+                        <span class="bi bi-person-nav-menu" aria-hidden="true"></span> Rechercher un joueur
+                    </NavLink>
+                </div>
+            </details>
+        </div>
 
         <AuthorizeView>
             <Authorized>
@@ -116,6 +129,9 @@
 
     /// <summary>Menu « Sauvegardes » ouvert : sur « Mes sauvegardes » ou « Synchronisation 3DS ».</summary>
     private bool savesOpen => currentUrl is { } url && (url == "sauvegardes" || url.StartsWith("sauvegardes/") || url.StartsWith("sauvegardes?"));
+
+    /// <summary>Menu « Multijoueurs » ouvert : sur la recherche ou les pages d'un joueur.</summary>
+    private bool playersOpen => currentUrl is { } url && (url == "joueurs" || url.StartsWith("joueurs/") || url.StartsWith("joueurs?"));
 
     protected override async Task OnInitializedAsync()
     {

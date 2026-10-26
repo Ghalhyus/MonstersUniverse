@@ -42,6 +42,20 @@ Ce fichier ne garde que ce que le README ne dit pas.
 - Tests : `AccountServiceTests` monte Identity comme `Program.cs` (`AccountService.ConfigureIdentity`) sur la base de test.
   Les comptes de `TestDatabase` sont créés sans Identity (pas d'adresse) : n'y appeler aucune méthode qui les revalide.
 
+## Multijoueurs
+
+- Collection, Parc, Inventaire et Living dex (liste et page d'un living dex) ont une seconde route `/joueurs/{Pseudo}/...` :
+  `Visitor` (paramètre `Pseudo`), compte du joueur trouvé par `PlayerService.FindAsync(pseudo, page)` à la place du sien.
+  En visiteur : tout le contenu dans `else` d'un `@if (Visitor && player is null)`, boutons d'action masqués **et**
+  méthodes d'action qui sortent tout de suite (`if (Visitor) return;`), ni journal, ni noms de fichiers
+  (`LabelAndFile` → `Label`, `PublicSaveLabel` des living dex), ni ID de dresseur (`PokemonCard.HideTrainerId`), ni
+  téléchargement. Une nouvelle action ou une nouvelle donnée sur ces pages : décider ce qu'en voit un visiteur.
+- Le premier rendu d'un visiteur a lieu avant que le joueur soit trouvé : ce qui touche aux éléments de la page dans
+  `OnAfterRenderAsync` (parc, grille de l'inventaire) attend que le contenu soit affiché (`engineStarted`, `contentStarted`).
+- Profil privé, page non publique, compte sans pseudo : même réponse (`PlayerHidden`), administrateurs compris.
+- Le panneau du navigateur de test, masqué, ne remplit pas les listes virtualisées (« Ma collection ») : faire une
+  capture d'écran pour qu'elles se chargent.
+
 ## Conventions du code
 
 - Services *scoped* à constructeur primaire, accès base par `IDbContextFactory<ApplicationDbContext>`.

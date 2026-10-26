@@ -48,6 +48,8 @@ public sealed class TestDatabase : IDisposable
 
     public AdminService Admin() => new(Factory, NullLogger<AdminService>.Instance);
 
+    public PlayerService Players() => new(Factory);
+
     public void Dispose()
     {
         _connection.Dispose();

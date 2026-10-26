@@ -147,4 +147,21 @@ public sealed class MigrationsTests : IDisposable
             Assert.Empty(await db.Roles.ToListAsync());
         }
     }
+    [Fact]
+    public async Task ProfileVisibility_MakesExistingAccountsPublic_WithAllTheirPages()
+    {
+        const string before = "20261026181527_UserTheme"; // juste avant ProfileVisibility
+        using (var db = NewContext())
+        {
+            await db.GetService<IMigrator>().MigrateAsync(before);
+            await AddUserAsync(db, "sacha", "Sacha");
+        }
+
+        using (var db = NewContext())
+        {
+            await db.Database.MigrateAsync();
+            var sacha = await db.Users.SingleAsync(u => u.Id == "sacha");
+            Assert.Equal((false, PublicPages.All), (sacha.ProfilePrivate, sacha.PublicPages));
+        }
+    }
 }

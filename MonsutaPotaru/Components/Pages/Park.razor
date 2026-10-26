@@ -1,4 +1,5 @@
 @page "/parc"
+@page "/joueurs/{Pseudo}/parc"
 @attribute [Authorize]
 @implements IAsyncDisposable
 @using System.Security.Claims
@@ -10,19 +11,37 @@
 @inject BankService BankStore
 @inject PokemonInfo Info
 @inject IJSRuntime JS
+@inject PlayerService Players
 
-<PageTitle>Parc</PageTitle>
+<PageTitle>@(!Visitor ? "Parc" : player is null ? "Joueur introuvable" : $"Parc de {player.Pseudo}")</PageTitle>
 
 @* Jusqu'à 30 Pokémon de la collection se promènent dans une boîte PC au fond « Forêt » :
-   l'animation et leur comportement sont dans wwwroot/js/parc.js, la page ne gère que la liste et les fenêtres. *@
+   l'animation et leur comportement sont dans wwwroot/js/parc.js, la page ne gère que la liste et les fenêtres.
+   Parc d'un autre joueur (Multijoueurs, /joueurs/{pseudo}/parc) : on le regarde, sans choisir ni retirer de Pokémon. *@
 
+@if (Visitor && player is null)
+{
+    @if (playerChecked)
+    {
+        <PlayerHidden />
+    }
+}
+else
+{
+@if (player is not null)
+{
+    <PlayerHeader Player="player" Current="PublicPages.Park" />
+}
 <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
-    <h1 class="mb-0">Parc <span class="badge bg-primary fs-6 align-middle">@members.Count / @ParkService.Capacity</span></h1>
-    <button type="button" class="btn btn-primary ms-auto" @onclick="OpenChooser">Choisir les Pokémon</button>
+    <h1 class="mb-0 @(Visitor ? "h3" : "")">Parc <span class="badge bg-primary fs-6 align-middle">@members.Count / @ParkService.Capacity</span></h1>
+    @if (!Visitor)
+    {
+        <button type="button" class="btn btn-primary ms-auto" @onclick="OpenChooser">Choisir les Pokémon</button>
+    }
 </div>
 <p class="small text-muted">
-    Tes Pokémon vivent ici : ils se promènent, se reposent, rendent visite à leur famille et dorment quand ils sont fatigués
-    (plus tôt le soir). Clique sur l'un d'eux pour voir sa fiche.
+    @(Visitor ? $"Les Pokémon de {player!.Pseudo} vivent ici" : "Tes Pokémon vivent ici") : ils se promènent, se reposent,
+    rendent visite à leur famille et dorment quand ils sont fatigués (plus tôt le soir). Clique sur l'un d'eux pour voir sa fiche.
 </p>
 
 @if (message is not null)
@@ -39,7 +58,10 @@
     {
         <div class="park-empty">
             <p>Le parc est vide.</p>
-            <button type="button" class="btn btn-light" @onclick="OpenChooser">Choisir des Pokémon</button>
+            @if (!Visitor)
+            {
+                <button type="button" class="btn btn-light" @onclick="OpenChooser">Choisir des Pokémon</button>
+            }
         </div>
     }
 </div>
@@ -103,17 +125,29 @@
 {
     <div class="collection-backdrop" @onclick="CloseDetail"></div>
     <div class="collection-dialog" role="dialog" aria-modal="true" aria-label="@selectedView.Nickname">
-        <PokemonCard Pokemon="@selectedView">
+        <PokemonCard Pokemon="@selectedView" HideTrainerId="Visitor">
             <div class="d-flex flex-wrap align-items-center gap-2">
-                <button type="button" class="btn btn-outline-danger btn-sm" @onclick="RemoveSelected" disabled="@busy">Retirer du parc</button>
+                @if (!Visitor)
+                {
+                    <button type="button" class="btn btn-outline-danger btn-sm" @onclick="RemoveSelected" disabled="@busy">Retirer du parc</button>
+                }
                 <button type="button" class="btn btn-secondary btn-sm ms-auto" @onclick="CloseDetail">Fermer</button>
             </div>
         </PokemonCard>
     </div>
 }
+}
 
 @code {
     [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = default!;
+
+    /// <summary>Pseudo d'un autre joueur (adresse /joueurs/{pseudo}/parc) : son parc, en lecture seule.</summary>
+    [Parameter] public string? Pseudo { get; set; }
+
+    private bool Visitor => Pseudo is not null;
+    private PlayerProfile? player; // joueur consulté, si son parc est public
+    private bool playerChecked;
+    private bool engineStarted;
 
     private string userId = "";
     private List<ParkPokemon> members = [];
@@ -139,15 +173,26 @@
 
     protected override async Task OnInitializedAsync()
     {
-        userId = (await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
+        if (Visitor)
+        {
+            player = await Players.FindAsync(Pseudo, PublicPages.Park);
+            playerChecked = true;
+            if (player is null)
+                return;
+            userId = player.Id;
+        }
+        else
+            userId = (await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
         members = await Parks.ListAsync(userId);
         loaded = true;
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!firstRender)
+        // Le décor n'est affiché, pour un visiteur, qu'une fois le joueur trouvé : l'animation démarre alors.
+        if (engineStarted || (Visitor && player is null))
             return;
+        engineStarted = true;
         selfRef = DotNetObjectReference.Create(this);
         module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/parc.js");
         engine = await module.InvokeAsync<IJSObjectReference>("create", stage, selfRef);
@@ -174,7 +219,7 @@
 
     private async Task RemoveSelected()
     {
-        if (selected is null)
+        if (selected is null || Visitor)
             return;
         busy = true;
         var name = selectedView?.Nickname ?? "Le Pokémon";
@@ -189,6 +234,8 @@
 
     private async Task OpenChooser()
     {
+        if (Visitor)
+            return;
         search = "";
         chooserMessage = null;
         criteria = PokemonCriteria.None;
@@ -230,6 +277,8 @@
 
     private async Task SaveChoice()
     {
+        if (Visitor)
+            return;
         busy = true;
         var result = await Parks.SetAsync(userId, chosen);
         busy = false;

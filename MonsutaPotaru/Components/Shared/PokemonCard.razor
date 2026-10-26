@@ -29,7 +29,7 @@
             <dt class="col-5">Nature</dt><dd class="col-7">@Pokemon.Nature</dd>
             <dt class="col-5">Talent</dt><dd class="col-7">@Pokemon.Ability</dd>
             <dt class="col-5">Objet</dt><dd class="col-7">@Pokemon.HeldItem</dd>
-            <dt class="col-5">Dresseur</dt><dd class="col-7">@Pokemon.OriginalTrainer (@Pokemon.TrainerId)</dd>
+            <dt class="col-5">Dresseur</dt><dd class="col-7">@Pokemon.OriginalTrainer@(HideTrainerId ? "" : $" ({Pokemon.TrainerId})")</dd>
             <dt class="col-5">Jeu d'origine</dt><dd class="col-7">@Pokemon.OriginGame</dd>
             <dt class="col-5">Attaques</dt>
             <dd class="col-7">
@@ -44,4 +44,7 @@
 @code {
     [Parameter, EditorRequired] public PokemonView Pokemon { get; set; } = default!;
     [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>Sans l'ID du dresseur : fiche vue par un autre joueur (Multijoueurs).</summary>
+    [Parameter] public bool HideTrainerId { get; set; }
 }

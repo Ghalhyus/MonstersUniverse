@@ -1,4 +1,5 @@
 @page "/inventaire"
+@page "/joueurs/{Pseudo}/inventaire"
 @attribute [Authorize]
 @using System.Security.Claims
 @using Microsoft.AspNetCore.Authorization
@@ -10,9 +11,10 @@
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
 @inject PokemonInfo Info
+@inject PlayerService Players
 @implements IAsyncDisposable
 
-<PageTitle>Inventaire</PageTitle>
+<PageTitle>@(!Visitor ? "Inventaire" : player is null ? "Joueur introuvable" : $"Inventaire de {player.Pseudo}")</PageTitle>
 
 @* Inventaire du site : le porte-monnaie de Pokédollars, le stockage des objets (objets ordinaires, Pokéballs, médicaments,
    baies, CT et DT) et le journal. L'argent et les objets viennent des sauvegardes stockées (les objets peuvent aussi y
@@ -21,15 +23,33 @@
    Le journal et le détail d'un objet s'ouvrent dans un panneau à droite, qui réduit la largeur de la page (il la recouvre
    sur un téléphone). Le tout dans .inventory-page, que les thèmes peuvent habiller (wwwroot/themes/). *@
 
+@* Inventaire d'un autre joueur (Multijoueurs, /joueurs/{pseudo}/inventaire) : objets et porte-monnaie en lecture seule,
+   sans journal, retraits, dépôts ni noms de fichiers. *@
+@if (Visitor && player is null)
+{
+    @if (playerChecked)
+    {
+        <PlayerHidden />
+    }
+}
+else
+{
 <div class="inventory-page">
+@if (player is not null)
+{
+    <PlayerHeader Player="player" Current="PublicPages.Inventory" />
+}
 <div class="inventory-layout">
 <div class="inventory-main">
     <div class="d-flex align-items-center gap-2 mb-3">
-        <h1 class="mb-0">Inventaire</h1>
-        <button class="btn btn-outline-secondary ms-auto" aria-expanded="@(panel == SidePanel.Journal ? "true" : "false")" aria-controls="journal"
-                @onclick="ToggleJournal">
-            @(panel == SidePanel.Journal ? "Fermer le journal" : "Journal")
-        </button>
+        <h1 class="mb-0 @(Visitor ? "h3" : "")">Inventaire</h1>
+        @if (!Visitor)
+        {
+            <button class="btn btn-outline-secondary ms-auto" aria-expanded="@(panel == SidePanel.Journal ? "true" : "false")" aria-controls="journal"
+                    @onclick="ToggleJournal">
+                @(panel == SidePanel.Journal ? "Fermer le journal" : "Journal")
+            </button>
+        }
     </div>
 
     @if (message is not null)
@@ -46,7 +66,10 @@
                 <div class="small text-muted">Porte-monnaie</div>
                 <div class="wallet-balance">@InventoryService.FormatMoney(balance)</div>
             </div>
-            <button class="btn btn-primary ms-auto" @onclick="OpenWithdraw">Retirer de l'argent d'une sauvegarde</button>
+            @if (!Visitor)
+            {
+                <button class="btn btn-primary ms-auto" @onclick="OpenWithdraw">Retirer de l'argent d'une sauvegarde</button>
+            }
         </div>
     </div>
 
@@ -54,10 +77,13 @@
        liste ou en grille. Une même opération peut déplacer des objets de toutes les catégories. *@
     <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
         <h2 class="h5 mb-0">Stockage</h2>
-        <div class="ms-auto d-flex flex-wrap gap-2">
-            <button class="btn btn-outline-primary" @onclick="() => OpenItems(deposit: false)">Retirer d'une sauvegarde</button>
-            <button class="btn btn-outline-primary" @onclick="() => OpenItems(deposit: true)" disabled="@(items.Count == 0)">Déposer dans une sauvegarde</button>
-        </div>
+        @if (!Visitor)
+        {
+            <div class="ms-auto d-flex flex-wrap gap-2">
+                <button class="btn btn-outline-primary" @onclick="() => OpenItems(deposit: false)">Retirer d'une sauvegarde</button>
+                <button class="btn btn-outline-primary" @onclick="() => OpenItems(deposit: true)" disabled="@(items.Count == 0)">Déposer dans une sauvegarde</button>
+            </div>
+        }
     </div>
 
     @{
@@ -95,7 +121,7 @@
             {
                 @foreach (var save in saves)
                 {
-                    <option value="@SaveSource(save.SaveId)">@save.LabelAndFile</option>
+                    <option value="@SaveSource(save.SaveId)">@(Visitor ? save.Label : save.LabelAndFile)</option>
                 }
             }
         </select>
@@ -229,7 +255,7 @@
     }
 </div>
 
-@if (panel == SidePanel.Journal)
+@if (panel == SidePanel.Journal && !Visitor)
 {
     @* Journal : une opération sur deux lignes (date, nature, montant ; puis sauvegarde, détail, solde). *@
     <aside id="journal" class="journal-panel card" aria-label="Journal des opérations">
@@ -292,7 +318,7 @@ else if (panel == SidePanel.Detail && detail is { } d)
                 <li class="list-group-item d-flex gap-2">
                     <span>
                         @label
-                        @if (file is not null)
+                        @if (file is not null && !Visitor)
                         {
                             <span class="d-block small text-muted">@file</span>
                         }
@@ -310,7 +336,7 @@ else if (panel == SidePanel.Detail && detail is { } d)
 </div>
 
 @* ---------- Fenêtre de retrait : sauvegarde → montant → confirmation ---------- *@
-@if (step != WithdrawStep.Closed)
+@if (step != WithdrawStep.Closed && !Visitor)
 {
     <div class="dialog-backdrop" @onclick="CloseWithdraw"></div>
     <div class="dialog-panel card" role="dialog" aria-modal="true" aria-label="Retirer de l'argent">
@@ -389,14 +415,23 @@ else if (panel == SidePanel.Detail && detail is { } d)
     </div>
 }
 
-@if (itemDialog is { } deposit)
+@if (itemDialog is { } deposit && !Visitor)
 {
     <ItemTransferDialog Deposit="deposit" UserId="@userId" Stock="items" OnDone="ItemsDone" OnCancel="() => itemDialog = null" />
 }
 </div>
+}
 
 @code {
     [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = default!;
+
+    /// <summary>Pseudo d'un autre joueur (adresse /joueurs/{pseudo}/inventaire) : son inventaire, en lecture seule.</summary>
+    [Parameter] public string? Pseudo { get; set; }
+
+    private bool Visitor => Pseudo is not null;
+    private PlayerProfile? player; // joueur consulté, si son inventaire est public
+    private bool playerChecked;
+    private bool contentStarted; // stockage du navigateur lu, grille surveillée, sacs chargés
 
     /// <summary>Onglet du stockage dans l'adresse (« ?onglet=baies ») : une actualisation garde l'onglet ouvert.</summary>
     [SupplyParameterFromQuery(Name = "onglet")] private string? TabSlug { get; set; }
@@ -494,7 +529,16 @@ else if (panel == SidePanel.Detail && detail is { } d)
 
     protected override async Task OnInitializedAsync()
     {
-        userId = (await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
+        if (Visitor)
+        {
+            player = await Players.FindAsync(Pseudo, PublicPages.Inventory);
+            playerChecked = true;
+            if (player is null)
+                return;
+            userId = player.Id;
+        }
+        else
+            userId = (await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
         await LoadWallet();
     }
 
@@ -511,8 +555,11 @@ else if (panel == SidePanel.Detail && detail is { } d)
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!firstRender)
+        // Une seule fois, dès que le contenu est affiché (pour un visiteur, une fois le joueur trouvé : la grille d'essai
+        // et l'identifiant du compte n'existent pas avant).
+        if (contentStarted || (Visitor && player is null))
             return;
+        contentStarted = true;
         try
         {
             grid = await JS.InvokeAsync<string?>("localStorage.getItem", ViewStorageKey) == "grille";
@@ -729,6 +776,8 @@ else if (panel == SidePanel.Detail && detail is { } d)
 
     private void ToggleJournal()
     {
+        if (Visitor)
+            return;
         detail = null;
         panel = panel == SidePanel.Journal ? SidePanel.None : SidePanel.Journal;
     }
@@ -802,7 +851,7 @@ else if (panel == SidePanel.Detail && detail is { } d)
     private async Task LoadWallet()
     {
         balance = await InventoryStore.GetBalanceAsync(userId);
-        operations = await InventoryStore.ListOperationsAsync(userId);
+        operations = Visitor ? [] : await InventoryStore.ListOperationsAsync(userId); // le journal reste privé
         items = await InventoryStore.GetItemsAsync(userId);
     }
 
@@ -820,6 +869,8 @@ else if (panel == SidePanel.Detail && detail is { } d)
 
     private void OpenItems(bool deposit)
     {
+        if (Visitor)
+            return;
         message = null;
         itemDialog = deposit;
     }
@@ -836,6 +887,8 @@ else if (panel == SidePanel.Detail && detail is { } d)
 
     private async Task OpenWithdraw()
     {
+        if (Visitor)
+            return;
         message = null;
         chosen = null;
         amount = null;
@@ -858,7 +911,7 @@ else if (panel == SidePanel.Detail && detail is { } d)
 
     private async Task ConfirmWithdraw()
     {
-        if (chosen is null || amount is not { } value) return;
+        if (Visitor || chosen is null || amount is not { } value) return;
         busy = true;
         try
         {

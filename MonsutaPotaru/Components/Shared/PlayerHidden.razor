@@ -1,0 +1,4 @@
+@using MonsutaPotaru.Services
+@* Joueur introuvable, profil privé ou page non publique : même réponse, qui ne dit pas si le joueur existe. *@
+<h1 class="mb-3">Joueur introuvable</h1>
+<p class="text-muted">@PlayerService.HiddenMessage <a href="joueurs">Rechercher un joueur</a></p>
