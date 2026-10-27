@@ -116,6 +116,14 @@ workflow).
 
 ## Compiler et tester pendant que l'appli tourne
 
+Le site de test (`Development`) ne montre pas tout ce que montre l'image Docker : en .NET 10, les scripts de Blazor
+(`_framework/blazor.web.js`) viennent d'un paquet que le SDK n'ajoute que s'il voit des `.razor` à la restauration ; le
+`Dockerfile` restaure avec le seul `.csproj`, d'où `RequiresAspNetWebAssets` dans le `.csproj` (sans lui : pages
+affichées mais jamais interactives, « Ma collection » qui charge sans fin). Pour un changement de version de .NET ou de
+la publication, refaire les étapes du `Dockerfile` en local (restauration du `.csproj` seul dans un dossier vide, copie
+des sources, `dotnet publish -c Release --no-restore`) et lancer le résultat en `--environment Production` (CSP sans
+les exceptions de développement). La CD vérifie que `blazor.web.js` répond.
+
 L'appli lancée par l'utilisateur verrouille `MonsutaPotaru/bin` : compiler et tester dans un dossier à part.
 
 ```bash

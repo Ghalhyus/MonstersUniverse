@@ -130,6 +130,12 @@ jobs:
           # redirection vers HTTPS. Une minute au plus : migrations et remplissages du démarrage compris.
           for essai in $(seq 30); do
             if docker compose exec -T caddy wget -q -O /dev/null --header "X-Forwarded-Proto: https" http://monsuta-potaru:8080/; then
+              # Le script de Blazor aussi : sans lui, les pages s'affichent mais aucune n'est interactive (.NET 10 :
+              # RequiresAspNetWebAssets dans MonsutaPotaru.csproj).
+              if ! docker compose exec -T caddy wget -q -O /dev/null --header "X-Forwarded-Proto: https" http://monsuta-potaru:8080/_framework/blazor.web.js; then
+                echo "::error title=Déploiement::Le site répond, mais _framework/blazor.web.js est introuvable : aucune page ne sera interactive."
+                exit 1
+              fi
               echo "Monsuta Potaru est à jour et répond."
               exit 0
             fi

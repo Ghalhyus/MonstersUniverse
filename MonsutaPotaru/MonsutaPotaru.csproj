@@ -5,6 +5,10 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UserSecretsId>aspnet-PokeBank-5ac98df5-ebf2-4cc1-aa23-fb8973587e0e</UserSecretsId>
+    <!-- Scripts de Blazor (_framework/blazor.web.js), en .NET 10 un paquet à part que le SDK n'ajoute que s'il voit des
+         .razor au moment de la restauration. Le Dockerfile restaure avec ce seul fichier (cache de Docker) : sans cette
+         ligne, l'image n'a pas _framework et aucune page n'est interactive. -->
+    <RequiresAspNetWebAssets>true</RequiresAspNetWebAssets>
   </PropertyGroup>
 
   <ItemGroup>

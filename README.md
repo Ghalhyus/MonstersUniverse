@@ -815,7 +815,7 @@ partent au bout de 14 jours, comme les nouvelles.
   sauvegarde des données (`sauvegarder.sh`, quelques secondes de coupure), envoi de la même archive que `publier.ps1`,
   **images manquantes** (`outils/images.py --sortie ~/monsuta-potaru-images`, comme `images-serveur` : les présentes sont gardées ;
   un échec ne bloque pas, avertissement orange et journal complet dans `~/monsuta-potaru-images.log` sur le VPS),
-  `docker compose up -d --build`, et vérification que le site répond (une minute au plus, sinon échec). Le dépôt est
+  `docker compose up -d --build`, et vérification que le site répond, script de Blazor compris (`_framework/blazor.web.js` ; une minute au plus, sinon échec). Le dépôt est
   public, ses journaux d'Actions aussi : ils n'affichent ni secret ni journal du site (à lire par SSH). Jamais deux déploiements à la fois. La première installation se fait toujours avec `publier.cmd`.
 
 Mise en place (une fois), avec une clé SSH réservée à GitHub (révocable sans toucher à la tienne), dans PowerShell :
