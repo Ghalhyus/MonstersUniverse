@@ -20,6 +20,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<Friendship> Friendships => Set<Friendship>();
     public DbSet<FriendRequest> FriendRequests => Set<FriendRequest>();
     public DbSet<TradeRecord> TradeRecords => Set<TradeRecord>();
+    public DbSet<BattleRecord> BattleRecords => Set<BattleRecord>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -40,6 +41,12 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         {
             e.HasIndex(t => t.FirstId);
             e.HasIndex(t => t.SecondId);
+        });
+
+        builder.Entity<BattleRecord>(e =>
+        {
+            e.HasIndex(b => b.FirstId);
+            e.HasIndex(b => b.SecondId);
         });
 
         builder.Entity<FriendRequest>(e =>

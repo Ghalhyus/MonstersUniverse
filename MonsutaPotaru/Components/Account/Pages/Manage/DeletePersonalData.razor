@@ -46,7 +46,7 @@
 
 @code {
     private string? message;
-    private ApplicationUser user = default!;
+    private ApplicationUser? user;
     private bool requirePassword;
 
     [CascadingParameter]
@@ -59,11 +59,15 @@
     {
         Input ??= new();
         user = await UserAccessor.GetRequiredUserAsync(HttpContext);
+        if (user is null)
+            return; // redirigé : compte supprimé
         requirePassword = await UserManager.HasPasswordAsync(user);
     }
 
     private async Task OnValidSubmitAsync()
     {
+        if (user is null)
+            return; // compte supprimé : page redirigée
         // Vérifié en comptant les échecs (blocage partagé avec la connexion).
         if (requirePassword && await Accounts.CheckPasswordAsync(user, Input.Password) is not PasswordCheck.Ok and var refused)
         {

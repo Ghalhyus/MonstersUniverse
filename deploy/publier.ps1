@@ -13,8 +13,8 @@ $archive = Join-Path $env:TEMP "monsuta-potaru.tgz"
 Write-Host "== Préparation de l'archive"
 # Sans les images : elles sont dans ~/monsuta-potaru-images sur le serveur (deploy\images-serveur.cmd). Avec outils/, pour
 # que le script des images soit sur le serveur.
-tar -czf $archive --exclude=bin --exclude=obj --exclude=.vs --exclude="app.db*" --exclude=backups --exclude=keys `
-    --exclude=MonsutaPotaru/wwwroot/images Dockerfile .dockerignore docker-compose.yml Caddyfile .env.example MonsutaPotaru.sln MonsutaPotaru deploy outils
+tar -czf $archive --exclude=bin --exclude=obj --exclude=.vs --exclude="app.db*" --exclude=backups --exclude=keys --exclude=node_modules `
+    --exclude=MonsutaPotaru/wwwroot/images Dockerfile .dockerignore docker-compose.yml Caddyfile .env.example MonsutaPotaru.sln MonsutaPotaru deploy outils showdown
 if ($LASTEXITCODE -ne 0) { throw "Impossible de créer l'archive." }
 
 Write-Host "== Envoi vers $Serveur"

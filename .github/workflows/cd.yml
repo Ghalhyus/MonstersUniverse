@@ -77,8 +77,8 @@ jobs:
         env:
           CIBLE: ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}
         run: |
-          tar -czf "$RUNNER_TEMP/monsuta-potaru.tgz" --exclude=bin --exclude=obj --exclude=MonsutaPotaru/wwwroot/images \
-            Dockerfile .dockerignore docker-compose.yml Caddyfile .env.example MonsutaPotaru.sln MonsutaPotaru deploy outils
+          tar -czf "$RUNNER_TEMP/monsuta-potaru.tgz" --exclude=bin --exclude=obj --exclude=node_modules --exclude=MonsutaPotaru/wwwroot/images \
+            Dockerfile .dockerignore docker-compose.yml Caddyfile .env.example MonsutaPotaru.sln MonsutaPotaru deploy outils showdown
           scp -o BatchMode=yes "$RUNNER_TEMP/monsuta-potaru.tgz" "$CIBLE:monsuta-potaru.tgz"
 
       - name: Sauvegarde, mise à jour, images et vérification

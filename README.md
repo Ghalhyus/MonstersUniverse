@@ -20,6 +20,16 @@ outils\recuperer-images.cmd debian@IP_DU_VPS
 Sans accès au serveur, `python outils/images.py` les reconstruit depuis leurs projets d'origine (~10 minutes). Sans images,
 le site marche mais affiche des points d'interrogation, et les tests d'images échouent avec un message qui l'explique.
 
+Les combats font tourner le simulateur de Pokémon Showdown avec Node.js (22 ou plus) : l'installer une fois après avoir
+cloné (sans lui, le site marche mais les combats et leurs tests échouent avec un message qui l'explique) :
+
+```bash
+npm ci --prefix showdown
+```
+
+Sous PowerShell, si l'exécution des scripts est bloquée (« npm.ps1 ne peut pas être chargé »), appeler `npm.cmd` à la
+place (`npm.cmd ci --prefix showdown`) : inutile de changer la politique d'exécution de Windows.
+
 ```bash
 dotnet run --project MonsutaPotaru
 ```
@@ -50,7 +60,7 @@ Pour simuler « j'ai rejoué un peu » et passer la règle anti-copie de « Mes 
 dépôt d'un Pokémon puis retour au même emplacement, stockage (tous ses Pokémon dans la collection), retrait d'argent,
 retrait de tous les objets du sac et du PC puis dépôt de retour (objets rares, CS et Cristaux Z intacts). Il suffit d'y ajouter un
 fichier pour qu'il soit testé ; sans le dossier, ces tests ne vérifient rien. Actuellement : Rouge, Bleu, Argent (partie
-randomisée : ses Pokémon sont signalés illégaux), SoulSilver, Noire (`noir.sav`), Noire 2, Rubis Oméga, Ultra-Soleil, Épée. SoulSilver : les blocs annexes
+randomisée : ses Pokémon sont signalés illégaux), Rouge Feu, Vert Feuille (2 parties de 3e génération, pour les combats ; PKHeX les reconnaît toutes deux comme Rouge Feu), SoulSilver, Noire (`noir.sav`), Noire 2, Rubis Oméga, Ultra-Soleil, Épée. SoulSilver : les blocs annexes
 jamais écrits par le jeu (Tour de Combat, vidéos...) restent à zéro, sans somme de contrôle valide, et PKHeX marque à
 l'écriture toutes les boîtes comme modifiées : le fichier change une fois, puis plus. En 1re et 2e génération, le fichier réécrit n'est pas identique octet pour octet (le contenu l'est) :
 le jeu ne prépare ses boîtes qu'au premier changement de boîte et PKHeX les écrit vides en règle ; et une boîte y est une
@@ -131,6 +141,59 @@ demande se fait aussi depuis le profil d'un joueur trouvable (« Demander en ami
 « Personne ». Une demande qui croise celle de l'autre est acceptée d'emblée. Tables `FriendRequests` (une par sens et
 par paire) et `Friendships` (deux lignes par amitié) ; supprimées avec le compte.
 
+### Combats
+
+Combats entre amis, génération par génération : la **3e** d'abord (Rubis, Saphir, Émeraude, Rouge Feu, Vert Feuille),
+combat simple, équipes de 6, niveaux réels, sans clause (comme un combat de câble), Pokémon illégaux acceptés mais
+signalés. Égalité (derniers Pokémon K.O. au même tour) : **match nul**, comme en 3e génération.
+
+**Moteur** : le simulateur de [Pokémon Showdown](https://github.com/smogon/pokemon-showdown) (paquet `@pkmn/sim`, dossier
+`showdown/`), toutes les capacités, talents et objets de la génération exacts. Un processus Node.js par combat
+(`showdown/combat.js`, lancé par `Services/Battle/ShowdownBattle.cs`), qui reçoit les Pokémon par numéros (traduits en
+noms de Showdown ; avec leurs **PP Plus** réels, Showdown en supposerait 3) et les choix des joueurs, et renvoie le
+protocole de Showdown. Le pont **ne transmet que les choix** (« p1 move 2 », « p2 switch 3 ») et la fin forcée
+(abandon, temps écoulé) : jamais `eval`, que le simulateur accepte aussi. Le hasard (graine) est tiré par le serveur.
+Deoxys a la forme du jeu de sa sauvegarde (Rouge Feu : Attaque, Émeraude : Vitesse...).
+
+**Déroulé** : Multijoueurs → **Combats** (`/combats`, `Pages/Battles.razor`), avec un ami, **en direct** (les deux
+connectés), comme les échanges : l'ami, puis une paire de sauvegardes stockées de même génération parmi celles qui ont
+leurs combats (`BattleService.SavePairsAsync`, amitié revérifiée), demande valable 10 minutes (compteur rouge dans le
+menu), un combat à la fois. Chacun choisit ensuite **6 Pokémon** de sa sauvegarde (tous s'il en a moins ; équipe et
+boîtes, sans les œufs), dans l'ordre (le premier entre en combat) ; chaque Pokémon garde sa place et son empreinte,
+revérifiées au départ (`BattleService.TeamAsync`). Les Pokémon **illégaux** sont marqués au choix, et l'adversaire en est
+averti au début du combat. Les sauvegardes ne sont jamais modifiées (combat amical).
+
+Le combat (`Services/Battle/BattleHub.cs`, singleton, en mémoire) : chaque choix est **vérifié par le serveur** sur la
+dernière requête de Showdown avant d'être transmis (capacité qui existe et n'est pas bloquée, Pokémon qui n'est ni au
+combat ni K.O., pas de rappel d'un Pokémon piégé) ; un choix que Showdown refuse quand même (interdiction cachée) est
+signalé et se refait. **60 secondes** pour chaque choix (remplaçant après un K.O. compris), comptées une fois les étapes
+du tour jouées : passé ce délai, le joueur **perd** (`BattleHub.Tick`, chaque seconde). **Fuite** (avec confirmation),
+quitter la page ou fermer l'onglet : défaite. Un simulateur arrêté par erreur annule le combat, sans vainqueur.
+
+**Interface** façon Pokémon Platine, en CSS (`app.css`, « Combats ») : écran du haut (terrain, Pokémon, boîtes de PV avec
+sexe, niveau, statut, Pokéballs de l'équipe adverse, PV exacts des siens, boîte de texte) ; écran du bas (ATTAQUE, SAC
+grisé comme en combat de câble, POKéMON, FUITE ; capacités colorées par type avec leurs PP ; équipe avec PV et statut ;
+compte à rebours). Les étapes défilent une à une (`BattleTiming` : 1,3 s par message) ; le Pokémon qui attaque
+s'avance puis revient, celui qui est touché clignote, un K.O. tombe.
+
+**Sprites** (`Services/Battle/BattleSprites.cs`) : chaque joueur voit le combat avec les sprites de **son** jeu (celui de
+sa sauvegarde), ceux de l'adversaire de face, les siens **de dos**, chromatiques compris : Rubis / Saphir, Émeraude (dos de
+Rubis / Saphir), Rouge Feu / Vert Feuille. Ce sont les dossiers des living dex (`images/livingdex/<jeu>/`), complétés par
+`dos/`, `chromatique/` et `dos/chromatique/` (`outils/images.py combats`). Zarbi garde sa lettre (forme d'aspect
+transmise à Showdown), Morphéo change selon le temps, Deoxys a la forme du jeu **de celui qui regarde** (seule image de
+son jeu ; ses statistiques restent celles du jeu de son dresseur). Un sprite absent : l'image de la collection.
+
+**Résultats** : chaque combat terminé (victoire, défaite, match nul ; abandon et temps écoulé compris, pas un combat
+annulé) est écrit dans la table `BattleRecords` (`Services/Battle/BattleRecorder.cs`, à l'événement
+`BattleHub.Finished` ; migration `BattleRecords`), sans clé étrangère, comme les échanges : victoires, défaites, matchs
+nuls et adversaires différents dans les **Statistiques**.
+
+**Traduction** (`Services/Battle/BattleView.cs`) : chaque joueur voit le combat de son côté, en français, comme dans
+Pokémon Platine (« Pika utilise Surf ! », « Abo ennemi est K.O. ! », « L'Attaque d'Abo ennemi baisse ! »), PV exacts pour
+ses Pokémon, en pourcentage pour ceux de l'adversaire ; noms français de PKHeX retrouvés depuis les noms anglais de
+Showdown (`BattleNames`). Vérifié sur des centaines de combats aléatoires (toute la 3e génération) : aucune ligne du
+protocole sans traduction (test `BattleTests.RandomBattles_EndAndAreFullyTranslated`).
+
 ### Échanges
 
 Multijoueurs → **Échanges** (`/echanges`, `Pages/Trades.razor`), avec un ami, **en direct** (les deux connectés), entre
@@ -158,7 +221,7 @@ pas Let's Go ↔ Soleil, ni Épée ↔ Diamant Étincelant). Compteur rouge des 
 singleton) : un redémarrage du serveur annule les échanges en cours.
 
 **Statistiques** (`/statistiques`, `Pages/Statistics.razor`) : nombre d'échanges réussis et de partenaires différents
-(table `TradeRecords`, sans clé étrangère : les statistiques d'un joueur survivent à la suppression du compte de son
+(table `TradeRecords`, et pour les combats victoires, défaites, matchs nuls et adversaires différents, table `BattleRecords`, sans clé étrangère : les statistiques d'un joueur survivent à la suppression du compte de son
 partenaire), base des futurs succès. Le **pseudo** du menu est un menu repliable : « Paramètres du profil » (Mon compte)
 et « Statistiques ».
 
@@ -678,9 +741,21 @@ est incompatible (espèce, attaques ou objets inexistants dans le jeu, conversio
 | `MonsutaPotaru/Data/Friendship.cs` | Tables des amitiés (deux lignes par amitié) et des demandes d'ami |
 | `MonsutaPotaru/Services/TradeService.cs` | Échanges : sauvegardes compatibles, Pokémon proposés, évolution par échange, écriture des deux sauvegardes, statistiques |
 | `MonsutaPotaru/Services/TradeHub.cs` | Échanges en direct (singleton, en mémoire) : demande, choix, validation, annulation, expiration |
+| `showdown/` | Simulateur des combats : `package.json` (`@pkmn/sim`, version fixée), `combat.js` (pont : Pokémon par numéros, PP Plus, choix seulement) |
+| `MonsutaPotaru/Components/Pages/Battles.razor` | « Multijoueurs » → « Combats » : demandes, ami et sauvegardes, choix de l'équipe, combat en direct (interface façon Platine) |
+| `MonsutaPotaru/Services/Battle/BattleHub.cs` | Combats en direct (singleton, en mémoire) : demande, équipes, simulateur, choix vérifiés, minuteur, abandon, fin |
+| `MonsutaPotaru/Services/Battle/BattleService.cs` | Combats : sauvegardes compatibles entre amis, Pokémon proposés pour l'équipe, équipe vérifiée, statistiques |
+| `MonsutaPotaru/Services/Battle/BattleSprites.cs` | Sprites d'un combat vus par un joueur : ceux de son jeu, de face et de dos, chromatiques, formes (Zarbi, Morphéo, Deoxys) |
+| `MonsutaPotaru/Services/Battle/BattleRecorder.cs` | Résultat de chaque combat terminé écrit en base (statistiques) |
+| `MonsutaPotaru/Data/BattleRecord.cs` | Table des combats terminés (vainqueur ou match nul) |
+| `MonsutaPotaru/Services/Battle/ShowdownBattle.cs` | Un combat dans le simulateur : processus Node.js, envoi des choix, réception du protocole |
+| `MonsutaPotaru/Services/Battle/BattleTeam.cs` | Pokémon d'une sauvegarde → Pokémon du simulateur (format par génération, forme de Deoxys) |
+| `MonsutaPotaru/Services/Battle/BattleProtocol.cs` | Lecture du protocole de Showdown : lignes, parties secrètes de chaque joueur, requêtes |
+| `MonsutaPotaru/Services/Battle/BattleView.cs` | Combat vu par un joueur : terrain, PV, statuts, météo, étapes à animer, messages en français |
+| `MonsutaPotaru/Services/Battle/BattleNames.cs` | Noms anglais de Showdown → noms français de PKHeX (espèces, capacités, objets, talents, types) |
 | `MonsutaPotaru/Components/Pages/Trades.razor` | « Multijoueurs » → « Échanges » : demandes, choix de l'ami et des sauvegardes, échange en direct |
 | `MonsutaPotaru/Components/Shared/TradePokemon.razor` | Pokémon choisi dans un échange (image, nom, place) |
-| `MonsutaPotaru/Components/Pages/Statistics.razor` | Statistiques du joueur (menu du pseudo) : échanges |
+| `MonsutaPotaru/Components/Pages/Statistics.razor` | Statistiques du joueur (menu du pseudo) : échanges, combats |
 | `MonsutaPotaru/Data/TradeRecord.cs` | Table des échanges réussis (statistiques, succès) |
 | `MonsutaPotaru/Components/Pages/PlayerSearch.razor` | « Multijoueurs » → « Rechercher un joueur » (`/joueurs`) |
 | `MonsutaPotaru/Components/Pages/PlayerProfilePage.razor` | Profil d'un joueur (`/joueurs/{pseudo}`) : ses pages publiques en onglets |
@@ -796,7 +871,7 @@ partent au bout de 14 jours, comme les nouvelles.
 
 **CI/CD** (GitHub Actions, deux workflows séparés : `.github/workflows/ci.yml` et `cd.yml`, l'un se lance sans l'autre) :
 
-- **CI, tests** à chaque push (ou « Run workflow » du workflow « CI » pour les relancer), sur une machine Ubuntu propre (un fichier oublié dans un commit s'y voit) : .NET 10, images
+- **CI, tests** à chaque push (ou « Run workflow » du workflow « CI » pour les relancer), sur une machine Ubuntu propre (un fichier oublié dans un commit s'y voit) : .NET 10, simulateur de combat (`npm ci --prefix showdown`), images
   copiées depuis `~/monsuta-potaru-images` du VPS par SSH (exigées par les tests d'images), puis `dotnet test`. Résultat dans
   l'onglet « Actions » du dépôt et à côté de chaque commit. Attention : Linux distingue majuscules et minuscules dans les
   noms de fichiers, Windows non.
@@ -872,8 +947,9 @@ Monsuta Potaru s'appuie sur le travail d'autres projets :
 
 | Projet | Utilisé pour | Licence |
 |---|---|---|
+| [Pokémon Showdown](https://github.com/smogon/pokemon-showdown) (Guangcong Luo et contributeurs), paquet [`@pkmn/sim`](https://github.com/pkmn/ps) | Simulateur des combats (`showdown/combat.js`) : règles, capacités, talents, objets de chaque génération | MIT |
 | [PKHeX](https://github.com/kwsch/PKHeX) (Kaphotics et contributeurs), paquet `PKHeX.Core` | Lecture et écriture des sauvegardes, Pokémon, sacs, noms français, légalité ; images d'objets « Big Items » et « Artwork Items », fond de boîte « Forêt » de Diamant Étincelant du parc (`outils/images.py`) | GPL-3.0 |
-| [PokéAPI sprites](https://github.com/PokeAPI/sprites) | Images des Pokémon (normales et chromatiques, formes, femelles, Méga-Évolutions, Gigamax), de la plupart des objets et des CT (`wwwroot/images`) ; sprites de Rouge / Bleu, Jaune, Or, Argent, Cristal, Rubis / Saphir, Émeraude, Rouge Feu / Vert Feuille, Diamant / Perle, Platine, HeartGold / SoulSilver et Noire / Blanche des living dex, formes comprises (`versions/generation-i` à `generation-v`, `wwwroot/images/livingdex`) | CC0 1.0 pour le dépôt ; images © The Pokémon Company |
+| [PokéAPI sprites](https://github.com/PokeAPI/sprites) | Images des Pokémon (normales et chromatiques, formes, femelles, Méga-Évolutions, Gigamax), de la plupart des objets et des CT (`wwwroot/images`) ; sprites de Rouge / Bleu, Jaune, Or, Argent, Cristal, Rubis / Saphir, Émeraude, Rouge Feu / Vert Feuille, Diamant / Perle, Platine, HeartGold / SoulSilver et Noire / Blanche des living dex, formes comprises (`versions/generation-i` à `generation-v`, `wwwroot/images/livingdex`) ; sprites de dos et chromatiques de Rubis / Saphir, Émeraude et Rouge Feu / Vert Feuille des combats (`back/`, `shiny/`) | CC0 1.0 pour le dépôt ; images © The Pokémon Company |
 | [PokéAPI](https://github.com/PokeAPI/pokeapi) (données) | Liste des formes de chaque espèce et des espèces dont la femelle est différente (tables `pokemon`, `pokemon_forms`, `pokemon_species`, lues par `outils/images.py` ; `has_gender_differences` reprise dans `GlobalLivingDex.GenderDifferences`) ; ordre des Pokédex régionaux des living dex (`pokemon_dex_numbers`, Pokédex « original-johto », « hoenn », « original-sinnoh », « extended-sinnoh », « updated-johto », « original-unova », « updated-unova », « kalos-central », « kalos-coastal », « kalos-mountain », « updated-hoenn », « original-alola », « updated-alola », « letsgo-kanto », « galar », « isle-of-armor », « crown-tundra », « hisui », « paldea », « kitakami » et « blueberry », repris dans `LivingDexGames`) | BSD-3-Clause |
 | [PokéSprite](https://github.com/msikma/pokesprite) (msikma) | Images d'objets absentes de PokéAPI, retrouvées par numéro d'objet (`data/item-map.json`) | MIT ; images © Nintendo / Creatures Inc. / GAME FREAK Inc. |
 | [SpriteCollab](https://github.com/PMDCollab/SpriteCollab) (PMD Collab, [sprites.pmdcollab.org](https://sprites.pmdcollab.org)) | Sprites animés façon Donjon Mystère du « Parc », animations Idle, Walk et Sleep (`wwwroot/images/donjon`, par `outils/images.py donjon`) ; auteurs de chaque sprite dans `wwwroot/images/donjon/credits.txt` | CC BY-NC 4.0 (usage non commercial, auteurs à citer) |

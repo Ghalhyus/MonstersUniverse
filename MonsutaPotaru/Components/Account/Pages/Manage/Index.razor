@@ -36,6 +36,8 @@
     protected override async Task OnInitializedAsync()
     {
         var user = await UserAccessor.GetRequiredUserAsync(HttpContext);
+        if (user is null)
+            return; // redirigé : compte supprimé
         username = await UserManager.GetUserNameAsync(user);
         email = await UserManager.GetEmailAsync(user);
     }

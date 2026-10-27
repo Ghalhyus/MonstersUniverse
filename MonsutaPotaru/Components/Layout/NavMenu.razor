@@ -6,6 +6,7 @@
 @inject WalletState Wallet
 @inject FriendService Friends
 @inject TradeHub Trades
+@inject BattleHub Battles
 
 <div class="top-row ps-3 navbar navbar-dark">
     <div class="container-fluid">
@@ -74,9 +75,9 @@
             <details open="@playersOpen">
                 <summary class="nav-link">
                     <span class="bi bi-person-badge-nav-menu" aria-hidden="true"></span> Multijoueurs
-                    @if (pendingRequests + tradeRequests > 0 && !playersOpen)
+                    @if (pendingRequests + tradeRequests + battleRequests > 0 && !playersOpen)
                     {
-                        <span class="badge bg-danger ms-2" title="Demandes d'ami et d'échange reçues">@(pendingRequests + tradeRequests)</span>
+                        <span class="badge bg-danger ms-2" title="Demandes d'ami, d'échange et de combat reçues">@(pendingRequests + tradeRequests + battleRequests)</span>
                     }
                 </summary>
                 <div class="nav-subitems">
@@ -95,6 +96,13 @@
                         @if (tradeRequests > 0)
                         {
                             <span class="badge bg-danger ms-2" title="Demandes d'échange reçues">@tradeRequests</span>
+                        }
+                    </NavLink>
+                    <NavLink class="nav-link" href="combats">
+                        <span class="bi bi-lightning-nav-menu" aria-hidden="true"></span> Combats
+                        @if (battleRequests > 0)
+                        {
+                            <span class="badge bg-danger ms-2" title="Demandes de combat reçues">@battleRequests</span>
                         }
                     </NavLink>
                 </div>
@@ -164,7 +172,7 @@
     /// <summary>Menu « Multijoueurs » ouvert : sur la recherche ou les pages d'un joueur.</summary>
     private bool playersOpen => currentUrl is { } url
         && (url == "joueurs" || url.StartsWith("joueurs/") || url.StartsWith("joueurs?") || url == "amis" || url.StartsWith("amis?")
-            || url == "echanges" || url.StartsWith("echanges?"));
+            || url == "echanges" || url.StartsWith("echanges?") || url == "combats" || url.StartsWith("combats?"));
 
     /// <summary>Menu du pseudo ouvert : sur les paramètres du profil ou les statistiques.</summary>
     private bool accountOpen => currentUrl is { } url && (url.StartsWith("Account/Manage", StringComparison.OrdinalIgnoreCase) || url == "statistiques");
@@ -172,6 +180,7 @@
     private string? userId;
     private int pendingRequests; // demandes d'ami reçues, relues à chaque navigation
     private int tradeRequests; // demandes d'échange reçues (en direct, TradeHub)
+    private int battleRequests; // demandes de combat reçues (en direct, BattleHub)
 
     protected override async Task OnInitializedAsync()
     {
@@ -180,6 +189,7 @@
         Wallet.Changed += OnWalletChanged;
         Friends.Changed += OnFriendsChanged;
         Trades.RequestsChanged += OnTradeRequestsChanged;
+        Battles.RequestsChanged += OnBattleRequestsChanged;
 
         // Solde du porte-monnaie pour l'utilisateur connecté (rafraîchi par « Inventaire » après un retrait).
         userId = AuthState is null ? null : (await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -188,7 +198,19 @@
             await Wallet.RefreshAsync(userId);
             pendingRequests = await Friends.PendingCountAsync(userId);
             tradeRequests = Trades.Incoming(userId).Count;
+            battleRequests = Battles.Incoming(userId).Count;
         }
+    }
+
+    private void OnBattleRequestsChanged(string user)
+    {
+        if (user != userId)
+            return;
+        InvokeAsync(() =>
+        {
+            battleRequests = Battles.Incoming(user).Count;
+            StateHasChanged();
+        });
     }
 
     private void OnTradeRequestsChanged(string user)
@@ -225,6 +247,7 @@
         Wallet.Changed -= OnWalletChanged;
         Friends.Changed -= OnFriendsChanged;
         Trades.RequestsChanged -= OnTradeRequestsChanged;
+        Battles.RequestsChanged -= OnBattleRequestsChanged;
     }
 }
 

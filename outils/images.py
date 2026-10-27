@@ -26,7 +26,10 @@ Rassemble les images servies par le site, dans MonsutaPotaru/wwwroot/images/ :
   soulsilver.png, noire.png, blanche.png, noire-2.png, blanche-2.png, x.png, y.png, rubis-omega.png, saphir-alpha.png,
   soleil.png, lune.png, ultra-soleil.png, ultra-lune.png, lets-go-pikachu.png, lets-go-evoli.png, epee.png, bouclier.png,
   diamant-etincelant.png, perle-scintillante.png, legendes-arceus.png, ecarlate.png, violet.png : Bulbagarden Archives,
-  versions anglaises, faute de françaises).
+  versions anglaises, faute de françaises) ;
+- combats : dans les dossiers de la 3e génération des living dex (rubis-saphir/, emeraude/, rouge-feu-vert-feuille/), les
+  sprites de dos (dos/<numéro>.png) et chromatiques (chromatique/, dos/chromatique/), mêmes formes, plus Morphéo selon le
+  temps (351-sunny.png, 351-rainy.png, 351-snowy.png) ; PokéAPI, versions/generation-iii/<jeu>/back/ et shiny/.
 
 Sources des objets, dans l'ordre :
   1. PokéAPI, par nom anglais (l'apparence d'origine du site), sauf quand ce nom est porté par plusieurs objets ;
@@ -37,7 +40,7 @@ jeton, seulement des fichiers bruts.
 Les objets qu'aucune source n'a (objets rares, objets de Légendes Arceus, accessoires de pique-nique...)
 gardent inconnu.png : il suffit de déposer leur image sous leur numéro pour la remplacer.
 
-Lancement (Python 3, rien à installer) : python outils/images.py [pokemon] [objets] [donjon] [fonds] [livingdex] [--sortie <dossier>]
+Lancement (Python 3, rien à installer) : python outils/images.py [pokemon] [objets] [donjon] [fonds] [livingdex] [combats] [--sortie <dossier>]
 (tout, sans argument ; dans MonsutaPotaru/wwwroot/images, sauf --sortie : le serveur l'utilise pour ~/monsuta-potaru-images, voir
 deploy/images-serveur.ps1). Les images ne sont pas dans le dépôt Git : en local, outils/recuperer-images.cmd les copie
 depuis le serveur, plus vite que les reconstruire.
@@ -294,6 +297,26 @@ LIVINGDEX_COVERS = {"rouge": "File:Red EN boxart.png", "bleu": "File:Blue EN box
                     "ecarlate": "File:Scarlet EN boxart.png", "violet": "File:Violet EN boxart.png"}
 
 
+# Combats (MonsutaPotaru/Services/Battle/BattleSprites.cs) : chaque joueur voit les sprites de son jeu, ceux des living dex de la
+# 3e génération (de face, déjà là), et ici de dos (dos/), chromatiques (chromatique/, dos/chromatique/). Émeraude a les dos de
+# Rubis / Saphir. Formes : celles des living dex (Zarbi, Deoxys du jeu) et Morphéo selon le temps (Pokémon 10013 à 10015).
+BATTLE_SPRITES = ["rubis-saphir", "emeraude", "rouge-feu-vert-feuille"]
+BATTLE_VARIANTS = {"": "", "chromatique/": "shiny/", "dos/": "back/", "dos/chromatique/": "back/shiny/"}
+CASTFORM_3 = {"351-sunny": "10013", "351-rainy": "10014", "351-snowy": "10015"}
+
+
+def combats_jobs():
+    """Sprites de combat de la 3e génération (PokéAPI) : de dos et chromatiques, dans les dossiers des living dex."""
+    jobs = {}
+    for folder in BATTLE_SPRITES:
+        theirs, count = LIVINGDEX_SPRITES[folder]
+        files = {str(n): str(n) for n in range(1, count + 1)} | LIVINGDEX_FORMS.get(folder, {}) | CASTFORM_3
+        for mine_variant, their_variant in BATTLE_VARIANTS.items():
+            for mine, their_file in files.items():
+                jobs[f"livingdex/{folder}/{mine_variant}{mine}.png"] = f"{POKEAPI}/pokemon/versions/{theirs}/{their_variant}{their_file}.png"
+    return jobs, []
+
+
 def livingdex_jobs():
     """Sprites des jeux des living dex (PokéAPI, fond transparent) et jaquettes officielles (Bulbagarden Archives)."""
     jobs, missing = {}, []
@@ -347,7 +370,7 @@ def main():
         del args[i:i + 2]
     failed = False
     parts = {"pokemon": ("Pokémon", pokemon_jobs), "objets": ("objets", item_jobs), "donjon": ("sprites Donjon Mystère", donjon_jobs),
-             "fonds": ("fonds", fonds_jobs), "livingdex": ("living dex", livingdex_jobs)}
+             "fonds": ("fonds", fonds_jobs), "livingdex": ("living dex", livingdex_jobs), "combats": ("combats", combats_jobs)}
     chosen = [parts[a] for a in args if a in parts] or list(parts.values())
     for kind, make in chosen:
         jobs, missing = make()

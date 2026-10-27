@@ -22,3 +22,4 @@ MonsutaPotaru/Data/keys/
 
 # Vraies sauvegardes de jeu pour les tests : versionnées malgré la règle *.sav, pour les avoir sur chaque poste
 !/MonsutaPotaru.Tests/Sauvegardes/**
+showdown/node_modules/

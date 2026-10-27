@@ -72,6 +72,10 @@ jobs:
             /d:sonar.exclusions="**/Data/Migrations/**,**/wwwroot/lib/**,**/wwwroot/images/**" \
             /d:sonar.coverage.exclusions="outils/**,deploy/**,**/wwwroot/**"
 
+      # Simulateur de combat (showdown/, Node.js déjà présent sur les machines de GitHub) : exigé par les tests de combat.
+      - name: Simulateur de combat
+        run: npm ci --prefix showdown
+
       # Couverture des tests au format OpenCover (coverlet.collector), lue par SonarCloud.
       - name: Tests
         run: >

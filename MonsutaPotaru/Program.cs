@@ -73,6 +73,12 @@ builder.Services.AddScoped<PlayerService>();
 builder.Services.AddScoped<FriendService>();
 builder.Services.AddScoped<TradeService>();
 builder.Services.AddSingleton<TradeHub>(); // échanges en cours, partagés entre les deux joueurs
+// Combats : simulateur de Pokémon Showdown (dossier showdown, Node.js), un processus par combat en cours.
+builder.Services.AddSingleton(sp => ShowdownOptions.From(builder.Configuration, builder.Environment));
+builder.Services.AddScoped<BattleService>();
+builder.Services.AddSingleton(sp => new BattleHub(sp.GetRequiredService<ShowdownOptions>(),
+    sp.GetRequiredService<ILogger<BattleHub>>())); // combats en cours, partagés entre les deux joueurs
+builder.Services.AddHostedService<BattleRecorder>(); // résultats des combats terminés (statistiques)
 builder.Services.AddSyncRateLimits(); // essais de codes de liaison 3DS
 
 var app = builder.Build();

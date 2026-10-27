@@ -1,0 +1,639 @@
+@page "/combats"
+@attribute [Authorize]
+@implements IDisposable
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Authorization
+@using MonsutaPotaru.Services
+@using PKHeX.Core
+@inject BattleHub Hub
+@inject BattleService BattleStore
+@inject FriendService FriendStore
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>Combats</PageTitle>
+
+@* Multijoueurs → Combats : avec un ami, entre deux sauvegardes stockées de même génération (la 3e pour l'instant).
+   Demande (valable BattleHub.RequestLifetime), choix des équipes, puis combat en direct dans le simulateur de Showdown
+   (BattleHub), affiché comme dans Pokémon Platine : écran du haut (terrain, PV, messages), écran du bas (menu). Chaque
+   choix a BattleTiming.Decision ; quitter la page pendant le combat demande confirmation, puis abandonne. *@
+<NavigationLock ConfirmExternalNavigation="InBattle" OnBeforeInternalNavigation="BeforeLeaving" />
+
+<h1 class="mb-3">Combats</h1>
+
+@if (message is not null)
+{
+    <div class="alert @(messageIsError ? "alert-danger" : "alert-success") alert-dismissible" role="alert">
+        @message
+        <button type="button" class="btn-close" aria-label="Fermer" @onclick="() => message = null"></button>
+    </div>
+}
+
+@if (session is { } s)
+{
+    var me = s.Me(userId);
+    var other = s.Other(userId);
+    <div class="d-flex flex-wrap align-items-start gap-2 mb-3">
+        <div>
+            <h2 class="h5 mb-1">Combat contre @other.Pseudo</h2>
+            <div class="small text-muted">Ta sauvegarde : @me.SaveLabel · Sa sauvegarde : @other.SaveLabel</div>
+        </div>
+        @if (s.Stage is BattleStage.Requested or BattleStage.TeamBuilding)
+        {
+            <button type="button" class="btn btn-outline-danger ms-auto" @onclick="CancelBattle">Annuler le combat</button>
+        }
+    </div>
+
+    @switch (s.Stage)
+    {
+        case BattleStage.Requested:
+            <p>En attente de la réponse de @other.Pseudo… La demande vaut jusqu'à @s.ExpiresAt.ToLocalTime().ToString("HH:mm"), tant que tu restes sur cette page.</p>
+            break;
+
+        case BattleStage.TeamBuilding:
+            @if (s.TeamReady(userId))
+            {
+                <p>Ton équipe est prête. En attente de l'équipe de @other.Pseudo…</p>
+            }
+            else if (candidates is null)
+            {
+                <p class="text-muted">Chargement de tes Pokémon…</p>
+            }
+            else
+            {
+                var size = BattleService.TeamSize(candidates.Count);
+                <p class="small text-muted mb-2">
+                    Choisis @size Pokémon de ta sauvegarde, dans l'ordre : le premier entre en combat. Combat simple, niveaux réels,
+                    sans objet du sac. Ta sauvegarde n'est pas modifiée.
+                </p>
+                <div class="battle-team mb-3">
+                    @for (var i = 0; i < size; i++)
+                    {
+                        var member = i < team.Count ? team[i] : null;
+                        <div class="battle-team-slot @(member is null ? "empty" : "")">
+                            @if (member is not null)
+                            {
+                                <img src="@member.SpriteUrl" alt="" data-remplacement="images/pokemon/inconnu.png" />
+                                <span>@member.Name</span>
+                                <button type="button" class="btn-close btn-sm" aria-label="Retirer @member.Name" @onclick="() => Toggle(member)"></button>
+                            }
+                            else
+                            {
+                                <span class="text-muted small">@(i + 1)</span>
+                            }
+                        </div>
+                    }
+                    <button type="button" class="btn btn-primary ms-auto" @onclick="SubmitTeam" disabled="@(busy || team.Count != size)">Valider l'équipe</button>
+                </div>
+                <div class="trade-candidates">
+                    @foreach (var candidate in candidates)
+                    {
+                        var c = candidate;
+                        var order = team.IndexOf(c);
+                        <button type="button" class="trade-candidate @(order >= 0 ? "selected" : "")" @onclick="() => Toggle(c)"
+                                title="@($"{c.SpeciesName} · Talent : {c.Ability} · Objet : {c.Item} · {string.Join(", ", c.Moves)}")"
+                                disabled="@(order < 0 && team.Count >= size)">
+                            @if (order >= 0)
+                            {
+                                <span class="battle-order">@(order + 1)</span>
+                            }
+                            <img src="@c.SpriteUrl" alt="" loading="lazy" data-remplacement="images/pokemon/inconnu.png" />
+                            <span class="trade-candidate-name">@c.Name@(c.IsShiny ? " ✨" : "")</span>
+                            <span class="small text-muted">N.@c.Level · @c.Location</span>
+                            @if (!c.IsLegal)
+                            {
+                                <span class="badge text-bg-warning">Illégal</span>
+                            }
+                        </button>
+                    }
+                </div>
+            }
+            break;
+
+        default:
+            @if (s.OtherIllegal(userId) is > 0 and var illegal)
+            {
+                <div class="alert alert-warning py-2 small">
+                    Attention : @(illegal == 1 ? "1 Pokémon" : $"{illegal} Pokémon") de l'équipe de @other.Pseudo @(illegal == 1 ? "est signalé illégal" : "sont signalés illégaux").
+                </div>
+            }
+            @if (s.Stage == BattleStage.Cancelled)
+            {
+                <div class="alert alert-secondary">@s.Notice</div>
+            }
+            <div class="battle">
+                @{
+                    var scene = shownScene ?? snapshot?.Scene;
+                }
+                <div class="battle-top">
+                    <div class="battle-field">
+                        @if (scene?.Foe is { } foe)
+                        {
+                            <div class="battle-info foe">
+                                <div class="battle-info-name">
+                                    <span>@foe.Name</span><span class="battle-gender @foe.Gender">@Gender(foe.Gender)</span>
+                                    <span class="battle-level">N.@foe.Level</span>
+                                </div>
+                                <div class="battle-hp"><span>PV</span><div class="battle-hp-bar"><div class="@HpClass(foe.Percent)" style="width: @(foe.Percent)%"></div></div></div>
+                                <div class="battle-info-foot">
+                                    @if (Status(foe.Status) is { } status)
+                                    {
+                                        <span class="battle-status @foe.Status">@status</span>
+                                    }
+                                    <span class="battle-balls">@Balls(scene.FoeLeft, scene.FoeTeam)</span>
+                                </div>
+                            </div>
+                            @if (foe.Hp > 0 || animated?.Cue == BattleCue.Faint)
+                            {
+                                <img @key="@($"foe-{animationKey}")" class="battle-sprite foe @Animation(false)" src="@sprites.Url(foe, false)" alt="@foe.SpeciesName"
+                                     data-remplacement="@BattleSprites.Fallback(foe)" />
+                            }
+                        }
+                        <div class="battle-base foe"></div>
+                        <div class="battle-base mine"></div>
+                        @if (scene?.Me is { } mine)
+                        {
+                            @if (mine.Hp > 0 || animated?.Cue == BattleCue.Faint)
+                            {
+                                <img @key="@($"mine-{animationKey}")" class="battle-sprite mine @Animation(true)" src="@sprites.Url(mine, true)" alt="@mine.SpeciesName"
+                                     data-remplacement="@BattleSprites.Fallback(mine)" />
+                            }
+                            <div class="battle-info mine">
+                                <div class="battle-info-name">
+                                    <span>@mine.Name</span><span class="battle-gender @mine.Gender">@Gender(mine.Gender)</span>
+                                    <span class="battle-level">N.@mine.Level</span>
+                                </div>
+                                <div class="battle-hp"><span>PV</span><div class="battle-hp-bar"><div class="@HpClass(mine.Percent)" style="width: @(mine.Percent)%"></div></div></div>
+                                <div class="battle-info-foot">
+                                    @if (Status(mine.Status) is { } status)
+                                    {
+                                        <span class="battle-status @mine.Status">@status</span>
+                                    }
+                                    <span class="battle-hp-text">@mine.Hp / @mine.MaxHp</span>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                    <div class="battle-text" aria-live="polite">@TextBox()</div>
+                </div>
+
+                <div class="battle-bottom">
+                    @if (s.Stage == BattleStage.Done || s.Stage == BattleStage.Cancelled)
+                    {
+                        @if (s.Stage == BattleStage.Done && !Playing)
+                        {
+                            <div class="battle-result @(snapshot?.Outcome.ToString().ToLowerInvariant())">
+                                @(snapshot?.Outcome switch { BattleOutcome.Won => "Victoire !", BattleOutcome.Lost => "Défaite…", _ => "Match nul" })
+                            </div>
+                        }
+                        <div class="battle-after">
+                            <a class="btn btn-light" href="">Retour à l'accueil</a>
+                            <button type="button" class="btn btn-light" @onclick="NewBattle">Nouveau combat</button>
+                        </div>
+                    }
+                    else if (CanAct && snapshot!.Request is { } request)
+                    {
+                        @if (SecondsLeft is { } seconds)
+                        {
+                            <div class="battle-timer @(seconds <= 10 ? "urgent" : "")">@seconds s</div>
+                        }
+                        @if (request.MustSwitch || menu == Menu.Team)
+                        {
+                            <div class="battle-team-menu">
+                                @for (var i = 0; i < request.Side.Pokemon.Count; i++)
+                                {
+                                    var index = i + 1;
+                                    var member = request.Side.Pokemon[i];
+                                    var (hp, max, memberStatus) = BattleProtocol.Condition(member.Condition);
+                                    var (species, _, speciesName) = BattleNames.SpeciesOf(member.Details);
+                                    var fainted = memberStatus == "fnt";
+                                    var percent = max > 0 ? (int)Math.Ceiling(hp * 100.0 / max) : 0;
+                                    <button type="button" class="battle-member @(member.Active ? "active" : "") @(fainted ? "fainted" : "")"
+                                            disabled="@(member.Active || fainted)" @onclick="() => Choose(BattleChoice.SwitchTo(index))">
+                                        <img src="@PokemonSprites.Url(species, 0, EntityContext.Gen3, false, 0, false)" alt="" data-remplacement="images/pokemon/inconnu.png" />
+                                        <span class="battle-member-name">@BattleProtocol.Who(member.Ident).Name</span>
+                                        <span class="battle-member-hp"><span class="battle-hp-bar"><span class="@HpClass(percent)" style="width: @(percent)%"></span></span> @hp/@max</span>
+                                        @if (Status(fainted ? null : memberStatus) is { } status)
+                                        {
+                                            <span class="battle-status @memberStatus">@status</span>
+                                        }
+                                        <span class="visually-hidden">@speciesName</span>
+                                    </button>
+                                }
+                                @if (!request.MustSwitch)
+                                {
+                                    <button type="button" class="battle-back" @onclick="() => menu = Menu.Main">RETOUR</button>
+                                }
+                            </div>
+                        }
+                        else if (menu == Menu.Moves && request.Active is [var active, ..])
+                        {
+                            <div class="battle-moves">
+                                @for (var i = 0; i < active.Moves.Count; i++)
+                                {
+                                    var index = i + 1;
+                                    var move = active.Moves[i];
+                                    <button type="button" class="battle-move type-@BattleNames.MoveTypeKey(move.Move)" disabled="@move.IsDisabled"
+                                            @onclick="() => Choose(BattleChoice.Move(index))">
+                                        <span class="battle-move-name">@BattleNames.Move(move.Move)</span>
+                                        @if (move.MaxPp is { } maxPp)
+                                        {
+                                            <span class="battle-move-pp">PP @move.Pp/@maxPp</span>
+                                        }
+                                        <span class="battle-move-type">@BattleNames.MoveType(move.Move)</span>
+                                    </button>
+                                }
+                                <button type="button" class="battle-back" @onclick="() => menu = Menu.Main">RETOUR</button>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="battle-menu">
+                                <button type="button" class="battle-fight" @onclick="() => menu = Menu.Moves">ATTAQUE</button>
+                                <button type="button" class="battle-bag" disabled title="Pas de sac en combat de câble">SAC</button>
+                                <button type="button" class="battle-run" @onclick="Forfeit">FUITE</button>
+                                <button type="button" class="battle-pokemon" @onclick="() => menu = Menu.Team">POKéMON</button>
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <div class="battle-waiting">@(Playing ? "" : $"En attente de {s.Other(userId).Pseudo}…")</div>
+                    }
+                </div>
+            </div>
+            break;
+    }
+}
+else
+{
+    @* ---------- Demandes reçues ---------- *@
+    var incoming = Hub.Incoming(userId);
+    @if (incoming.Count > 0)
+    {
+        <h2 class="h5">Demandes reçues</h2>
+        <div class="list-group mb-4">
+            @foreach (var request in incoming)
+            {
+                var r = request;
+                <div class="list-group-item d-flex flex-wrap align-items-center gap-2">
+                    <span>
+                        <strong>@r.First.Pseudo</strong> te propose un combat : sa sauvegarde « @r.First.SaveLabel » contre ta sauvegarde « @r.Second.SaveLabel ».
+                        <span class="d-block small text-muted">Jusqu'à @r.ExpiresAt.ToLocalTime().ToString("HH:mm").</span>
+                    </span>
+                    <button type="button" class="btn btn-sm btn-primary ms-auto" @onclick="() => Accept(r)">Accepter</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => Hub.Leave(r, userId)">Refuser</button>
+                </div>
+            }
+        </div>
+    }
+
+    @* ---------- Nouveau combat : l'ami, puis la paire de sauvegardes ---------- *@
+    <h2 class="h5">Nouveau combat</h2>
+    <p class="small text-muted">
+        Le combat se fait en direct, avec un ami connecté, entre deux sauvegardes stockées de la même génération (la 3e pour
+        l'instant : Rubis, Saphir, Émeraude, Rouge Feu, Vert Feuille). Combat simple, équipes de 6, niveaux réels, comme un combat
+        de câble. Chaque joueur a @((int)BattleTiming.Decision.TotalSeconds) secondes pour choisir son action : passé ce délai, il perd.
+        Les sauvegardes ne sont pas modifiées.
+    </p>
+    @if (friends is null)
+    {
+        <p class="text-muted">Chargement…</p>
+    }
+    else if (friends.Count == 0)
+    {
+        <p class="text-muted">Il te faut un ami pour combattre : ajoute-en dans <a href="amis">Amis</a>.</p>
+    }
+    else
+    {
+        <select class="form-select mb-3 battle-friend" aria-label="Ami" value="@friendId" @onchange="FriendChosen">
+            <option value="">Choisis un ami…</option>
+            @foreach (var f in friends)
+            {
+                <option value="@f.UserId">@(f.Pseudo ?? FriendService.NoPseudo)</option>
+            }
+        </select>
+        @if (pairs is not null)
+        {
+            @if (pairs.Count == 0)
+            {
+                <p class="text-muted">Vous n'avez aucune sauvegarde stockée de la même génération parmi celles qui ont déjà leurs combats.</p>
+            }
+            else
+            {
+                <div class="list-group">
+                    @foreach (var pair in pairs)
+                    {
+                        var p = pair;
+                        <div class="list-group-item d-flex flex-wrap align-items-center gap-2">
+                            <span>Ta sauvegarde : <strong>@p.Mine.Label</strong></span>
+                            <span class="mx-2">⚔</span>
+                            <span>Sa sauvegarde : <strong>@p.Theirs.Label</strong></span>
+                            <button type="button" class="btn btn-sm btn-primary ms-auto" @onclick="() => Propose(p)" disabled="@busy">Proposer le combat</button>
+                        </div>
+                    }
+                </div>
+            }
+        }
+    }
+}
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = default!;
+
+    private enum Menu { Main, Moves, Team }
+
+    private string userId = "";
+    private string pseudo = "";
+    private BattleSession? session;
+    private BattleSnapshot? snapshot;
+    private List<FriendEntry>? friends;
+    private string friendId = "";
+    private List<BattleSavePair>? pairs;
+    private List<BattleCandidate>? candidates;
+    private readonly List<BattleCandidate> team = [];
+    private bool busy;
+    private string? message;
+    private bool messageIsError;
+    private Menu menu;
+
+    // Lecture des étapes : une à une, au rythme de BattleTiming.
+    private int played;
+    private bool playing;
+    private BattleStep? animated; // étape en cours (animation)
+    private BattleSprites sprites = BattleSprites.None; // ceux du jeu de ma sauvegarde, connus quand mon équipe est acceptée
+    private int animationKey; // change à chaque étape : relance l'animation CSS
+    private BattleScene? shownScene;
+    private string? shownText;
+    private Timer? clock; // compte à rebours
+
+    /// <summary>Un combat est en cours (ou en préparation) : quitter la page l'annulerait, ou ferait perdre.</summary>
+    private bool InBattle => session is { IsOver: false };
+
+    private bool Playing => playing || (snapshot is not null && played < snapshot.StepCount);
+
+    /// <summary>Le joueur doit choisir (toutes les étapes jouées, requête en attente, pas encore de choix).</summary>
+    private bool CanAct => !Playing && snapshot is { Stage: BattleStage.Fighting, Chosen: false, Request.MustAct: true } && !(session?.IsOver ?? true);
+
+    private int? SecondsLeft => snapshot?.Deadline is { } deadline
+        ? Math.Clamp((int)Math.Ceiling((deadline - DateTime.UtcNow).TotalSeconds), 0, (int)BattleTiming.Decision.TotalSeconds)
+        : null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var user = (await AuthState).User;
+        userId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
+        pseudo = user.Identity?.Name ?? "";
+        Hub.RequestsChanged += OnRequestsChanged;
+        if (Hub.Active(userId) is { } active) // page rechargée pendant un combat : on reprend où il en est
+            await Join(active, skipHistory: true);
+        friends = (await FriendStore.ListAsync(userId)).Friends.ToList();
+    }
+
+    private async Task Join(BattleSession joined, bool skipHistory = false)
+    {
+        if (session is not null)
+            session.Changed -= OnSessionChanged;
+        session = joined;
+        session.Changed += OnSessionChanged;
+        snapshot = session.Snapshot(userId);
+        played = skipHistory ? snapshot.StepCount : 0;
+        shownScene = skipHistory ? snapshot.Scene : null;
+        clock ??= new Timer(_ => InvokeAsync(() => { if (session?.Stage == BattleStage.Fighting) StateHasChanged(); }), null, 500, 500);
+        await Refresh();
+    }
+
+    private async Task Refresh()
+    {
+        if (session is null)
+            return;
+        snapshot = session.Snapshot(userId);
+        if (snapshot.Error is { } error)
+            message = error;
+        if (session.Stage == BattleStage.TeamBuilding && candidates is null && !session.TeamReady(userId))
+            candidates = await BattleStore.CandidatesAsync(userId, session.Me(userId).SaveId);
+        if (session.Stage != BattleStage.Requested && message?.StartsWith("Demande envoyée") == true)
+            message = null;
+        _ = PlayAsync();
+    }
+
+    /// <summary>Joue les nouvelles étapes une à une (message, animation, PV), puis rend la main au menu.</summary>
+    private async Task PlayAsync()
+    {
+        // Rien de nouveau (l'autre joueur a seulement choisi) : surtout ne pas refermer le menu ouvert.
+        if (playing || session is null || session.Steps(userId, played).Count == 0)
+            return;
+        playing = true;
+        try
+        {
+            while (session.Steps(userId, played) is { Count: > 0 } steps)
+            {
+                foreach (var step in steps)
+                {
+                    played++;
+                    animated = step;
+                    animationKey++;
+                    shownScene = step.Scene;
+                    if (step.Text is not null)
+                        shownText = step.Text;
+                    StateHasChanged();
+                    await Task.Delay(step.Text is null ? BattleTiming.AnimationStep : BattleTiming.TextStep);
+                }
+            }
+        }
+        finally
+        {
+            playing = false;
+            animated = null;
+            menu = Menu.Main;
+            snapshot = session.Snapshot(userId);
+            StateHasChanged();
+        }
+    }
+
+    private void OnSessionChanged() => InvokeAsync(async () =>
+    {
+        await Refresh();
+        StateHasChanged();
+    });
+
+    private void OnRequestsChanged(string user)
+    {
+        if (user == userId)
+            InvokeAsync(StateHasChanged);
+    }
+
+    private async Task FriendChosen(ChangeEventArgs e)
+    {
+        friendId = e.Value?.ToString() ?? "";
+        pairs = null;
+        if (friendId.Length > 0)
+            pairs = await BattleStore.SavePairsAsync(userId, friendId);
+    }
+
+    private async Task Propose(BattleSavePair pair)
+    {
+        var friend = friends?.FirstOrDefault(f => f.UserId == friendId);
+        if (friend is null)
+            return;
+        var (created, text) = Hub.Request(new BattleParty(userId, pseudo, pair.Mine.Id, pair.Mine.Label),
+            new BattleParty(friend.UserId, friend.Pseudo ?? FriendService.NoPseudo, pair.Theirs.Id, pair.Theirs.Label), pair.Format);
+        message = text;
+        messageIsError = created is null;
+        if (created is not null)
+            await Join(created);
+    }
+
+    private async Task Accept(BattleSession request)
+    {
+        if (Hub.Accept(request, userId) is { } error)
+        {
+            message = error;
+            messageIsError = true;
+            return;
+        }
+        message = null;
+        await Join(request);
+    }
+
+    private void Toggle(BattleCandidate candidate)
+    {
+        if (!team.Remove(candidate) && candidates is not null && team.Count < BattleService.TeamSize(candidates.Count))
+            team.Add(candidate);
+    }
+
+    private async Task SubmitTeam()
+    {
+        if (session is not { } s)
+            return;
+        busy = true;
+        try
+        {
+            var result = await BattleStore.TeamAsync(userId, s.Me(userId).SaveId, pseudo, team);
+            var error = result.Team is null ? result.Error : Hub.SubmitTeam(s, userId, result.Team, result.Illegal);
+            if (error is null)
+                sprites = result.Sprites ?? BattleSprites.None;
+            if (error is not null)
+            {
+                message = error;
+                messageIsError = true;
+                candidates = null; // relue : la sauvegarde a peut-être changé
+                team.Clear();
+                await Refresh();
+            }
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private void Choose(BattleChoice choice)
+    {
+        if (session is null)
+            return;
+        if (Hub.Choose(session, userId, choice) is { } error)
+        {
+            message = error;
+            messageIsError = true;
+            return;
+        }
+        message = null;
+        menu = Menu.Main;
+        snapshot = session.Snapshot(userId);
+    }
+
+    private async Task Forfeit()
+    {
+        if (session is null || !await JS.InvokeAsync<bool>("confirm", "Abandonner le combat ? Tu perdras."))
+            return;
+        Hub.Forfeit(session, userId);
+    }
+
+    /// <summary>« Annuler le combat » (demande ou choix des équipes) : annulé pour les deux, retour à l'accueil.</summary>
+    private void CancelBattle()
+    {
+        if (session is not null)
+            Hub.Leave(session, userId);
+        Navigation.NavigateTo("");
+    }
+
+    private async Task BeforeLeaving(LocationChangingContext context)
+    {
+        if (!InBattle)
+            return;
+        var question = session!.Stage == BattleStage.Fighting
+            ? "Quitter cette page abandonne le combat : tu perdras. Continuer ?"
+            : "Quitter cette page annule le combat, pour toi et pour ton ami. Continuer ?";
+        if (!await JS.InvokeAsync<bool>("confirm", question))
+        {
+            context.PreventNavigation();
+            return;
+        }
+        Hub.Leave(session, userId, $"{pseudo} a quitté le combat.");
+    }
+
+    private void NewBattle()
+    {
+        if (session is not null)
+            session.Changed -= OnSessionChanged;
+        session = null;
+        snapshot = null;
+        candidates = null;
+        team.Clear();
+        played = 0;
+        shownScene = null;
+        shownText = null;
+        message = null;
+    }
+
+    // ---------- Affichage ----------
+
+    private string TextBox()
+    {
+        if (Playing && shownText is not null)
+            return shownText;
+        if (snapshot is null || session is null)
+            return "";
+        if (session.Stage is BattleStage.Done or BattleStage.Cancelled)
+            return shownText ?? session.Notice ?? "";
+        if (CanAct)
+        {
+            return snapshot.Request!.MustSwitch
+                ? "Choisis le Pokémon à envoyer."
+                : $"Que doit faire {snapshot.Scene.Me?.Name ?? "ton Pokémon"} ?";
+        }
+        return shownText ?? "";
+    }
+
+    private string Animation(bool mine) => animated is not { } step || step.Mine != mine ? "" : step.Cue switch
+    {
+        BattleCue.Attack => "attaque",
+        BattleCue.Damage => "touche",
+        BattleCue.Faint => "ko",
+        BattleCue.SwitchIn => "entree",
+        _ => "",
+    };
+
+    private static string HpClass(int percent) => percent > 50 ? "hp-high" : percent > 20 ? "hp-mid" : "hp-low";
+
+    private static string Gender(string gender) => gender switch { "M" => "♂", "F" => "♀", _ => "" };
+
+    private static string? Status(string? status) => status switch
+    {
+        "brn" => "BRU", "par" => "PAR", "slp" => "SOM", "frz" => "GEL", "psn" or "tox" => "PSN", _ => null,
+    };
+
+    /// <summary>Pokéballs de l'équipe, comme en jeu : ● restant, ○ K.O.</summary>
+    private static string Balls(int left, int total) => new string('●', Math.Max(0, left)) + new string('○', Math.Max(0, total - left));
+
+    public void Dispose()
+    {
+        clock?.Dispose();
+        Hub.RequestsChanged -= OnRequestsChanged;
+        if (session is null)
+            return;
+        session.Changed -= OnSessionChanged;
+        Hub.Leave(session, userId, $"{pseudo} a quitté le combat."); // onglet fermé, connexion perdue : sans effet si fini
+    }
+}

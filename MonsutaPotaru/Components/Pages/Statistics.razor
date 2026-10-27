@@ -4,10 +4,11 @@
 @using Microsoft.AspNetCore.Authorization
 @using MonsutaPotaru.Services
 @inject TradeService Trades
+@inject BattleService Battles
 
 <PageTitle>Statistiques</PageTitle>
 
-@* Statistiques du joueur (menu de son pseudo), base des futurs succès : pour l'instant, les échanges. *@
+@* Statistiques du joueur (menu de son pseudo), base des futurs succès : échanges et combats. *@
 
 <h1 class="mb-3">Statistiques</h1>
 
@@ -38,11 +39,55 @@ else
     }
 }
 
+<h2 class="h5 mt-4">Combats</h2>
+@if (battles is null)
+{
+    <p class="text-muted">Chargement…</p>
+}
+else
+{
+    <div class="stat-tiles">
+        <div class="card">
+            <div class="card-body">
+                <div class="small text-muted">Victoires</div>
+                <div class="stat-value">@battles.Won</div>
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-body">
+                <div class="small text-muted">Défaites</div>
+                <div class="stat-value">@battles.Lost</div>
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-body">
+                <div class="small text-muted">Matchs nuls</div>
+                <div class="stat-value">@battles.Draws</div>
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-body">
+                <div class="small text-muted">Adversaires différents</div>
+                <div class="stat-value">@battles.Opponents</div>
+            </div>
+        </div>
+    </div>
+    @if (battles.Total == 0)
+    {
+        <p class="text-muted small mt-3">Aucun combat pour l'instant : défie un ami dans <a href="combats">Combats</a>.</p>
+    }
+}
+
 @code {
     [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = default!;
 
     private TradeStats? stats;
+    private BattleRecordStats? battles;
 
-    protected override async Task OnInitializedAsync() =>
-        stats = await Trades.StatsAsync((await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "");
+    protected override async Task OnInitializedAsync()
+    {
+        var userId = (await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
+        stats = await Trades.StatsAsync(userId);
+        battles = await Battles.StatsAsync(userId);
+    }
 }

@@ -9,6 +9,10 @@
          .razor au moment de la restauration. Le Dockerfile restaure avec ce seul fichier (cache de Docker) : sans cette
          ligne, l'image n'a pas _framework et aucune page n'est interactive. -->
     <RequiresAspNetWebAssets>true</RequiresAspNetWebAssets>
+    <!-- .NET 10 : en rendu statique (pages du compte), NavigateTo redirige sans lancer de NavigationException (que le
+         débogueur de Visual Studio arrêtait à chaque connexion). Le code qui suit une redirection s'exécute : sortir
+         (return) juste après, voir IdentityRedirectManager. -->
+    <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
   </PropertyGroup>
 
   <ItemGroup>

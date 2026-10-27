@@ -39,7 +39,7 @@
 
 @code {
     private string? message;
-    private ApplicationUser user = default!;
+    private ApplicationUser? user;
     private string current = SiteThemes.Classic;
 
     [CascadingParameter]
@@ -51,11 +51,15 @@
     protected override async Task OnInitializedAsync()
     {
         user = await UserAccessor.GetRequiredUserAsync(HttpContext);
+        if (user is null)
+            return; // redirigé : compte supprimé
         current = SiteThemes.Normalize(user.Theme);
     }
 
     private async Task OnSubmitAsync()
     {
+        if (user is null)
+            return; // compte supprimé : page redirigée
         var result = await Accounts.SetThemeAsync(user.Id, Key ?? "");
         if (!result.Ok)
         {

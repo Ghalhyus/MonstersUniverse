@@ -188,10 +188,11 @@ public sealed class RealSavesTests : IDisposable
         Assert.True(stored.PokemonCount >= sav.PartyCount + inBoxes, $"{file} : {stored.PokemonCount} Pokémon lus");
         Assert.Equal(stored.PokemonCount, await _db.Bank().CountAsync(Owner, filter: CollectionFilter.Save(id)));
 
-        var result = await _db.Inventory().WithdrawFromSaveAsync(Owner, id, 1000);
+        var amount = Math.Min(1000, sav.Money); // au plus ce que contient la sauvegarde (rouge-feu.sav : 18 ₽)
+        var result = await _db.Inventory().WithdrawFromSaveAsync(Owner, id, amount);
         Assert.True(result.Ok, $"{file} : {result.Message}");
-        Assert.Equal(sav.Money - 1000, (await Stored(id, file)).Money);
-        Assert.Equal(1000, await _db.Inventory().GetBalanceAsync(Owner));
+        Assert.Equal(sav.Money - amount, (await Stored(id, file)).Money);
+        Assert.Equal(amount, await _db.Inventory().GetBalanceAsync(Owner));
     }
 
     [Theory]

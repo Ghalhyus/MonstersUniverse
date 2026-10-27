@@ -1,0 +1,10 @@
+{
+  "name": "monsuta-potaru-combats",
+  "private": true,
+  "description": "Combats de Monsuta Potaru : simulateur de Pokémon Showdown (@pkmn/sim), lancé par le site pour chaque combat (combat.js).",
+  "license": "MIT",
+  "main": "combat.js",
+  "dependencies": {
+    "@pkmn/sim": "0.10.11"
+  }
+}

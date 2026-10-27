@@ -1,6 +1,6 @@
 # Notes pour Claude
 
-Monsuta Potaru (anciennement PokeBank) : banque Pokémon privée (ASP.NET Core 9, Blazor Server, EF Core + SQLite, Identity,
+Monsuta Potaru (anciennement PokeBank) : banque Pokémon privée (ASP.NET Core 10, Blazor Server, EF Core + SQLite, Identity,
 PKHeX.Core, xUnit). Noms : « Monsuta Potaru » affiché, `MonsutaPotaru` dans le code, `monsuta-potaru` sur le serveur
 (dossiers, service et volumes Docker). Restent « PokeBank » exprès : le homebrew 3DS **PokeBank Sync** (autre dépôt, à
 renommer plus tard) et `SetApplicationName("PokeBank")` (clés de connexion : le changer déconnecte tout le monde).
@@ -33,6 +33,10 @@ Ce fichier ne garde que ce que le README ne dit pas.
   En test dans le navigateur : un compte bloqué se débloque en passant `LockoutEnd` dans le passé dans la base de test ;
   `localhost` et `127.0.0.1` ont chacun leur compteur d'IP. Envoyer le formulaire par `fetch` (`FormData` du
   formulaire) : après une connexion réussie, recharger la page (jeton antiforgery lié à l'ancien compte : 400).
+- Redirections des pages du compte (rendu statique) : depuis .NET 10 (`BlazorDisableThrowNavigationException` dans le
+  `.csproj`), `IdentityRedirectManager.RedirectTo` **ne lance plus d'exception** : le code qui suit s'exécute. Toujours
+  `return` juste après une redirection ; `UserAccessor.GetRequiredUserAsync` renvoie null pour un compte supprimé (page
+  redirigée) : le vérifier dans `OnInitializedAsync` **et** dans la méthode d'envoi du formulaire (elle s'exécute aussi).
 - Identity **modifie l'objet du compte avant de valider** (`SetUserNameAsync`, `SetEmailAsync`) : un refus laisse la
   valeur refusée dessus. D'où les vérifications d'unicité faites avant, dans `AccountService`.
 - Rôles exclusifs Standard / Administrateur (`SiteRoles`, README « Administration ») ; `AdminService` revérifie le rôle
@@ -80,6 +84,41 @@ Ce fichier ne garde que ce que le README ne dit pas.
   page). Le Pokémon du parc se clique en cherchant ses pixels dans le canvas (`getImageData`).
 - Le panneau du navigateur de test, masqué, ne remplit pas les listes virtualisées (« Ma collection ») : faire une
   capture d'écran pour qu'elles se chargent.
+
+## Combats
+
+- Moteur : simulateur de Pokémon Showdown (`showdown/`, `@pkmn/sim` en version fixée, `npm ci --prefix showdown` en local et
+  dans la CI ; dans l'image Docker, étape `node` du `Dockerfile`). On ne réécrit pas de mécanique de combat en C# : le
+  site traduit le protocole de Showdown (`BattleView`) et dessine l'interface. Un nouveau format (génération) :
+  `BattleTeam.Format`.
+- `combat.js` reçoit les Pokémon **par numéros** (PKHeX) et les traduit en noms de Showdown : `byNum` préfère l'entrée
+  standard de la génération (un objet « Past » de la 2e génération partage parfois son numéro : « Berry » / « Oran
+  Berry »). Il ne transmet que les choix et la fin forcée (`>eval` existe dans le simulateur : jamais).
+- Protocole : lignes `|split|<camp>` suivies de la version secrète (pour ce camp) puis de la publique. Un choix peut être
+  refusé (« [Unavailable choice] », interdiction que la requête ne montrait pas) : Showdown renvoie alors une requête
+  corrigée, à laquelle on répond de nouveau.
+- Nouvelle ligne du protocole ou nouvel effet : `BattleView` note ce qu'elle ne sait pas traduire (`Unhandled`). Pour
+  chercher les cas rares, monter temporairement le nombre de combats de `RandomBattles_EndAndAreFullyTranslated` (300 :
+  ~2 min 30) ; pour relire les phrases, écrire le journal d'un combat (`Steps1`) dans un fichier. Le recensement des
+  lignes produites par Showdown se fait aussi en Node (`BattleStreams`, équipes tirées au hasard en « gen3customgame » :
+  `@pkmn/sim` n'a pas le générateur d'équipes aléatoires).
+- Les tests de combat lancent le vrai simulateur (`BattleTests.Showdown()` : échec clair s'il n'est pas installé).
+- Combat en direct : `BattleHub` tient l'état sous `BattleSession.Gate` (le simulateur écrit sur son propre fil) ; les
+  pages lisent par `Snapshot` et `Steps` (copies). Ordre des verrous : celui du hub, puis celui de la session, jamais
+  l'inverse. Le délai de choix part de la requête + la durée des étapes du tour (`BattleTiming.Playback`).
+- Sprites (`BattleSprites`) : ceux du jeu **de celui qui regarde** (sa sauvegarde, connue quand son équipe est acceptée :
+  `BattleTeamResult.Sprites`), rangés dans les dossiers des living dex de la 3e génération (`dos/`, `chromatique/`,
+  `outils/images.py combats`). Une forme qui ne change que l'image (lettre de Zarbi) passe quand même par `forme` :
+  `combat.js` la donne à Showdown comme forme d'aspect (`cosmeticFormes`), qui la remet dans la description du Pokémon.
+  Une nouvelle génération de combats : ses dossiers dans `BATTLE_SPRITES` (PokéAPI a des dos jusqu'à la 5e).
+- Résultats : `BattleRecorder` (service hébergé) écoute `BattleHub.Finished` et écrit `BattleRecords` à côté du fil du
+  simulateur ; tests : `BattleRecorder.RecordAsync` appelé directement.
+- Page : `PlayAsync` ne doit rien faire quand il n'y a pas d'étape nouvelle (un simple « l'autre a choisi » refermerait
+  le menu ouvert sous le clic du joueur).
+- Essai à deux dans le navigateur : Sacha sur `127.0.0.1:5299`, Ondine sur `localhost:5299` ; chacune a une sauvegarde
+  de 3e génération dans la base de test (Vert Feuille, Rouge Feu). Les clics se font par `javascript_tool` (un script ne
+  dépasse pas 45 s : découper les attentes) ; « Fuite » : remplacer `window.confirm` avant de cliquer. Le minuteur se
+  vérifie sans rien choisir pendant ~70 s.
 
 ## Conventions du code
 

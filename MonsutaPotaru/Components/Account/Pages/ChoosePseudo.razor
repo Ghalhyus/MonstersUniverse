@@ -44,7 +44,7 @@
 
 @code {
     private string? message;
-    private ApplicationUser user = default!;
+    private ApplicationUser? user;
 
     [CascadingParameter]
     private HttpContext HttpContext { get; set; } = default!;
@@ -56,12 +56,16 @@
     {
         Input ??= new();
         user = await UserAccessor.GetRequiredUserAsync(HttpContext);
+        if (user is null)
+            return; // redirigé : compte supprimé
         if (AccountService.HasPseudo(user.UserName))
             RedirectManager.RedirectTo("");
     }
 
     private async Task OnValidSubmitAsync()
     {
+        if (user is null)
+            return; // compte supprimé : page redirigée
         var result = await Accounts.ChoosePseudoAsync(user, Input.Pseudo);
         if (!result.Ok)
         {

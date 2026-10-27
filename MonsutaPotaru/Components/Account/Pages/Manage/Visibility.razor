@@ -68,7 +68,7 @@
 
 @code {
     private string? message;
-    private ApplicationUser user = default!;
+    private ApplicationUser? user;
     private string? pseudo;
     private ProfileAudience audience;
 
@@ -81,6 +81,8 @@
     protected override async Task OnInitializedAsync()
     {
         user = await UserAccessor.GetRequiredUserAsync(HttpContext);
+        if (user is null)
+            return; // redirigé : compte supprimé
         pseudo = user.UserName;
         var visibility = await Players.VisibilityAsync(user.Id);
         audience = visibility.Audience;
@@ -96,6 +98,8 @@
 
     private async Task OnValidSubmitAsync()
     {
+        if (user is null)
+            return; // compte supprimé : page redirigée
         var pages = (Input.Collection ? PublicPages.Collection : 0) | (Input.Park ? PublicPages.Park : 0)
             | (Input.Inventory ? PublicPages.Inventory : 0) | (Input.LivingDex ? PublicPages.LivingDex : 0);
         var result = await Players.SetVisibilityAsync(user.Id, Input.Audience, pages);

@@ -11,3 +11,4 @@ MonsutaPotaru/wwwroot/images/
 MonsutaPotaru.Tests/
 deploy/
 *.sav
+showdown/node_modules/
