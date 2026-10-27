@@ -20,12 +20,28 @@ public sealed class AccountService(UserManager<ApplicationUser> userManager, IDb
     public const int PseudoMinLength = 3;
     public const int PseudoMaxLength = 20;
 
+    /// <summary>Mauvais mots de passe d'affilée qui bloquent la connexion à un compte.</summary>
+    public const int MaxFailedLogins = 5;
+
+    /// <summary>Durée du blocage, levé tout seul.</summary>
+    public static readonly TimeSpan LoginLockout = TimeSpan.FromMinutes(5);
+
+    /// <summary>Message de tout échec de connexion : il ne dit pas si l'adresse a un compte, ni si ce compte est bloqué.</summary>
+    public static readonly string LoginFailedMessage =
+        $"Adresse mail ou mot de passe incorrect. Après {MaxFailedLogins} échecs, la connexion à ce compte est bloquée {LoginLockout.TotalMinutes:0} minutes.";
+
+    /// <summary>Empreinte d'un mot de passe quelconque, vérifiée pour une adresse inconnue (voir <see cref="FindForLoginAsync"/>).</summary>
+    private static string? unknownAccountHash;
+
     /// <summary>Réglages d'Identity du site (aussi ceux des tests).</summary>
     public static void ConfigureIdentity(IdentityOptions options)
     {
         options.SignIn.RequireConfirmedAccount = false; // le site n'envoie pas de mails
         options.User.RequireUniqueEmail = true; // on se connecte avec l'adresse
         options.User.AllowedUserNameCharacters = ""; // tous : le pseudo est vérifié par CheckPseudo (accents, espaces)
+        options.Lockout.AllowedForNewUsers = true; // contre les essais de mots de passe (FindForLoginAsync)
+        options.Lockout.MaxFailedAccessAttempts = MaxFailedLogins;
+        options.Lockout.DefaultLockoutTimeSpan = LoginLockout;
     }
 
     /// <summary>Le compte a-t-il choisi son pseudo ? Sinon, son nom d'utilisateur est encore son adresse mail.</summary>
@@ -75,11 +91,41 @@ public sealed class AccountService(UserManager<ApplicationUser> userManager, IDb
         return new(true, $"Bienvenue, {pseudo} !", user);
     }
 
-    /// <summary>Le compte de cette adresse, si le mot de passe est le bon (null sinon).</summary>
+    /// <summary>
+    /// Le compte de cette adresse, si le mot de passe est le bon et que le compte n'est pas bloqué ; null sinon, sans dire
+    /// pourquoi (<see cref="LoginFailedMessage"/>). Chaque mauvais mot de passe compte un échec : au
+    /// <see cref="MaxFailedLogins"/>e d'affilée, le compte est bloqué <see cref="LoginLockout"/>, même pour le bon mot de
+    /// passe. Un bon mot de passe remet le compteur à zéro. Le mot de passe est toujours vérifié (adresse inconnue
+    /// comprise) : la durée de la réponse ne dit pas non plus si l'adresse a un compte.
+    /// </summary>
     public async Task<ApplicationUser?> FindForLoginAsync(string email, string password)
     {
         var user = await userManager.FindByEmailAsync(email.Trim());
-        return user is not null && await userManager.CheckPasswordAsync(user, password) ? user : null;
+        if (user is null)
+        {
+            var unknown = new ApplicationUser();
+            unknownAccountHash ??= userManager.PasswordHasher.HashPassword(unknown, Guid.NewGuid().ToString());
+            userManager.PasswordHasher.VerifyHashedPassword(unknown, unknownAccountHash, password);
+            return null;
+        }
+
+        var correct = await userManager.CheckPasswordAsync(user, password);
+        if (await userManager.IsLockedOutAsync(user))
+        {
+            logger.LogWarning("Compte {User} bloqué : connexion refusée.", user.Id);
+            return null;
+        }
+        if (!correct)
+        {
+            await userManager.AccessFailedAsync(user);
+            if (await userManager.IsLockedOutAsync(user))
+                logger.LogWarning("Compte {User} : {Count} mauvais mots de passe, connexion bloquée {Minutes} minutes.",
+                    user.Id, MaxFailedLogins, LoginLockout.TotalMinutes);
+            return null;
+        }
+        if (await userManager.GetAccessFailedCountAsync(user) > 0)
+            await userManager.ResetAccessFailedCountAsync(user);
+        return user;
     }
 
     /// <summary>Pseudo d'un compte créé avant le pseudo. Définitif : refusé si le compte en a déjà un.</summary>

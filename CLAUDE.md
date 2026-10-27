@@ -25,6 +25,12 @@ Ce fichier ne garde que ce que le README ne dit pas.
 - Le pseudo est le `UserName` d'Identity ; on se connecte avec l'adresse (`AccountService.FindForLoginAsync`). Un ancien
   compte a encore son adresse pour `UserName` : « @ » est interdit dans un pseudo, c'est le repère (`HasPseudo`). Ne
   jamais afficher l'adresse d'un compte à la place du pseudo.
+- Connexion protégée (README « Comptes ») : `FindForLoginAsync` compte les échecs (`AccessFailedAsync` : 5 bloquent le
+  compte 5 minutes) et `LoginLimiter` (singleton) limite les envois par adresse IP. Un échec, quelle qu'en soit la
+  raison, a le même message (`LoginFailedMessage`) : ne jamais dire qu'une adresse a un compte ou qu'il est bloqué.
+  En test dans le navigateur : un compte bloqué se débloque en passant `LockoutEnd` dans le passé dans la base de test ;
+  `localhost` et `127.0.0.1` ont chacun leur compteur d'IP. Envoyer le formulaire par `fetch` (`FormData` du
+  formulaire) : après une connexion réussie, recharger la page (jeton antiforgery lié à l'ancien compte : 400).
 - Identity **modifie l'objet du compte avant de valider** (`SetUserNameAsync`, `SetEmailAsync`) : un refus laisse la
   valeur refusée dessus. D'où les vérifications d'unicité faites avant, dans `AccountService`.
 - Rôles exclusifs Standard / Administrateur (`SiteRoles`, README « Administration ») ; `AdminService` revérifie le rôle

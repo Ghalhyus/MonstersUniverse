@@ -48,6 +48,7 @@ builder.Services.AddIdentityCore<ApplicationUser>(AccountService.ConfigureIdenti
     .AddErrorDescriber<FrenchIdentityErrorDescriber>();
 builder.Services.AddScoped<AccountService>();
 builder.Services.AddScoped<AdminService>();
+builder.Services.AddSingleton<LoginLimiter>(); // envois du formulaire de connexion par adresse IP
 
 // Clés qui chiffrent les cookies (connexion, formulaires) : gardées avec les données (volume Docker),
 // sinon chaque mise à jour du conteneur en crée de nouvelles et déconnecte tout le monde.

@@ -74,7 +74,15 @@ liste sans trou, tassée à l'écriture comme le fait le jeu (un Pokémon dépos
   trop retirés) est unique sans tenir compte des majuscules et **définitif**. C'est le nom d'utilisateur d'Identity : le
   menu (lien vers « Mon compte ») et la 3DS (`compte` de l'API) l'affichent ; l'adresse mail n'est montrée à personne.
 - **Connexion** par l'**adresse mail** (unique, `RequireUniqueEmail`) et le mot de passe, pas par le pseudo. Pas de
-  verrouillage après des échecs, pas de double authentification (`SignInAsync` direct, même si elle était restée active).
+  double authentification (`SignInAsync` direct, même si elle était restée active). Contre les essais de mots de passe :
+  - **5 mauvais mots de passe d'affilée bloquent la connexion au compte 5 minutes**, même avec le bon (verrouillage
+    d'Identity, `AccountService.FindForLoginAsync`) ; le blocage se lève tout seul, un bon mot de passe remet le
+    compteur à zéro ;
+  - **10 envois du formulaire par minute et par adresse IP** au plus (celle transmise par Caddy, `LoginLimiter`) :
+    contre les essais sur beaucoup de comptes à la fois ; au-delà, « Trop d'essais de connexion : attends une minute » ;
+  - un seul message pour tout échec (« Adresse mail ou mot de passe incorrect. Après 5 échecs, la connexion à ce compte
+    est bloquée 5 minutes. ») : la page ne dit pas si l'adresse a un compte, ni s'il est bloqué. Le mot de passe est
+    vérifié même pour une adresse inconnue, pour que la durée de la réponse ne le dise pas non plus.
 - **Comptes d'avant le pseudo** : leur nom d'utilisateur est encore leur adresse (« @ », interdit dans un pseudo :
   `AccountService.HasPseudo`). `Shared/PseudoGuard.razor` (autour du contenu de `MainLayout`) les renvoie sur
   « Choisis ton pseudo » (`/Account/Pseudo`) tant qu'ils n'en ont pas ; la 3DS continue de marcher.
@@ -649,7 +657,8 @@ est incompatible (espèce, attaques ou objets inexistants dans le jeu, conversio
 | `MonsutaPotaru/Components/Account/Pages/Manage/Themes.razor` | « Mon compte » → « Thèmes » : choix du thème, miniatures en CSS |
 | `MonsutaPotaru/wwwroot/themes/pokedex.css` | Thème Pokédex, sous `[data-theme="pokedex"]` : menu, barre du haut, contenu de toutes les pages |
 | `MonsutaPotaru/Data/SiteSetting.cs` | Table des réglages du site (code d'invitation) et rôles des comptes (`SiteRoles`) |
-| `MonsutaPotaru/Services/AccountService.cs` | Comptes : règles du pseudo, inscription, connexion par l'adresse, choix du pseudo des anciens comptes, changement d'adresse ; réglages d'Identity, messages d'Identity en français |
+| `MonsutaPotaru/Services/AccountService.cs` | Comptes : règles du pseudo, inscription, connexion par l'adresse (blocage après 5 échecs), choix du pseudo des anciens comptes, changement d'adresse ; réglages d'Identity, messages d'Identity en français |
+| `MonsutaPotaru/Services/LoginLimiter.cs` | Limite d'envois du formulaire de connexion par adresse IP (10 par minute) |
 | `MonsutaPotaru/Components/Account/Pages/` | Pages du compte : connexion, inscription, « Choisis ton pseudo », « Mon compte » (`Manage/` : profil, adresse, mot de passe, données personnelles) |
 | `MonsutaPotaru/Components/Account/Shared/PseudoGuard.razor` | Renvoie un compte sans pseudo sur « Choisis ton pseudo » (autour du contenu de `MainLayout`) |
 | `MonsutaPotaru/Services/BankService.cs` | Accès base, validation transactionnelle, copies de sécurité |

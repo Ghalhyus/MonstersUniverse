@@ -102,6 +102,42 @@ public sealed class AccountServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Login_LocksTheAccount_AfterFiveWrongPasswordsInARow()
+    {
+        var sacha = (await _accounts.RegisterAsync("Sacha", "sacha@kanto.fr", Password, Invite)).User!;
+        async Task<int> Failures() => await _users.GetAccessFailedCountAsync((await _users.FindByIdAsync(sacha.Id))!);
+
+        // 4 échecs, puis le bon mot de passe : le compteur repart à zéro.
+        for (int i = 0; i < AccountService.MaxFailedLogins - 1; i++)
+            Assert.Null(await _accounts.FindForLoginAsync("sacha@kanto.fr", "Mauvais-1"));
+        Assert.Equal(AccountService.MaxFailedLogins - 1, await Failures());
+        Assert.NotNull(await _accounts.FindForLoginAsync("sacha@kanto.fr", Password));
+        Assert.Equal(0, await Failures());
+
+        // 5 d'affilée : bloqué, même avec le bon mot de passe.
+        for (int i = 0; i < AccountService.MaxFailedLogins; i++)
+            Assert.Null(await _accounts.FindForLoginAsync("sacha@kanto.fr", "Mauvais-1"));
+        Assert.Null(await _accounts.FindForLoginAsync("sacha@kanto.fr", Password));
+        var lockedUntil = await _users.GetLockoutEndDateAsync((await _users.FindByIdAsync(sacha.Id))!);
+        Assert.InRange(lockedUntil!.Value - DateTimeOffset.UtcNow, AccountService.LoginLockout - TimeSpan.FromMinutes(1), AccountService.LoginLockout);
+
+        // Blocage passé : le bon mot de passe marche de nouveau.
+        await _users.SetLockoutEndDateAsync((await _users.FindByIdAsync(sacha.Id))!, DateTimeOffset.UtcNow.AddSeconds(-1));
+        Assert.Equal(sacha.Id, (await _accounts.FindForLoginAsync("sacha@kanto.fr", Password))?.Id);
+    }
+
+    [Fact]
+    public void LoginLimiter_RefusesTheEleventhAttemptOfAMinute_PerAddress()
+    {
+        using var limiter = new LoginLimiter();
+        for (int i = 0; i < LoginLimiter.AttemptsPerMinute; i++)
+            Assert.True(limiter.TryAttempt("203.0.113.7"));
+        Assert.False(limiter.TryAttempt("203.0.113.7"));
+        Assert.True(limiter.TryAttempt("198.51.100.2")); // une autre adresse n'est pas gênée
+        Assert.True(limiter.TryAttempt(null));
+    }
+
+    [Fact]
     public async Task Register_Refuses_ATakenPseudoOrEmail_AndAWeakPassword_InFrench()
     {
         Assert.True((await _accounts.RegisterAsync("Sacha", "sacha@kanto.fr", Password, Invite)).Ok);
