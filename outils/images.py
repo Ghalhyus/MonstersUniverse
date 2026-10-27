@@ -57,7 +57,7 @@ import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 
-PKHEX = "https://raw.githubusercontent.com/kwsch/PKHeX/25.12.21"  # même version que le paquet PKHeX.Core du site
+PKHEX = "https://raw.githubusercontent.com/kwsch/PKHeX/26.10.18"  # même version que le paquet PKHeX.Core du site
 POKEAPI = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites"
 POKEAPI_DATA = "https://raw.githubusercontent.com/PokeAPI/pokeapi/master/data/v2/csv"
 POKESPRITE = "https://raw.githubusercontent.com/msikma/pokesprite/master"

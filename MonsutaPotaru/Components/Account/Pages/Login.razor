@@ -63,13 +63,14 @@
     private HttpContext HttpContext { get; set; } = default!;
 
     [SupplyParameterFromForm]
-    private InputModel Input { get; set; } = new();
+    private InputModel Input { get; set; } = default!; // null pendant un envoi de formulaire : créé dans OnInitialized
 
     [SupplyParameterFromQuery]
     private string? ReturnUrl { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
+        Input ??= new();
         if (HttpMethods.IsGet(HttpContext.Request.Method))
         {
             // Repart d'une connexion propre

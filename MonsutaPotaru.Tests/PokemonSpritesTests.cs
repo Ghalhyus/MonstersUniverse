@@ -79,7 +79,7 @@ public sealed class PokemonSpritesTests
     {
         var english = GameInfo.GetStrings("en");
         var missing = new SortedSet<string>(StringComparer.Ordinal);
-        foreach (var context in Enum.GetValues<EntityContext>().Where(c => c.IsValid()))
+        foreach (var context in Enum.GetValues<EntityContext>().Where(c => c.IsValid))
             for (ushort species = 1; species < (ushort)Species.MAX_COUNT; species++)
             {
                 var names = FormConverter.GetFormList(species, english.types, english.forms, GameInfo.GenderSymbolASCII, context);

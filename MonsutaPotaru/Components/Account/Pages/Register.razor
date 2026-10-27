@@ -67,10 +67,12 @@
     private HttpContext HttpContext { get; set; } = default!;
 
     [SupplyParameterFromForm]
-    private InputModel Input { get; set; } = new();
+    private InputModel Input { get; set; } = default!; // null pendant un envoi de formulaire : créé dans OnInitialized
 
     [SupplyParameterFromQuery]
     private string? ReturnUrl { get; set; }
+
+    protected override void OnInitialized() => Input ??= new();
 
     public async Task RegisterUser(EditContext editContext)
     {

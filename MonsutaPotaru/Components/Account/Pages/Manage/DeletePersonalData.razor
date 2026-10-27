@@ -53,7 +53,7 @@
     private HttpContext HttpContext { get; set; } = default!;
 
     [SupplyParameterFromForm]
-    private InputModel Input { get; set; } = new();
+    private InputModel Input { get; set; } = default!; // null pendant un envoi de formulaire : créé dans OnInitialized
 
     protected override async Task OnInitializedAsync()
     {

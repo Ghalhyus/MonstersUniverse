@@ -135,7 +135,7 @@ public sealed class SaveSession
         if (pk.GetType() != sav.PKMType)
         {
             converted = EntityConverter.ConvertToType(pk, sav.PKMType, out var result);
-            if (converted is null || !result.IsSuccess())
+            if (converted is null || !result.IsSuccess)
             {
                 error = $"Conversion {pk.Extension.ToUpperInvariant()} → {sav.BlankPKM.Extension.ToUpperInvariant()} impossible ({result}).";
                 return false;

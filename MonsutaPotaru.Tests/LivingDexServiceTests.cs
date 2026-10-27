@@ -96,11 +96,11 @@ public sealed class LivingDexServiceTests : IDisposable
         Assert.Equal([LivingDexGame.FireRed, LivingDexGame.LeafGreen], LivingDexGames.For(new SAV3FRLG()));
         Assert.Empty(LivingDexGames.For(new SAV3XD()));
 
-        // 4e génération : Platine reconnu, pas Diamant de Perle ni HeartGold de SoulSilver.
+        // 4e génération : Platine reconnu, pas Diamant de Perle ; HeartGold et SoulSilver, si (PKHeX 26).
         Assert.Equal([LivingDexGame.Platinum], LivingDexGames.For(new SAV4Pt()));
         Assert.Equal([LivingDexGame.Diamond, LivingDexGame.Pearl], LivingDexGames.For(new SAV4DP()));
         Assert.True(SaveUtil.TryGetSaveFile(RealSave("soulsilver.sav"), out var soulSilver, "soulsilver.sav"));
-        Assert.Equal([LivingDexGame.HeartGold, LivingDexGame.SoulSilver], LivingDexGames.For(soulSilver!));
+        Assert.Equal([LivingDexGame.SoulSilver], LivingDexGames.For(soulSilver!));
 
         // 5e génération : chaque sauvegarde dit son jeu ; une sauvegarde vide de PKHeX (« Any ») propose les deux de son format.
         Assert.True(SaveUtil.TryGetSaveFile(RealSave("noir.sav"), out var black, "noir.sav"));
@@ -745,8 +745,8 @@ public sealed class LivingDexServiceTests : IDisposable
     {
         var save = await Store("sacha", "soulsilver.sav");
         var candidate = Assert.Single(await _dex.ListCandidatesAsync("sacha"));
-        Assert.Equal([LivingDexGame.HeartGold, LivingDexGame.SoulSilver], candidate.Games);
-        Assert.Equal("Or HeartGold / Argent SoulSilver — Ghal · soulsilver.sav", candidate.Label); // pas « HGSS » (PokemonInfo.GroupNames)
+        Assert.Equal([LivingDexGame.SoulSilver], candidate.Games); // version reconnue par PKHeX 26
+        Assert.Equal("Argent SoulSilver — Ghal · soulsilver.sav", candidate.Label); // le jeu exact, pas « HGSS »
         var id = (await _dex.CreateAsync("sacha", save, LivingDexGame.SoulSilver)).Id!.Value;
 
         var johto = (await _dex.GetAsync("sacha", id, LivingDexMode.Regional))!;

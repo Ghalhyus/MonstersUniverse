@@ -206,6 +206,14 @@ public sealed class BankService(
     public static PKM? ToPkm(BankPokemon entry) =>
         EntityFormat.GetFromBytes(entry.Data.ToArray(), (EntityContext)entry.Context);
 
+    /// <summary>Octets du Pokémon au format des boîtes, déchiffrés (ce que garde <see cref="BankPokemon.Data"/>).</summary>
+    public static byte[] StoredData(PKM pk)
+    {
+        var data = new byte[pk.SIZE_STORED];
+        pk.WriteDecryptedDataStored(data);
+        return data;
+    }
+
     /// <summary>Ligne de base pour un Pokémon : octets bruts + métadonnées d'affichage et de recherche.</summary>
     public static BankPokemon CreateEntry(PokemonInfo info, PKM pk, string ownerId, DateTime now)
     {
@@ -213,7 +221,7 @@ public sealed class BankService(
         var entry = new BankPokemon
         {
             OwnerId = ownerId,
-            Data = pk.DecryptedBoxData,
+            Data = StoredData(pk),
             Context = (byte)pk.Context,
             Extension = pk.Extension,
             Species = pk.Species,

@@ -50,7 +50,7 @@ public sealed class RealSavesTests : IDisposable
 
     /// <summary>Emplacements remplis de toutes les poches (sac et PC) : poche, numéro d'objet dans le jeu, quantité.</summary>
     private static List<(InventoryType, int, int)> Slots(SaveFile sav) =>
-        sav.Inventory.SelectMany(p => p.Items.Where(i => i.Index != 0 && i.Count > 0).Select(i => (p.Type, (int)i.Index, i.Count))).ToList();
+        sav.Inventory.Pouches.SelectMany(p => p.Items.Where(i => i.Index != 0 && i.Count > 0).Select(i => (p.Type, (int)i.Index, i.Count))).ToList();
 
     /// <summary>Chaque élément de <paramref name="part"/> est dans <paramref name="whole"/> (multi-ensembles).</summary>
     private static void AssertContained(List<(InventoryType, int, int)> part, List<(InventoryType, int, int)> whole, string file)
@@ -130,7 +130,7 @@ public sealed class RealSavesTests : IDisposable
     /// <summary>Octets de chaque Pokémon de l'équipe et des boîtes, dans l'ordre.</summary>
     private static List<string> Contents(SaveFile sav) =>
         sav.PartyData.Concat(Enumerable.Range(0, sav.BoxCount).SelectMany(sav.GetBoxData))
-            .Select(pk => pk.Species == 0 ? "" : Convert.ToHexString(pk.Data[..pk.SIZE_STORED])).ToList();
+            .Select(pk => pk.Species == 0 ? "" : Convert.ToHexString(BankService.StoredData(pk))).ToList();
 
     [Theory]
     [MemberData(nameof(Files))]

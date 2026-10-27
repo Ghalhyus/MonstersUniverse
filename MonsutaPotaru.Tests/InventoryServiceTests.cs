@@ -372,7 +372,7 @@ public sealed class InventoryServiceTests : IDisposable
         SaveSessionTests.GiveItems(sav, (MasterBall, 1), (HyperBall, 2), (SuperBall, 3));
         Assert.Null(SaveBag.Withdraw(sav, new Dictionary<int, int> { [MasterBall] = 1 }, i => $"{i}"));
 
-        var slots = sav.Inventory.First(p => p.CanContain(HyperBall)).Items; // poche « Objets » en 5e génération
+        var slots = sav.Inventory.Pouches.First(p => p.CanContain(HyperBall)).Items; // poche « Objets » en 5e génération
         Assert.Equal([HyperBall, SuperBall, 0], slots.Take(3).Select(s => s.Index));
     }
 
@@ -439,7 +439,7 @@ public sealed class InventoryServiceTests : IDisposable
         Assert.Null(SaveBag.Deposit(sav, new Dictionary<int, int> { [Potion] = 5, [PokeBall] = 3 }, i => $"{i}", "Émeraude"));
 
         // Vérifié en mémoire : comme en 4e génération, PKHeX ne sait pas écrire une sauvegarde de 3e génération créée vide.
-        Assert.Contains(sav.Inventory.SelectMany(p => p.Items), s => s.Index == 13 && s.Count == 5);
+        Assert.Contains(sav.Inventory.Pouches.SelectMany(p => p.Items), s => s.Index == 13 && s.Count == 5);
         Assert.Equal(new Dictionary<int, int> { [Potion] = 5, [PokeBall] = 3 }, SaveBag.ReadItems(sav));
 
         Assert.Null(SaveBag.Withdraw(sav, new Dictionary<int, int> { [Potion] = 5 }, i => $"{i}"));
@@ -512,7 +512,7 @@ public sealed class InventoryServiceTests : IDisposable
 
         // Toutes les CT retirées : les CS restent, sans trou dans la poche.
         Assert.Null(SaveBag.Withdraw(sav!, SaveSessionTests.PlatinumSampleMoves, i => $"{i}"));
-        var pouch = sav!.Inventory.Single(p => p.Type == InventoryType.TMHMs);
+        var pouch = sav!.Inventory.Pouches.Single(p => p.Type == InventoryType.TMHMs);
         Assert.Equal([(HM01, 1), (HM03, 1), (0, 0)], pouch.Items.Take(3).Select(s => ((int)s.Index, s.Count)));
         Assert.NotNull(SaveBag.Deposit(sav, new Dictionary<int, int> { [SaveBag.MachineKey(Surf)] = 1 }, i => $"{i}", "Platine"));
 
@@ -549,7 +549,7 @@ public sealed class InventoryServiceTests : IDisposable
         Assert.Equal(1, capacity[SaveBag.MachineKey(MegaPunch)]); // Ultimapoing : CT00, réutilisable
         Assert.Null(SaveBag.Deposit(sav, new Dictionary<int, int> { [EarthquakeTM] = 3 }, i => $"{i}", "Épée"));
         Assert.Equal(new Dictionary<int, int> { [EarthquakeTM] = 3 }, SaveBag.ReadItems(sav));
-        Assert.Contains(sav.Inventory.SelectMany(p => p.Items), s => s.Index == 1140 && s.Count == 3); // objet DT10
+        Assert.Contains(sav.Inventory.Pouches.SelectMany(p => p.Items), s => s.Index == 1140 && s.Count == 3); // objet DT10
     }
 
     [Fact]
@@ -558,7 +558,7 @@ public sealed class InventoryServiceTests : IDisposable
         var sav = new SAV3E();
         Assert.Equal(79, SaveBag.Capacity(sav)[EarthquakeTM]); // à usage unique : sous le seuil de 80
         Assert.Null(SaveBag.Deposit(sav, new Dictionary<int, int> { [EarthquakeTM] = 2, [FocusPunchTM] = 1 }, i => $"{i}", "Émeraude"));
-        Assert.Contains(sav.Inventory.SelectMany(p => p.Items), s => s.Index == 314 && s.Count == 2); // CT26 en numérotation de la 3e génération
+        Assert.Contains(sav.Inventory.Pouches.SelectMany(p => p.Items), s => s.Index == 314 && s.Count == 2); // CT26 en numérotation de la 3e génération
         Assert.Equal(new Dictionary<int, int> { [EarthquakeTM] = 2, [FocusPunchTM] = 1 }, SaveBag.ReadItems(sav));
         Assert.Null(SaveBag.Withdraw(sav, new Dictionary<int, int> { [EarthquakeTM] = 2 }, i => $"{i}"));
         Assert.Equal(new Dictionary<int, int> { [FocusPunchTM] = 1 }, SaveBag.ReadItems(sav));
@@ -581,7 +581,7 @@ public sealed class InventoryServiceTests : IDisposable
         Assert.NotNull(SaveBag.Withdraw(sav, new Dictionary<int, int> { [EarthquakeTM] = 1 }, i => $"{i}"));
         Assert.Equal(SaveBag.LockedMessage("Séisme"), SaveBag.Deposit(sav, new Dictionary<int, int> { [EarthquakeTM] = 1 }, _ => "Séisme", "Émeraude"));
         Assert.Null(SaveBag.Withdraw(sav, new Dictionary<int, int> { [FocusPunchTM] = 1 }, i => $"{i}"));
-        Assert.Contains(sav.Inventory.SelectMany(p => p.Items), s => s.Index == 314 && s.Count == 80); // jamais touchée
+        Assert.Contains(sav.Inventory.Pouches.SelectMany(p => p.Items), s => s.Index == 314 && s.Count == 80); // jamais touchée
     }
 
     [Fact]
@@ -647,7 +647,7 @@ public sealed class InventoryServiceTests : IDisposable
         Assert.Equal(new Dictionary<int, int> { [EarthquakeTM] = 10, [ToxicTM] = 3 }, await InventoryItems());
         using var db = _db.NewContext();
         Assert.True(SaveUtil.TryGetSaveFile((await db.StoredSaves.SingleAsync(s => s.Id == lucas)).Data, out var stored, "lucas.sav"));
-        Assert.Contains(stored!.Inventory.SelectMany(p => p.Items), s => s.Index == TM26 && s.Count == 85); // jamais touchée
+        Assert.Contains(stored!.Inventory.Pouches.SelectMany(p => p.Items), s => s.Index == TM26 && s.Count == 85); // jamais touchée
     }
 
     // ---------- Baies ----------
@@ -688,16 +688,16 @@ public sealed class InventoryServiceTests : IDisposable
         Assert.Contains("e-Reader", refused);
 
         // Baie Enigma de l'e-Reader (175 en numérotation de la 3e génération) et Baies Oran : seules les Oran sont lues et retirées.
-        var pouches = sav.Inventory;
-        var berries = pouches.Single(p => p.Type == InventoryType.Berries);
+        var inventory = sav.Inventory;
+        var berries = inventory.GetPouch(InventoryType.Berries);
         berries.Items[0].Index = 175;
         berries.Items[0].Count = 1;
-        sav.Inventory = pouches;
+        inventory.CopyTo(sav);
         Assert.Null(SaveBag.Deposit(sav, new Dictionary<int, int> { [OranBerry] = 5 }, i => $"{i}", "Émeraude"));
         Assert.Equal(new Dictionary<int, int> { [OranBerry] = 5 }, SaveBag.ReadItems(sav));
         Assert.NotNull(SaveBag.Withdraw(sav, new Dictionary<int, int> { [EnigmaBerry] = 1 }, i => $"{i}"));
         Assert.Null(SaveBag.Withdraw(sav, new Dictionary<int, int> { [OranBerry] = 5 }, i => $"{i}"));
-        Assert.Equal([(175, 1), (0, 0)], sav.Inventory.Single(p => p.Type == InventoryType.Berries).Items.Take(2).Select(s => ((int)s.Index, s.Count)));
+        Assert.Equal([(175, 1), (0, 0)], sav.Inventory.Pouches.Single(p => p.Type == InventoryType.Berries).Items.Take(2).Select(s => ((int)s.Index, s.Count)));
     }
 
     [Fact]
@@ -759,7 +759,7 @@ public sealed class InventoryServiceTests : IDisposable
         // Tous les objets retirés : le Vélo et la Lettre restent dans leur poche.
         Assert.Null(SaveBag.Withdraw(sav!, items, i => $"{i}"));
         Assert.Empty(SaveBag.ReadItems(sav!));
-        var pouches = sav!.Inventory;
+        var pouches = sav!.Inventory.Pouches;
         Assert.Contains(pouches.Single(p => p.Type == InventoryType.KeyItems).Items, s => s.Index == Bicycle && s.Count == 1);
         Assert.Contains(pouches.Single(p => p.Type == InventoryType.MailItems).Items, s => s.Index == GrassMail && s.Count == 1);
     }
@@ -770,15 +770,14 @@ public sealed class InventoryServiceTests : IDisposable
         var sav = new SAV3E();
         Assert.Equal(99, SaveBag.Capacity(sav)[FireStone]); // poche Objets de la 3e génération
         Assert.Null(SaveBag.Deposit(sav, new Dictionary<int, int> { [FireStone] = 2, [Nugget] = 1 }, i => $"{i}", "Émeraude"));
-        Assert.Contains(sav.Inventory.SelectMany(p => p.Items), s => s.Index == ItemConverter.GetItemOld3(FireStone) && s.Count == 2);
+        Assert.Contains(sav.Inventory.Pouches.SelectMany(p => p.Items), s => s.Index == ItemConverter.GetItemOld3(FireStone) && s.Count == 2);
 
         // Lettre de la 3e génération (121 : Lettre Orsch), sans équivalent ensuite : ni lue ni retirée.
-        var pouches = sav.Inventory;
-        var bag = pouches.Single(p => p.Type == InventoryType.Items);
-        var free = bag.Items.First(s => s.Index == 0);
+        var inventory = sav.Inventory;
+        var free = inventory.GetPouch(InventoryType.Items).Items.First(s => s.Index == 0);
         free.Index = 121;
         free.Count = 1;
-        sav.Inventory = pouches;
+        inventory.CopyTo(sav);
         Assert.Equal(new Dictionary<int, int> { [FireStone] = 2, [Nugget] = 1 }, SaveBag.ReadItems(sav));
     }
 
@@ -789,11 +788,11 @@ public sealed class InventoryServiceTests : IDisposable
     /// <summary>Ajoute des objets (numéros du jeu) au PC d'objets de la sauvegarde.</summary>
     private static void GiveToPc(SaveFile sav, params (int Item, int Count)[] items)
     {
-        var pouches = sav.Inventory;
-        var pc = pouches.Single(p => p.Type == InventoryType.PCItems);
+        var inventory = sav.Inventory;
+        var pc = inventory.GetPouch(InventoryType.PCItems);
         foreach (var (item, count) in items)
-            Assert.True(pc.GiveItem(sav, (ushort)item, count) > 0, $"{item} refusé par le PC");
-        sav.Inventory = pouches;
+            Assert.True(pc.GiveItem(inventory, (ushort)item, count) > 0, $"{item} refusé par le PC");
+        inventory.CopyTo(sav);
     }
 
     /// <summary>
@@ -839,14 +838,14 @@ public sealed class InventoryServiceTests : IDisposable
         Assert.Null(SaveBag.Withdraw(sav, SaveBag.ReadItems(sav, BagPlace.Pc), i => $"{i}", BagPlace.Pc));
         var again = sav; // relue en mémoire (voir Red)
         Assert.Empty(SaveBag.ReadItems(again));
-        Assert.Equal([(6, 1), (75, 1), (196, 1)], again.Inventory.Single(p => p.Type == InventoryType.Items).Items
+        Assert.Equal([(6, 1), (75, 1), (196, 1)], again.Inventory.Pouches.Single(p => p.Type == InventoryType.Items).Items
             .Where(s => s.Count > 0).Select(s => ((int)s.Index, s.Count)).Order());
-        Assert.Equal([(5, 1)], again.Inventory.Single(p => p.Type == InventoryType.PCItems).Items
+        Assert.Equal([(5, 1)], again.Inventory.Pouches.Single(p => p.Type == InventoryType.PCItems).Items
             .Where(s => s.Count > 0).Select(s => ((int)s.Index, s.Count)));
 
         // Dépôt dans le PC : l'objet y arrive sous son numéro de Rouge/Bleu.
         Assert.Null(SaveBag.Deposit(again, new Dictionary<int, int> { [Potion] = 7 }, i => $"{i}", "Rouge / Bleu", BagPlace.Pc));
-        Assert.Contains(again.Inventory.Single(p => p.Type == InventoryType.PCItems).Items, s => s.Index == 20 && s.Count == 7);
+        Assert.Contains(again.Inventory.Pouches.Single(p => p.Type == InventoryType.PCItems).Items, s => s.Index == 20 && s.Count == 7);
     }
 
     [Fact]
@@ -880,10 +879,10 @@ public sealed class InventoryServiceTests : IDisposable
         Assert.Null(SaveBag.Withdraw(sav, SaveBag.ReadItems(sav, BagPlace.Bag), i => $"{i}"));
         var again = sav; // relue en mémoire, comme Red
         Assert.Equal(new Dictionary<int, int> { [RareCandy] = 2 }, SaveBag.ReadItems(again));
-        var tm = again.Inventory.Single(p => p.Type == InventoryType.TMHMs);
+        var tm = again.Inventory.Pouches.Single(p => p.Type == InventoryType.TMHMs);
         Assert.Equal([(243, 1)], tm.Items.Where(s => s.Count > 0).Select(s => ((int)s.Index, s.Count))); // la CS reste
-        Assert.Contains(again.Inventory.Single(p => p.Type == InventoryType.KeyItems).Items, s => s.Index == 7 && s.Count == 1);
-        Assert.Contains(again.Inventory.Single(p => p.Type == InventoryType.Items).Items, s => s.Index == 75 && s.Count == 1);
+        Assert.Contains(again.Inventory.Pouches.Single(p => p.Type == InventoryType.KeyItems).Items, s => s.Index == 7 && s.Count == 1);
+        Assert.Contains(again.Inventory.Pouches.Single(p => p.Type == InventoryType.Items).Items, s => s.Index == 75 && s.Count == 1);
 
         // Noigrumes : Bleue (89) et Jaune (92) d'Or/Argent/Cristal, 486 et 487 à partir de la 5e génération (inversés en 4e).
         SaveSessionTests.GiveItems(again, (89, 1), (92, 2));
@@ -893,7 +892,7 @@ public sealed class InventoryServiceTests : IDisposable
 
         // Retour : la Baie Oran redevient la Baie, l'Appât Ball revient sous son numéro d'Or/Argent/Cristal.
         Assert.Null(SaveBag.Deposit(again, new Dictionary<int, int> { [OranBerry2] = 4, [LureBall] = 2 }, i => $"{i}", "Cristal"));
-        var items = again.Inventory.SelectMany(p => p.Items).ToList();
+        var items = again.Inventory.Pouches.SelectMany(p => p.Items).ToList();
         Assert.Contains(items, s => s.Index == 173 && s.Count == 4);
         Assert.Contains(items, s => s.Index == 160 && s.Count == 2);
     }
@@ -907,7 +906,7 @@ public sealed class InventoryServiceTests : IDisposable
         Assert.Equal(new Dictionary<int, int> { [Potion] = 5, [RareCandy] = 1 }, SaveBag.ReadItems(sav, BagPlace.Pc));
         Assert.Null(SaveBag.Withdraw(sav, new Dictionary<int, int> { [Potion] = 5 }, i => $"{i}", BagPlace.Pc));
         Assert.Equal(new Dictionary<int, int> { [RareCandy] = 1 }, SaveBag.ReadItems(sav, BagPlace.Pc));
-        Assert.Contains(sav.Inventory.Single(p => p.Type == InventoryType.PCItems).Items, s => s.Index == 339 && s.Count == 1);
+        Assert.Contains(sav.Inventory.Pouches.Single(p => p.Type == InventoryType.PCItems).Items, s => s.Index == 339 && s.Count == 1);
 
         // Platine n'a pas de PC d'objets.
         Assert.True(SaveUtil.TryGetSaveFile(SaveSessionTests.CreatePlatinumSave(), out var platinum, "platine.sav"));

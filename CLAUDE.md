@@ -152,11 +152,15 @@ tests créent la base avec `EnsureCreated`, sans passer par les migrations.
 
 ## Pièges de PKHeX
 
+- PKHeX 26 (C# 14) a des **propriétés d'extension** : `result.IsSuccess`, `context.IsValid`, sans parenthèses. Octets
+  d'un Pokémon au format des boîtes : `BankService.StoredData(pk)` (`DecryptedBoxData` n'existe plus).
 - PKHeX **écrit dans le tableau d'octets qu'on lui donne** : lui passer `data.ToArray()` quand l'original doit rester intact.
 - Une sauvegarde de 3e ou 4e génération créée vide (`new SAV3E()`, `new SAV4Pt()`) ne peut pas être écrite (`Write()`
   plante) : tester ces jeux en mémoire, ou partir d'un fichier brut valide (voir `CreatePlatinumSave`).
 - `SaveUtil.TryGetSaveFile` dans les tests (les méthodes internes de PKHeX ne sont pas visibles).
-- Sac : lire `sav.Inventory`, modifier les poches, puis **réaffecter** `sav.Inventory`. Le PC d'objets (`InventoryType.PCItems`,
+- Sac (PKHeX 26) : `var bag = sav.Inventory` (un `PlayerBag`, copie du sac), modifier `bag.Pouches` (ou
+  `bag.GetPouch(type)`, `pouch.GiveItem(bag, ...)`), puis **`bag.CopyTo(sav)`** ; `sav.Inventory` n'est plus affectable.
+  Le PC d'objets (`InventoryType.PCItems`,
   1re à 3e génération) n'est lu et modifié que comme `BagPlace.Pc`. Après un retrait, `ClearCount0()` seulement sur les
   poches vidées.
 - Or/Argent/Cristal : PKHeX **n'écrit pas une quantité de CT tombée à zéro** (poche CT/CS, un octet par numéro) ;
@@ -165,8 +169,9 @@ tests créent la base avec `EnsureCreated`, sans passer par les migrations.
   `SaveUtil` une fois écrite : la tester en mémoire (relire `sav.Inventory`), ou partir d'une vraie sauvegarde
   (`Sauvegardes/rouge.sav`, voir `InventoryServiceTests.RedFile`).
 - Numéros d'objets : 3e génération avec `ItemConverter.GetItemOld3` / `GetItemFuture3`, 2e avec `GetItemFuture2` (128 : sans
-  équivalent) / `GetItemOld2`, Rouge/Bleu avec la table `SaveBag.Gen1Items` (PKHeX n'a rien). La 2e génération sort en
-  numéros de 4e : les Noigrumes Bleue/Jaune (486/487) y sont inversées par rapport aux jeux suivants (`SwapApricorns`).
+  équivalent) / `GetItemOld2`, Rouge/Bleu avec la table `SaveBag.Gen1Items` (PKHeX n'a rien). Depuis PKHeX 26, la 2e
+  génération sort directement dans la numérotation des jeux suivants (Noigrumes Bleue/Jaune : 486/487) ; avant, il fallait
+  les inverser.
 - Les poches changent d'un jeu à l'autre (Balls avec les objets en Noir 2, baies de Let's Go avec les Balls...) : chercher
   un objet dans toutes les poches avec `CanContain`, jamais par type de poche.
 - CT : un même numéro n'apprend pas la même capacité selon le jeu, d'où le stockage par capacité (`SaveBag.MachineKey`).
@@ -237,8 +242,8 @@ suivante), sans lister les dossiers des dépôts.
 
 - Jeux et modes : `LivingDexGames` (`Services/LivingDexService.cs`). Ajouter un jeu : son entrée (`All` : jaquette,
   dossier de sprites, Pokédex régional, dernier numéro national), `For(SaveFile)` (quelle sauvegarde, sachant que PKHeX ne
-  distingue pas Rouge de Bleu, Or d'Argent, Rubis de Saphir, Rouge Feu de Vert Feuille, Diamant de Perle ni HeartGold de
-  SoulSilver), les formes du mode Complet (`Forms` : régionales, Méga, Gigamax, d'aspect, lettres de Zarbi ; pas le sexe ;
+  distingue pas Rouge de Bleu, Or d'Argent, Rubis de Saphir, Rouge Feu de Vert Feuille ni Diamant de Perle ; HeartGold de
+  SoulSilver, si, depuis PKHeX 26 : `soulsilver.sav` est reconnue SoulSilver), les formes du mode Complet (`Forms` : régionales, Méga, Gigamax, d'aspect, lettres de Zarbi ; pas le sexe ;
   **seulement celles qu'une sauvegarde du jeu peut contenir** : les formes de Morphéo n'existent qu'en combat, Deoxys de 3e
   génération a la forme de son jeu, `DeoxysForm`, case `AnyForm` ; à partir de la 4e, le nombre de formes de chaque jeu
   vient de `PersonalTable` de PKHeX (`FormCount`, liste `AspectForms`), et les règles de légalité de PKHeX disent ce

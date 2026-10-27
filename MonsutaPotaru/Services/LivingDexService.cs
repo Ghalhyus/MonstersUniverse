@@ -1534,7 +1534,7 @@ public sealed class LivingDexService(
         var save = await db.StoredSaves.AsNoTracking().Where(s => s.Id == saveId).Select(s => new { s.Data, s.FileName }).FirstOrDefaultAsync();
         if (save is null || !StoredSaveService.TryRead(save.Data, save.FileName, out var sav))
             return new HashSet<int>();
-        return sav.Inventory.SelectMany(p => p.Items).Where(i => i.Count > 0).Select(i => i.Index).ToHashSet();
+        return sav.Inventory.Pouches.SelectMany(p => p.Items).Where(i => i.Count > 0).Select(i => i.Index).ToHashSet();
     }
 
     private static string SaveLabel(string trainer, string fileName) => $"{trainer} · {fileName}";

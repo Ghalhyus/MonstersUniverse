@@ -94,7 +94,7 @@ public class SaveSessionTests
     public void BankBytes_RoundTrip_ThroughEntityFormat()
     {
         var pk = CreatePk5(25, 20);
-        var restored = EntityFormat.GetFromBytes(pk.DecryptedBoxData, EntityContext.Gen5);
+        var restored = EntityFormat.GetFromBytes(BankService.StoredData(pk), EntityContext.Gen5);
         Assert.IsType<PK5>(restored);
         Assert.Equal(25, restored!.Species);
         Assert.Equal(20, restored.CurrentLevel);
@@ -310,13 +310,13 @@ public class SaveSessionTests
     /// </summary>
     internal static void GiveItems(SaveFile sav, params (int Item, int Count)[] items)
     {
-        var pouches = sav.Inventory;
+        var inventory = sav.Inventory;
         foreach (var (item, count) in items)
         {
-            var pouch = pouches.First(p => p.Type != InventoryType.PCItems && p.CanContain((ushort)item));
-            Assert.True(pouch.GiveItem(sav, (ushort)item, count) > 0);
+            var pouch = inventory.Pouches.First(p => p.Type != InventoryType.PCItems && p.CanContain((ushort)item));
+            Assert.True(pouch.GiveItem(inventory, (ushort)item, count) > 0);
         }
-        sav.Inventory = pouches;
+        inventory.CopyTo(sav);
     }
 
     /// <summary>Bloc Gen 4 vide avec son pied : compteurs de sauvegarde, taille du bloc et signature du jeu.</summary>

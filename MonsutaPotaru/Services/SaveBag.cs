@@ -115,7 +115,7 @@ public static class SaveBag
         : null;
 
     /// <summary>La sauvegarde a un PC d'objets, à côté du sac (1re à 3e génération).</summary>
-    public static bool HasPc(SaveFile sav) => sav.Generation <= 3 && sav.Inventory.Any(p => p.Type == InventoryType.PCItems);
+    public static bool HasPc(SaveFile sav) => sav.Generation <= 3 && sav.Inventory.Pouches.Any(p => p.Type == InventoryType.PCItems);
 
     /// <summary>« le sac », « le PC ».</summary>
     public static string PlaceName(BagPlace place) => place == BagPlace.Pc ? "le PC" : "le sac";
@@ -131,14 +131,14 @@ public static class SaveBag
     /// </summary>
     public static Dictionary<int, int> ReadItems(SaveFile sav)
     {
-        var total = Total(Counts(sav, sav.Inventory));
+        var total = Total(Counts(sav, sav.Inventory.Pouches));
         return Visible(total, Locked(sav, total));
     }
 
     /// <summary>Comme <see cref="ReadItems(SaveFile)"/>, pour le sac ou pour le PC seulement.</summary>
     public static Dictionary<int, int> ReadItems(SaveFile sav, BagPlace place)
     {
-        var counts = Counts(sav, sav.Inventory);
+        var counts = Counts(sav, sav.Inventory.Pouches);
         return Visible(place == BagPlace.Pc ? counts.Pc : counts.Bag, Locked(sav, Total(counts)));
     }
 
@@ -147,7 +147,7 @@ public static class SaveBag
     /// par clé : cachées pour cette sauvegarde, ni retirées ni déposées. Les autres CT, et la même CT dans une autre sauvegarde,
     /// ne sont pas concernées.
     /// </summary>
-    public static HashSet<int> LockedMachines(SaveFile sav) => Locked(sav, Total(Counts(sav, sav.Inventory)));
+    public static HashSet<int> LockedMachines(SaveFile sav) => Locked(sav, Total(Counts(sav, sav.Inventory.Pouches)));
 
     /// <summary>
     /// Quantité maximale de chaque objet que le sac (ou le PC) peut contenir, par clé : 999 en 4e et 5e génération, 99 dans la
@@ -160,7 +160,7 @@ public static class SaveBag
     /// </summary>
     public static Dictionary<int, int> Capacity(SaveFile sav, BagPlace place = BagPlace.Bag)
     {
-        var all = sav.Inventory;
+        var all = sav.Inventory.Pouches;
         var target = Pouches(all, place);
         var counts = Counts(sav, all);
         var other = place == BagPlace.Pc ? counts.Bag : counts.Pc;
@@ -204,9 +204,9 @@ public static class SaveBag
             return why;
         if (place == BagPlace.Pc && !HasPc(sav))
             return "Cette sauvegarde n'a pas de PC d'objets.";
-        var pouches = sav.Inventory;
-        var target = Pouches(pouches, place);
-        var counts = Counts(sav, pouches);
+        var bag = sav.Inventory; // copie du sac : réécrite dans la sauvegarde à la fin (CopyTo)
+        var target = Pouches(bag.Pouches, place);
+        var counts = Counts(sav, bag.Pouches);
         // Une CT bloquée compte pour 0 : elle n'est jamais retirée.
         var have = Visible(place == BagPlace.Pc ? counts.Pc : counts.Bag, Locked(sav, Total(counts)));
         foreach (var (item, quantity) in quantities)
@@ -238,8 +238,8 @@ public static class SaveBag
         }
         foreach (var pouch in emptied)
             pouch.ClearCount0(); // le jeu attend des emplacements sans trou : seules les poches vidées sont tassées (les CS restent)
-        sav.Inventory = pouches;
-        ClearEmptiedMachines(sav, emptied);
+        bag.CopyTo(sav);
+        ClearEmptiedMachines(sav, bag, emptied);
         return null;
     }
 
@@ -249,16 +249,16 @@ public static class SaveBag
         ?? throw new InvalidOperationException("PKHeX : position des poches introuvable (InventoryPouch.Offset).");
 
     /// <summary>
-    /// Or/Argent/Cristal rangent leurs CT/CS dans un octet par numéro, et PKHeX (25.12.21) n'y écrit pas les quantités tombées à
+    /// Or/Argent/Cristal rangent leurs CT/CS dans un octet par numéro, et PKHeX (26.10.18) n'y écrit pas les quantités tombées à
     /// zéro : une CT entièrement retirée y garderait son ancienne quantité. Les octets des CT qui n'ont plus d'exemplaire sont
     /// donc remis à zéro ici, dans l'ordre des CT/CS de la poche.
     /// </summary>
-    private static void ClearEmptiedMachines(SaveFile sav, IEnumerable<InventoryPouch> emptied)
+    private static void ClearEmptiedMachines(SaveFile sav, PlayerBag bag, IEnumerable<InventoryPouch> emptied)
     {
         foreach (var pouch in emptied.Where(p => sav.Generation == 2 && p.Type == InventoryType.TMHMs))
         {
             var offset = (int)PouchOffset.GetValue(pouch)!;
-            var slots = pouch.Info.GetItems(InventoryType.TMHMs).ToArray();
+            var slots = bag.Info.GetItems(InventoryType.TMHMs).ToArray();
             for (var i = 0; i < slots.Length; i++)
             {
                 if (!pouch.Items.Any(s => s.Index == slots[i] && s.Count > 0))
@@ -277,9 +277,9 @@ public static class SaveBag
             return why;
         if (place == BagPlace.Pc && !HasPc(sav))
             return "Cette sauvegarde n'a pas de PC d'objets.";
-        var pouches = sav.Inventory;
-        var target = Pouches(pouches, place);
-        var counts = Counts(sav, pouches);
+        var bag = sav.Inventory; // copie du sac : réécrite dans la sauvegarde à la fin (CopyTo)
+        var target = Pouches(bag.Pouches, place);
+        var counts = Counts(sav, bag.Pouches);
         var have = place == BagPlace.Pc ? counts.Pc : counts.Bag;
         var total = Total(counts);
         var locked = Locked(sav, total);
@@ -312,10 +312,10 @@ public static class SaveBag
         {
             var gameItem = MoveOf(item) is { } move ? machines.ByMove[move].Item : item;
             var targets = CategoryOf(item) == ItemCategory.Items ? target.Where(p => ItemPouches.Contains(p.Type)) : target;
-            if (PouchFor(sav, targets, gameItem)!.GiveItem(sav, ToGame(sav, gameItem), quantity) < 0)
+            if (PouchFor(sav, targets, gameItem)!.GiveItem(bag, ToGame(sav, gameItem), quantity) < 0)
                 return $"Plus de place dans {PlaceName(place)} pour {name(item)}.";
         }
-        sav.Inventory = pouches;
+        bag.CopyTo(sav);
         return null;
     }
 
@@ -385,14 +385,6 @@ public static class SaveBag
     private const int LureBall2 = 160, LureBall = 494;
 
     /// <summary>
-    /// Noigrumes Bleue et Jaune : seuls objets dont le numéro a changé entre la 4e génération (487 et 486) et les suivantes (486 et
-    /// 487). PKHeX convertit Or/Argent/Cristal vers les numéros de la 4e ; le site range les objets sous ceux des jeux suivants
-    /// (Épée/Bouclier, où les Noigrumes sont dans le sac). HeartGold/SoulSilver gardent les leurs dans la Boîte à Noigrumes,
-    /// jamais touchée.
-    /// </summary>
-    private static int SwapApricorns(int item) => item switch { 486 => 487, 487 => 486, _ => item };
-
-    /// <summary>
     /// Numéro de 4e génération et suivantes d'un objet lu dans le sac (0 s'il n'en a pas) : table <see cref="Gen1Items"/> pour
     /// Rouge/Bleu/Jaune, conversions de PKHeX pour la 2e génération (128 : sans équivalent) et la 3e.
     /// </summary>
@@ -400,7 +392,7 @@ public static class SaveBag
     {
         1 => Gen1Items.GetValueOrDefault(index),
         2 => index == LureBall2 ? LureBall
-            : index is > 0 and <= byte.MaxValue && ItemConverter.GetItemFuture2((byte)index) is var item and not 128 ? SwapApricorns(item) : 0,
+            : index is > 0 and <= byte.MaxValue && ItemConverter.GetItemFuture2((byte)index) is var item and not 128 ? item : 0,
         3 => ItemConverter.GetItemFuture3((ushort)index),
         _ => index,
     };
@@ -410,7 +402,7 @@ public static class SaveBag
     {
         1 => (ushort)Gen1Back.GetValueOrDefault(item),
         2 => item == LureBall ? (ushort)LureBall2
-            : item is > 0 and <= ushort.MaxValue && ItemConverter.GetItemOld2((ushort)SwapApricorns(item)) is var index && ToNational(sav, index) == item
+            : item is > 0 and <= ushort.MaxValue && ItemConverter.GetItemOld2((ushort)item) is var index && ToNational(sav, index) == item
                 ? index : (ushort)0,
         3 => ItemConverter.GetItemOld3((ushort)item),
         _ => (ushort)item,
@@ -431,7 +423,7 @@ public static class SaveBag
     {
         var keys = sav.Generation == 2
             ? ItemStorage2.KeyCrystal.ToArray() // Cristal en a plus qu'Or/Argent
-            : sav.Inventory.FirstOrDefault(p => p.Type == InventoryType.KeyItems)?.GetAllItems().ToArray() ?? [];
+            : sav.Inventory.Pouches.FirstOrDefault(p => p.Type == InventoryType.KeyItems)?.GetAllItems().ToArray() ?? [];
         return keys.Select(k => ToNational(sav, k)).Where(k => k != 0).ToHashSet();
     });
 
