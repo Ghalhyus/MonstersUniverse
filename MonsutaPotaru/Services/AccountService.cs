@@ -8,6 +8,9 @@ namespace MonsutaPotaru.Services;
 /// <summary>Résultat d'une opération sur un compte, message prêt à afficher.</summary>
 public sealed record AccountResult(bool Ok, string Message, ApplicationUser? User = null);
 
+/// <summary>Vérification d'un mot de passe (<see cref="AccountService.CheckPasswordAsync"/>).</summary>
+public enum PasswordCheck { Ok, Wrong, LockedOut }
+
 /// <summary>
 /// Comptes : inscription (pseudo, adresse mail, mot de passe, code d'invitation), connexion par l'adresse mail, choix du
 /// pseudo pour les comptes créés avant lui, changement d'adresse. Le pseudo est le nom d'utilisateur d'Identity : c'est lui
@@ -19,6 +22,9 @@ public sealed class AccountService(UserManager<ApplicationUser> userManager, IDb
 {
     public const int PseudoMinLength = 3;
     public const int PseudoMaxLength = 20;
+
+    /// <summary>Longueur minimale d'un mot de passe (inscription, changement ; les mots de passe plus anciens restent valables).</summary>
+    public const int PasswordMinLength = 12;
 
     /// <summary>Mauvais mots de passe d'affilée qui bloquent la connexion à un compte.</summary>
     public const int MaxFailedLogins = 5;
@@ -39,6 +45,7 @@ public sealed class AccountService(UserManager<ApplicationUser> userManager, IDb
         options.SignIn.RequireConfirmedAccount = false; // le site n'envoie pas de mails
         options.User.RequireUniqueEmail = true; // on se connecte avec l'adresse
         options.User.AllowedUserNameCharacters = ""; // tous : le pseudo est vérifié par CheckPseudo (accents, espaces)
+        options.Password.RequiredLength = PasswordMinLength; // plus majuscule, minuscule, chiffre et caractère spécial (défaut)
         options.Lockout.AllowedForNewUsers = true; // contre les essais de mots de passe (FindForLoginAsync)
         options.Lockout.MaxFailedAccessAttempts = MaxFailedLogins;
         options.Lockout.DefaultLockoutTimeSpan = LoginLockout;
@@ -109,24 +116,43 @@ public sealed class AccountService(UserManager<ApplicationUser> userManager, IDb
             return null;
         }
 
+        return await CheckPasswordAsync(user, password) == PasswordCheck.Ok ? user : null;
+    }
+
+    /// <summary>
+    /// Vérifie le mot de passe d'un compte en comptant les échecs, comme la connexion (<see cref="FindForLoginAsync"/>) :
+    /// les mauvais mots de passe des pages du compte (adresse, mot de passe, suppression) s'ajoutent à ceux de la connexion.
+    /// Un compte bloqué est refusé même avec le bon mot de passe. Message à afficher : <see cref="PasswordCheckMessage"/>.
+    /// </summary>
+    public async Task<PasswordCheck> CheckPasswordAsync(ApplicationUser user, string password)
+    {
         var correct = await userManager.CheckPasswordAsync(user, password);
         if (await userManager.IsLockedOutAsync(user))
         {
-            logger.LogWarning("Compte {User} bloqué : connexion refusée.", user.Id);
-            return null;
+            logger.LogWarning("Compte {User} bloqué : mot de passe refusé.", user.Id);
+            return PasswordCheck.LockedOut;
         }
         if (!correct)
         {
             await userManager.AccessFailedAsync(user);
-            if (await userManager.IsLockedOutAsync(user))
-                logger.LogWarning("Compte {User} : {Count} mauvais mots de passe, connexion bloquée {Minutes} minutes.",
-                    user.Id, MaxFailedLogins, LoginLockout.TotalMinutes);
-            return null;
+            if (!await userManager.IsLockedOutAsync(user))
+                return PasswordCheck.Wrong;
+            logger.LogWarning("Compte {User} : {Count} mauvais mots de passe, compte bloqué {Minutes} minutes.",
+                user.Id, MaxFailedLogins, LoginLockout.TotalMinutes);
+            return PasswordCheck.LockedOut;
         }
         if (await userManager.GetAccessFailedCountAsync(user) > 0)
             await userManager.ResetAccessFailedCountAsync(user);
-        return user;
+        return PasswordCheck.Ok;
     }
+
+    /// <summary>
+    /// Message d'un mot de passe refusé sur les pages du compte. Le compte est celui de la personne connectée : on peut lui
+    /// dire qu'il est bloqué (la page de connexion, elle, ne le dit jamais).
+    /// </summary>
+    public static string PasswordCheckMessage(PasswordCheck check) => check == PasswordCheck.LockedOut
+        ? $"Trop de mauvais mots de passe : réessaie dans {LoginLockout.TotalMinutes:0} minutes."
+        : "Mot de passe incorrect.";
 
     /// <summary>Pseudo d'un compte créé avant le pseudo. Définitif : refusé si le compte en a déjà un.</summary>
     public async Task<AccountResult> ChoosePseudoAsync(ApplicationUser user, string pseudo)
@@ -151,8 +177,8 @@ public sealed class AccountService(UserManager<ApplicationUser> userManager, IDb
     /// <summary>Change l'adresse mail du compte, après vérification du mot de passe (le site n'envoie pas de lien de confirmation).</summary>
     public async Task<AccountResult> ChangeEmailAsync(ApplicationUser user, string newEmail, string password)
     {
-        if (!await userManager.CheckPasswordAsync(user, password))
-            return new(false, "Mot de passe incorrect.");
+        if (await CheckPasswordAsync(user, password) is not PasswordCheck.Ok and var refused)
+            return new(false, PasswordCheckMessage(refused));
         newEmail = newEmail.Trim();
         if (string.Equals(newEmail, user.Email, StringComparison.OrdinalIgnoreCase))
             return new(false, "C'est déjà ton adresse mail.");

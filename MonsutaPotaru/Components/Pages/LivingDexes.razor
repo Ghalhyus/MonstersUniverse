@@ -94,7 +94,7 @@ else
                     var isTaken = taken.Contains(value);
                     <label class="livingdex-game @(game == value ? "selected" : "") @(isTaken ? "taken" : "")" title="@(isTaken ? "Tu as déjà ce living dex" : null)">
                         <input type="radio" class="visually-hidden" name="dexGame" checked="@(game == value)" disabled="@isTaken" @onchange="() => GameChosen(value)" />
-                        <img src="@info.Cover" alt="" onerror="this.style.visibility='hidden'" />
+                        <img src="@info.Cover" alt="" data-cacher-si-absente />
                         <span>@info.Name@(isTaken ? " (déjà créé)" : "")</span>
                     </label>
                 }

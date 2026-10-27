@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using MonsutaPotaru;
 using MonsutaPotaru.Api;
 using MonsutaPotaru.Components;
 using MonsutaPotaru.Components.Account;
@@ -48,7 +49,7 @@ builder.Services.AddIdentityCore<ApplicationUser>(AccountService.ConfigureIdenti
     .AddErrorDescriber<FrenchIdentityErrorDescriber>();
 builder.Services.AddScoped<AccountService>();
 builder.Services.AddScoped<AdminService>();
-builder.Services.AddSingleton<LoginLimiter>(); // envois du formulaire de connexion par adresse IP
+builder.Services.AddSingleton<AccountLimiter>(); // envois des formulaires de connexion et d'inscription par adresse IP
 
 // Clés qui chiffrent les cookies (connexion, formulaires) : gardées avec les données (volume Docker),
 // sinon chaque mise à jour du conteneur en crée de nouvelles et déconnecte tout le monde.
@@ -89,6 +90,9 @@ using (var scope = app.Services.CreateScope())
 }
 PokemonSprites.Load(app.Environment.WebRootPath); // images des Pokémon et de leurs formes
 
+// En-têtes de sécurité (nosniff, Referrer-Policy, CSP stricte : aucun script écrit dans la page) : SecurityHeaders.cs.
+app.UseSecurityHeaders(app.Environment.IsDevelopment());
+
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
@@ -120,7 +124,8 @@ app.UseAntiforgery();
 
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
-    .AddInteractiveServerRenderMode();
+    // Sans la CSP « frame-ancestors » que Blazor ajoute de lui-même : la nôtre la contient (SecurityHeaders.cs).
+    .AddInteractiveServerRenderMode(options => options.ContentSecurityFrameAncestorsPolicy = null);
 
 // Add additional endpoints required by the Identity /Account Razor components.
 app.MapAdditionalIdentityEndpoints();

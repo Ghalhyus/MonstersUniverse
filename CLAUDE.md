@@ -25,9 +25,11 @@ Ce fichier ne garde que ce que le README ne dit pas.
 - Le pseudo est le `UserName` d'Identity ; on se connecte avec l'adresse (`AccountService.FindForLoginAsync`). Un ancien
   compte a encore son adresse pour `UserName` : « @ » est interdit dans un pseudo, c'est le repère (`HasPseudo`). Ne
   jamais afficher l'adresse d'un compte à la place du pseudo.
-- Connexion protégée (README « Comptes ») : `FindForLoginAsync` compte les échecs (`AccessFailedAsync` : 5 bloquent le
-  compte 5 minutes) et `LoginLimiter` (singleton) limite les envois par adresse IP. Un échec, quelle qu'en soit la
-  raison, a le même message (`LoginFailedMessage`) : ne jamais dire qu'une adresse a un compte ou qu'il est bloqué.
+- Connexion protégée (README « Comptes ») : `FindForLoginAsync` compte les échecs (`CheckPasswordAsync` du service :
+  5 bloquent le compte 5 minutes) et `AccountLimiter` (singleton) limite les envois par adresse IP (connexion,
+  inscription). Un échec de connexion, quelle qu'en soit la raison, a le même message (`LoginFailedMessage`) : ne
+  jamais dire qu'une adresse a un compte ou qu'il est bloqué. Toute nouvelle vérification du mot de passe passe par
+  `AccountService.CheckPasswordAsync` (jamais `UserManager.CheckPasswordAsync` : il ne compte pas les échecs).
   En test dans le navigateur : un compte bloqué se débloque en passant `LockoutEnd` dans le passé dans la base de test ;
   `localhost` et `127.0.0.1` ont chacun leur compteur d'IP. Envoyer le formulaire par `fetch` (`FormData` du
   formulaire) : après une connexion réussie, recharger la page (jeton antiforgery lié à l'ancien compte : 400).
@@ -69,11 +71,24 @@ Ce fichier ne garde que ce que le README ne dit pas.
   valider qui écrit les deux sauvegardes. Pour essayer à deux dans le navigateur intégré (cookies partagés entre onglets),
   ouvrir un joueur sur `localhost:5299` et l'autre sur `127.0.0.1:5299` : un cookie est propre au nom d'hôte. La
   confirmation de départ (`NavigationLock`) se teste en remplaçant `window.confirm` dans la page.
+- Blazor Server : la valeur d'un événement (`<select>`, champ, `[JSInvokable]`) vient du navigateur et peut être
+  trafiquée. Un service appelé avec l'identifiant d'un autre compte revérifie la relation lui-même (amitié :
+  `FriendService.RelationAsync`, visibilité : `PlayerService.FindAsync`), sans se fier à la liste affichée. Pour le
+  tester : changer la `value` d'une option dans la page, puis déclencher `change`. Pour un argument de `[JSInvokable]`
+  (parc : `OnPokemonClicked`), remplacer `WebSocket.prototype.send` en gardant l'original dans une variable, réécrire
+  l'argument dans le message (« [137] » → « [136] », même longueur), puis **remettre l'original** (le supprimer casse la
+  page). Le Pokémon du parc se clique en cherchant ses pixels dans le canvas (`getImageData`).
 - Le panneau du navigateur de test, masqué, ne remplit pas les listes virtualisées (« Ma collection ») : faire une
   capture d'écran pour qu'elles se chargent.
 
 ## Conventions du code
 
+- **CSP stricte** (`SecurityHeaders.cs`, README « Sécurité ») : aucun script écrit dans la page, il ne s'exécuterait
+  pas. Pas de bloc `<script>` sans `src`, pas d'attribut `onerror` / `onclick` / `onload` (les `@onclick` de Blazor, eux,
+  marchent) : le JavaScript va dans `wwwroot/js/app.js` (ou un module comme `parc.js`), une image absente prend
+  `data-remplacement` ou `data-cacher-si-absente`. `SecurityHeadersTests.Pages_HaveNoInlineScript` le vérifie. Une
+  ressource d'un autre site (police, script, image) serait bloquée : l'ajouter à la CSP, ou plutôt la servir depuis le
+  site. Dans le navigateur de test, un refus apparaît dans la console (« Content Security Policy »).
 - Services *scoped* à constructeur primaire, accès base par `IDbContextFactory<ApplicationDbContext>`.
 - Résultats en `record` portant un message français prêt à afficher (`ItemTransferResult(bool Ok, string Message)`...).
 - Écritures en transaction ; jeton de concurrence `Version` sur `StoredSave` ; débits et crédits atomiques avec
@@ -170,7 +185,8 @@ d'images existants exigent qu'elles soient là (`WebRootWithImages`).
 Servies par le site, plus rien n'est chargé depuis GitHub : `wwwroot/images/pokemon/<numéro d'espèce>.png`,
 `<numéro>-<forme>.png` (nom de forme de PokéAPI), `femelle/`, et les mêmes sous `pokemon/chromatique/` ;
 `wwwroot/images/objets/<numéro d'objet>.png` (numéros de PKHeX, ceux de `SaveBag`), `ct-<type>.png` ; dans chaque dossier
-un `inconnu.png` affiché en remplacement (`onerror` des balises, composant `ItemSprite` pour les objets).
+un `inconnu.png` affiché en remplacement (attribut `data-remplacement` des balises, géré par `wwwroot/js/app.js` :
+jamais de `onerror`, bloqué par la CSP ; composant `ItemSprite` pour les objets).
 `outils/images.py` les rassemble (Python seul, garde les fichiers présents) : le relancer après une mise à jour de
 PKHeX.Core (nouvelles espèces), en changeant la version en tête du script. Il n'utilise pas l'API GitHub (limitée sans
 jeton) : seulement des fichiers bruts, en essayant les sources dans l'ordre (une image absente répond 404, on passe à la

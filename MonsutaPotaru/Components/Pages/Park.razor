@@ -199,11 +199,11 @@ else
         await engine.InvokeVoidAsync("setPokemon", members);
     }
 
-    /// <summary>Clic sur un Pokémon du parc (il s'est tourné vers toi) : sa fiche.</summary>
+    /// <summary>Clic sur un Pokémon du parc (il s'est tourné vers toi) : sa fiche, seulement s'il est dans ce parc.</summary>
     [JSInvokable]
     public Task OnPokemonClicked(int id) => InvokeAsync(async () =>
     {
-        var entry = await BankStore.GetAsync(userId, id);
+        var entry = await Parks.GetMemberAsync(userId, id);
         if (entry is null || BankService.ToPkm(entry) is not { } pk)
             return;
         selected = entry;

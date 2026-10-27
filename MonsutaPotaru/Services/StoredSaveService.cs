@@ -46,6 +46,26 @@ public sealed class StoredSaveService(
 {
     public const string OtherAccountMessage = "Cette sauvegarde est déjà enregistrée sur le serveur par un autre compte.";
 
+    /// <summary>
+    /// Plus gros fichier accepté depuis le navigateur (« Mes sauvegardes », « Transfert ») : les sauvegardes Pokémon font
+    /// au plus quelques Mo (Épée : 1,5 Mo ; Écarlate / Violet : 3 Mo environ). La 3DS a sa propre limite
+    /// (<see cref="Api.SyncEndpoints.MaxSaveBytes"/>).
+    /// </summary>
+    public const int MaxFileBytes = 8 * 1024 * 1024;
+
+    public const string TooBigMessage = "Fichier trop gros (plus de 8 Mo) : ce n'est pas une sauvegarde Pokémon.";
+
+    /// <summary>Contenu d'un fichier choisi dans le navigateur, refusé au-delà de <see cref="MaxFileBytes"/>.</summary>
+    public static async Task<byte[]> ReadUploadAsync(Microsoft.AspNetCore.Components.Forms.IBrowserFile file)
+    {
+        if (file.Size > MaxFileBytes)
+            throw new InvalidDataException(TooBigMessage);
+        await using var stream = file.OpenReadStream(maxAllowedSize: MaxFileBytes);
+        using var ms = new MemoryStream();
+        await stream.CopyToAsync(ms);
+        return ms.ToArray();
+    }
+
     public async Task<List<StoredSaveInfo>> ListAsync(string ownerId)
     {
         await using var db = await dbFactory.CreateDbContextAsync();

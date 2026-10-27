@@ -34,6 +34,21 @@ public sealed class ParkServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task GetMember_OnlyAPokemonOfThatPark()
+    {
+        var pikachu = Add(25);
+        var mew = Add(151); // dans la collection de Sacha, pas dans son parc
+        var misty = Add(120, owner: "ondine");
+        Assert.True((await _park.SetAsync("sacha", [pikachu])).Ok);
+        Assert.True((await _park.SetAsync("ondine", [misty])).Ok);
+
+        Assert.Equal(pikachu, (await _park.GetMemberAsync("sacha", pikachu))?.Id);
+        Assert.Null(await _park.GetMemberAsync("sacha", mew)); // numéro envoyé par un navigateur modifié
+        Assert.Null(await _park.GetMemberAsync("sacha", misty)); // dans un autre parc
+        Assert.Null(await _park.GetMemberAsync("ondine", pikachu));
+    }
+
+    [Fact]
     public async Task Choice_IsLimitedToThirtyPokemonWithSprites_OfTheTrainer()
     {
         var pikachu = Add(25);

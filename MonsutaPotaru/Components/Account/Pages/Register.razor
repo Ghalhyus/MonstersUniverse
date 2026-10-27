@@ -6,6 +6,7 @@
 @using MonsutaPotaru.Services
 
 @inject AccountService Accounts
+@inject AccountLimiter Limiter
 @inject SignInManager<ApplicationUser> SignInManager
 @inject IdentityRedirectManager RedirectManager
 
@@ -41,7 +42,7 @@
             <div class="form-floating mb-3">
                 <InputText type="password" @bind-Value="Input.Password" id="Input.Password" class="form-control" autocomplete="new-password" aria-required="true" placeholder="mot de passe" />
                 <label for="Input.Password">Mot de passe</label>
-                <div class="form-text">Au moins 6 caractères, avec une majuscule, une minuscule, un chiffre et un caractère spécial.</div>
+                <div class="form-text">Au moins @AccountService.PasswordMinLength caractères, avec une majuscule, une minuscule, un chiffre et un caractère spécial.</div>
                 <ValidationMessage For="() => Input.Password" class="text-danger" />
             </div>
             <div class="form-floating mb-3">
@@ -62,6 +63,9 @@
 @code {
     private string? message;
 
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
     [SupplyParameterFromForm]
     private InputModel Input { get; set; } = new();
 
@@ -70,6 +74,12 @@
 
     public async Task RegisterUser(EditContext editContext)
     {
+        // Limite par adresse IP : une adresse mail déjà inscrite est refusée, et le code d'invitation pourrait être cherché.
+        if (!Limiter.TryRegister(HttpContext.Connection.RemoteIpAddress?.ToString()))
+        {
+            message = AccountService.AsError(AccountLimiter.TooManyRegistrationsMessage);
+            return;
+        }
         var result = await Accounts.RegisterAsync(Input.Pseudo, Input.Email, Input.Password, Input.InviteCode);
         if (!result.Ok)
         {
@@ -91,7 +101,7 @@
         public string Email { get; set; } = "";
 
         [Required(ErrorMessage = "Le mot de passe est obligatoire.")]
-        [StringLength(100, ErrorMessage = "Le mot de passe doit faire de {2} à {1} caractères.", MinimumLength = 6)]
+        [StringLength(100, ErrorMessage = "Le mot de passe doit faire de {2} à {1} caractères.", MinimumLength = AccountService.PasswordMinLength)]
         [DataType(DataType.Password)]
         public string Password { get; set; } = "";
 

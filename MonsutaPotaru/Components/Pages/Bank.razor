@@ -447,11 +447,9 @@
         busy = true;
         try
         {
-            await using var stream = e.File.OpenReadStream(maxAllowedSize: 32 * 1024 * 1024);
-            using var ms = new MemoryStream();
-            await stream.CopyToAsync(ms);
+            var data = await StoredSaveService.ReadUploadAsync(e.File);
 
-            if (Session.TryLoad(ms.ToArray(), e.File.Name, out var error))
+            if (Session.TryLoad(data, e.File.Name, out var error))
             {
                 // Une sauvegarde stockée sur le serveur (par n'importe quel compte) est en lecture seule.
                 if (await StoredSaves.FindHolderAsync(SaveIdentity.Of(Session.Save!).Key) is { } holder)

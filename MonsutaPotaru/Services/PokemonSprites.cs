@@ -228,12 +228,18 @@ public static partial class PokemonSprites
     [GeneratedRegex("^([cm])-([a-z]+)$")]
     private static partial Regex MinorPattern();
 
+    [GeneratedRegex("[^a-z0-9-]")]
+    private static partial Regex NotSlugCharacter();
+
+    [GeneratedRegex("-+")]
+    private static partial Regex Dashes();
+
     /// <summary>Nom anglais en nom de fichier : « Paldea Combat » → paldea-combat, « Flabébé » → flabebe.</summary>
     private static string Slug(string name)
     {
         var plain = new string(name.Normalize(NormalizationForm.FormD)
             .Where(c => CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark).ToArray());
-        var slug = Regex.Replace(plain.ToLowerInvariant().Replace(' ', '-'), "[^a-z0-9-]", "");
-        return Regex.Replace(slug, "-+", "-").Trim('-');
+        var slug = NotSlugCharacter().Replace(plain.ToLowerInvariant().Replace(' ', '-'), "");
+        return Dashes().Replace(slug, "-").Trim('-');
     }
 }

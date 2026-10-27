@@ -43,6 +43,19 @@ public sealed class ParkService(IDbContextFactory<ApplicationDbContext> dbFactor
     }
 
     /// <summary>
+    /// Fiche d'un Pokémon du parc de ce compte (clic sur le Pokémon), ou null s'il n'est pas dans ce parc. Le numéro vient
+    /// du navigateur : un visiteur ne doit pas pouvoir lire ainsi le reste de la collection du joueur.
+    /// </summary>
+    public async Task<BankPokemon?> GetMemberAsync(string ownerId, int bankPokemonId)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+        return await db.ParkMembers.AsNoTracking()
+            .Where(m => m.OwnerId == ownerId && m.BankPokemonId == bankPokemonId)
+            .Select(m => m.BankPokemon!)
+            .FirstOrDefaultAsync();
+    }
+
+    /// <summary>
     /// Pokémon qui peuvent aller au parc (sans les œufs), filtrés comme dans « Ma collection » (pastilles), par numéro de
     /// Pokédex.
     /// </summary>

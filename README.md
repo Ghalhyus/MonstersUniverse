@@ -69,7 +69,11 @@ liste sans trou, tassée à l'écriture comme le fait le jeu (un Pokémon dépos
 `Services/AccountService.cs`, pages dans `Components/Account` (ASP.NET Identity, tout en français) :
 
 - **Inscription** : pseudo, adresse mail, mot de passe et **code d'invitation** (obligatoire, gardé en base : voir
-  « Administration » ; majuscules, tirets et espaces ne comptent pas). Rôle **Standard**.
+  « Administration » ; majuscules, tirets et espaces ne comptent pas). Rôle **Standard**. Mot de passe d'**au moins 12
+  caractères** (`AccountService.PasswordMinLength`), avec une majuscule, une minuscule, un chiffre et un caractère
+  spécial ; un compte plus ancien garde son mot de passe plus court jusqu'à ce qu'il le change. **10 envois du formulaire par
+  heure et par adresse IP** au plus (`AccountLimiter`) : sans mail de confirmation, une adresse déjà inscrite est
+  forcément refusée, la limite empêche d'en essayer beaucoup (et de chercher le code d'invitation).
   Le **pseudo** (3 à 20 caractères : lettres, accents compris, chiffres, espaces, tirets, points, tirets bas ; espaces en
   trop retirés) est unique sans tenir compte des majuscules et **définitif**. C'est le nom d'utilisateur d'Identity : le
   menu (lien vers « Mon compte ») et la 3DS (`compte` de l'API) l'affichent ; l'adresse mail n'est montrée à personne.
@@ -78,8 +82,12 @@ liste sans trou, tassée à l'écriture comme le fait le jeu (un Pokémon dépos
   - **5 mauvais mots de passe d'affilée bloquent la connexion au compte 5 minutes**, même avec le bon (verrouillage
     d'Identity, `AccountService.FindForLoginAsync`) ; le blocage se lève tout seul, un bon mot de passe remet le
     compteur à zéro ;
-  - **10 envois du formulaire par minute et par adresse IP** au plus (celle transmise par Caddy, `LoginLimiter`) :
+  - **10 envois du formulaire par minute et par adresse IP** au plus (celle transmise par Caddy, `AccountLimiter`) :
     contre les essais sur beaucoup de comptes à la fois ; au-delà, « Trop d'essais de connexion : attends une minute » ;
+  - les mauvais mots de passe tapés dans « Mon compte » (Adresse mail, Mot de passe, Supprimer le compte :
+    `AccountService.CheckPasswordAsync`) **comptent avec ceux de la connexion** : une session volée ne permet pas de
+    deviner le mot de passe. Bloqué, ces actions sont refusées (« Trop de mauvais mots de passe : réessaie dans 5
+    minutes » : la personne est connectée, c'est son compte) ; la session ouverte, elle, reste ouverte ;
   - un seul message pour tout échec (« Adresse mail ou mot de passe incorrect. Après 5 échecs, la connexion à ce compte
     est bloquée 5 minutes. ») : la page ne dit pas si l'adresse a un compte, ni s'il est bloqué. Le mot de passe est
     vérifié même pour une adresse inconnue, pour que la durée de la réponse ne le dise pas non plus.
@@ -130,7 +138,8 @@ deux sauvegardes stockées du **même contexte de jeu** de PKHeX (même généra
 pas Let's Go ↔ Soleil, ni Épée ↔ Diamant Étincelant). Compteur rouge des demandes reçues dans le menu.
 
 1. **Demande** : l'ami, puis la paire de sauvegardes (avec la date de la version stockée et un rappel si elle a été
-   modifiée par le site sans être téléchargée : l'échange porte sur la version stockée). Elle vaut 10 minutes, tant que
+   modifiée par le site sans être téléchargée : l'échange porte sur la version stockée). Le serveur revérifie l'amitié
+   avant de montrer les sauvegardes de l'autre (`TradeService.SavePairsAsync`) : rien pour un autre compte. Elle vaut 10 minutes, tant que
    son auteur reste sur la page ; l'ami l'accepte ou la refuse. Un joueur ne fait qu'un échange à la fois.
 2. **Choix**, en direct sur les deux pages : chacun choisit, parmi les Pokémon de l'autre (équipe et boîtes, hors cases
    verrouillées), **celui qu'il veut recevoir** ; seuls ceux que sa sauvegarde peut recevoir sont proposés
@@ -173,6 +182,28 @@ clé du thème du compte sur la page dès le premier rendu (`<html data-theme="p
   `html` pour passer devant.
 - `app.css` fixe certaines couleurs en dur (`.btn-primary`, `.btn-link`, anneau bleu du focus) : un thème doit les
   écraser explicitement, pas seulement changer les variables de Bootstrap.
+
+### Sécurité
+
+- **Connexion et inscription** : voir « Comptes » (blocage après 5 échecs, limites par adresse IP).
+- **En-têtes de toutes les réponses** (`SecurityHeaders.cs`, branché au début de `Program.cs`, fichiers statiques et API
+  compris) : `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin`, et une **politique de contenu (CSP)
+  stricte** qui n'accepte que le site : scripts, images (plus les icônes `data:` du CSS), connexions (dont le WebSocket de
+  Blazor), formulaires ; ni plugin, ni page du site dans le cadre d'un autre site. Les styles écrits dans la page restent
+  permis (Blazor en écrit). La CSP que Blazor ajoute de lui-même est retirée (`ContentSecurityFrameAncestorsPolicy`) : la
+  nôtre la contient. En `Development` seulement, les scripts de rechargement de Visual Studio (`localhost:*`) sont permis.
+- **Aucun script écrit dans la page** : la CSP ne l'exécuterait pas. Les scripts du site sont dans `wwwroot/js` :
+  `app.js` (chargé dans le `<head>` d'`App.razor` : images de remplacement, téléchargement, largeur d'écran, grille de
+  l'inventaire, glisser-déposer, fermeture du menu sur téléphone) et `parc.js`. Pas de `onerror` / `onclick` dans le
+  HTML : une image absente prend `data-remplacement="images/…/inconnu.png"` (ou `data-cacher-si-absente`), un seul
+  écouteur d'`app.js` s'en charge. Pas d'`<ImportMap />` (script écrit dans la page) : `parc.js` est chargé par son
+  chemin. Test `SecurityHeadersTests.Pages_HaveNoInlineScript`.
+- **Fichiers envoyés** : 8 Mo au plus depuis le navigateur (« Mes sauvegardes », « Transfert » :
+  `StoredSaveService.ReadUploadAsync`), 4 Mo depuis la 3DS (`SyncEndpoints.MaxSaveBytes`) ; les sauvegardes Pokémon
+  font au plus quelques Mo.
+- **Ce que le navigateur envoie peut être trafiqué** (valeurs d'événements, arguments des méthodes appelées par
+  JavaScript) : les services revérifient le compte, l'amitié (`TradeService.SavePairsAsync`) et la visibilité
+  (`ParkService.GetMemberAsync`, `PlayerService.FindAsync`).
 
 ### Administration
 
@@ -328,7 +359,7 @@ La page « Inventaire » affiche le porte-monnaie du compte et le « Stockage »
 que la largeur en permet, moins quand le journal est ouvert ; le curseur « Colonnes » affiche « Auto (10) ») ; le curseur
 en fixe le nombre de 1 à 10 (vignettes élargies ou rétrécies), retenu par le navigateur, et le bouton « Auto » rend la
 main à la largeur. Le nombre automatique est mesuré par le navigateur sur une grille vide invisible (`.item-grid-probe`,
-`watchGridColumns` dans `App.razor`). La
+`watchGridColumns` dans `wwwroot/js/app.js`). La
 recherche porte sur toute la source affichée : chaque onglet affiche alors le nombre d'objets trouvés. Chaque onglet a son
 **tri**, retenu par le navigateur et valable pour toutes les sources : « Par défaut » (numéro d'objet commun à tous les jeux,
 qui garde ensemble les Balls, les pierres, les potions... ; les CT par nom de capacité), « Nom » (accents ignorés ; pour une
@@ -409,7 +440,9 @@ collection, stockage interne ou sauvegardes stockées, de **toutes les générat
 « Choisir les Pokémon » ouvre la collection avec la recherche, les pastilles de filtres de « Ma collection » (génération,
 type, forme...) et le compteur. Les espèces dont SpriteCollab n'a pas encore les sprites (64, surtout de 9e génération)
 y sont grisées (🔒) et refusées ; elles viendront quand il les aura (relancer `outils/images.py donjon`, puis
-`images-serveur`). Un clic sur un Pokémon du parc le fait se tourner vers toi et ouvre sa fiche, avec « Retirer du parc ».
+`images-serveur`). Un clic sur un Pokémon du parc le fait se tourner vers toi et ouvre sa fiche, avec « Retirer du parc ». La fiche n'est
+donnée que pour un Pokémon de ce parc (`ParkService.GetMemberAsync`) : le numéro vient du navigateur, et un visiteur ne
+doit pas lire ainsi le reste de la collection.
 Un Pokémon qui quitte la collection (retiré, sauvegarde mise à jour ou supprimée) quitte le parc (table `ParkMembers`,
 suppression en cascade).
 
@@ -658,7 +691,7 @@ est incompatible (espèce, attaques ou objets inexistants dans le jeu, conversio
 | `MonsutaPotaru/wwwroot/themes/pokedex.css` | Thème Pokédex, sous `[data-theme="pokedex"]` : menu, barre du haut, contenu de toutes les pages |
 | `MonsutaPotaru/Data/SiteSetting.cs` | Table des réglages du site (code d'invitation) et rôles des comptes (`SiteRoles`) |
 | `MonsutaPotaru/Services/AccountService.cs` | Comptes : règles du pseudo, inscription, connexion par l'adresse (blocage après 5 échecs), choix du pseudo des anciens comptes, changement d'adresse ; réglages d'Identity, messages d'Identity en français |
-| `MonsutaPotaru/Services/LoginLimiter.cs` | Limite d'envois du formulaire de connexion par adresse IP (10 par minute) |
+| `MonsutaPotaru/Services/AccountLimiter.cs` | Limites d'envois par adresse IP : connexion (10 par minute), inscription (10 par heure) |
 | `MonsutaPotaru/Components/Account/Pages/` | Pages du compte : connexion, inscription, « Choisis ton pseudo », « Mon compte » (`Manage/` : profil, adresse, mot de passe, données personnelles) |
 | `MonsutaPotaru/Components/Account/Shared/PseudoGuard.razor` | Renvoie un compte sans pseudo sur « Choisis ton pseudo » (autour du contenu de `MainLayout`) |
 | `MonsutaPotaru/Services/BankService.cs` | Accès base, validation transactionnelle, copies de sécurité |
@@ -666,6 +699,8 @@ est incompatible (espèce, attaques ou objets inexistants dans le jeu, conversio
 | `MonsutaPotaru/Services/PokemonInfo.cs` | Noms français (dont « Rouge / Bleu », « Or / Argent », « Diamant / Perle », « Or HeartGold / Argent SoulSilver » pour les groupes de jeux : une sauvegarde de ces jeux ne dit pas lequel des deux ; migrations `GameNames` et `GameGroupNames` pour les noms déjà enregistrés), sprites, légalité |
 | `MonsutaPotaru/Components/Pages/Bank.razor` | Page « Transfert et stockage interne » (`/transfert`) : boîtes, glisser-déposer, sélection multiple |
 | `MonsutaPotaru/Components/Pages/Park.razor` | Page « Parc » : boîte où vivent jusqu'à 30 Pokémon, fenêtre de choix, fiche au clic |
+| `MonsutaPotaru/SecurityHeaders.cs` | En-têtes de sécurité de toutes les réponses : nosniff, Referrer-Policy, CSP stricte (plus aucun script écrit dans la page) |
+| `MonsutaPotaru/wwwroot/js/app.js` | Scripts du site (chargés dans le `<head>`) : images de remplacement (`data-remplacement`), téléchargement, largeur d'écran, glisser-déposer, menu sur téléphone |
 | `MonsutaPotaru/wwwroot/js/parc.js` | Animation et comportement des Pokémon du parc (énergie, intentions, famille, nuit, curiosité) ; `simulate` pour les essais |
 | `MonsutaPotaru/Services/ParkService.cs` | Pokémon du parc : liste, choix (30 au plus, avec des sprites Donjon Mystère), retrait, famille d'évolution |
 | `MonsutaPotaru/Data/ParkMember.cs` | Table des Pokémon au parc (supprimée avec le Pokémon) |

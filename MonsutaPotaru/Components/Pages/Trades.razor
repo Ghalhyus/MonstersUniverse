@@ -129,7 +129,7 @@
                         var c = candidate;
                         <button type="button" class="trade-candidate @(wants?.Slot == c.Slot ? "selected" : "")" title="@c.Location"
                                 @onclick="() => Choose(c)" disabled="@(busy || s.Confirmed(userId))">
-                            <img src="@c.SpriteUrl" alt="" loading="lazy" onerror="this.src='images/pokemon/inconnu.png'" />
+                            <img src="@c.SpriteUrl" alt="" loading="lazy" data-remplacement="images/pokemon/inconnu.png" />
                             <span class="trade-candidate-name">@c.Name@(c.IsShiny ? " ✨" : "")</span>
                             <span class="small text-muted">@(c.IsEgg ? "Œuf" : $"N.{c.Level}") · @c.Location</span>
                         </button>

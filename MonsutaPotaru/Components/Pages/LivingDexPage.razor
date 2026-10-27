@@ -123,14 +123,14 @@ else if (view is not null)
             @if (e.Owned)
             {
                 <button type="button" class="livingdex-slot" title="@title" aria-label="@title" @onclick="() => OpenDetail(e)">
-                    <img src="@e.Sprite" alt="" loading="lazy" onerror="@FallbackSprite(e)" />
+                    <img src="@e.Sprite" alt="" loading="lazy" data-remplacement="@e.Fallback" />
                     <span>#@e.Number.ToString("000")</span>
                 </button>
             }
             else
             {
                 <div class="livingdex-slot missing" title="@title" aria-label="@title">
-                    <img src="@e.Sprite" alt="" loading="lazy" onerror="@FallbackSprite(e)" />
+                    <img src="@e.Sprite" alt="" loading="lazy" data-remplacement="@e.Fallback" />
                     <span>#@e.Number.ToString("000")</span>
                 </div>
             }
@@ -271,9 +271,6 @@ else if (view is not null)
 
     private void SetFilter(Filter value) =>
         Navigation.NavigateTo(Navigation.GetUriWithQueryParameter("filtre", FilterSlugs.GetValueOrDefault(value)), replace: true);
-
-    /// <summary>Sprite du jeu absent (images pas encore récupérées) : l'image de la même forme sur le site.</summary>
-    private static string FallbackSprite(LivingDexEntry e) => $"this.onerror=null;this.src='{e.Fallback}'";
 
     private async Task OpenDetail(LivingDexEntry e)
     {

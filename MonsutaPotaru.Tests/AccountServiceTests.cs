@@ -14,7 +14,7 @@ namespace MonsutaPotaru.Tests;
 public sealed class AccountServiceTests : IDisposable
 {
     private const string Invite = "pokeamis";
-    private const string Password = "Pikachu-25";
+    private const string Password = "Pikachu-2525"; // 12 caractères : le minimum
     private const string AdminPseudo = "Pierre";
 
     private readonly TestDatabase _db = new();
@@ -127,14 +127,40 @@ public sealed class AccountServiceTests : IDisposable
     }
 
     [Fact]
-    public void LoginLimiter_RefusesTheEleventhAttemptOfAMinute_PerAddress()
+    public void AccountLimiter_CountsLoginsAndRegistrations_PerAddress_Separately()
     {
-        using var limiter = new LoginLimiter();
-        for (int i = 0; i < LoginLimiter.AttemptsPerMinute; i++)
-            Assert.True(limiter.TryAttempt("203.0.113.7"));
-        Assert.False(limiter.TryAttempt("203.0.113.7"));
-        Assert.True(limiter.TryAttempt("198.51.100.2")); // une autre adresse n'est pas gênée
-        Assert.True(limiter.TryAttempt(null));
+        using var limiter = new AccountLimiter();
+        for (int i = 0; i < AccountLimiter.LoginsPerMinute; i++)
+            Assert.True(limiter.TryLogin("203.0.113.7"));
+        Assert.False(limiter.TryLogin("203.0.113.7"));
+        Assert.True(limiter.TryLogin("198.51.100.2")); // une autre adresse n'est pas gênée
+        Assert.True(limiter.TryLogin(null));
+
+        for (int i = 0; i < AccountLimiter.RegistrationsPerHour; i++)
+            Assert.True(limiter.TryRegister("203.0.113.7")); // compteur à part : les connexions ne l'ont pas entamé
+        Assert.False(limiter.TryRegister("203.0.113.7"));
+        Assert.True(limiter.TryRegister("198.51.100.2"));
+    }
+
+    [Fact]
+    public async Task AccountPages_CountWrongPasswords_WithTheLogin()
+    {
+        var sacha = (await _accounts.RegisterAsync("Sacha", "sacha@kanto.fr", Password, Invite)).User!;
+
+        // 4 échecs à la connexion, le 5e sur la page « Adresse mail » : bloqué.
+        for (int i = 0; i < AccountService.MaxFailedLogins - 1; i++)
+            Assert.Null(await _accounts.FindForLoginAsync("sacha@kanto.fr", "Mauvais-1"));
+        Assert.Equal("Trop de mauvais mots de passe : réessaie dans 5 minutes.",
+            (await _accounts.ChangeEmailAsync(sacha, "sacha@johto.fr", "Mauvais-1")).Message);
+
+        // Bloqué partout, même avec le bon mot de passe ; l'adresse n'a pas changé.
+        Assert.Equal(PasswordCheck.LockedOut, await _accounts.CheckPasswordAsync(sacha, Password));
+        Assert.False((await _accounts.ChangeEmailAsync(sacha, "sacha@johto.fr", Password)).Ok);
+        Assert.Null(await _accounts.FindForLoginAsync("sacha@kanto.fr", Password));
+        Assert.Equal("sacha@kanto.fr", (await _users.FindByIdAsync(sacha.Id))!.Email);
+
+        await _users.SetLockoutEndDateAsync(sacha, DateTimeOffset.UtcNow.AddSeconds(-1));
+        Assert.True((await _accounts.ChangeEmailAsync(sacha, "sacha@johto.fr", Password)).Ok);
     }
 
     [Fact]
@@ -149,6 +175,8 @@ public sealed class AccountServiceTests : IDisposable
         Assert.False(weak.Ok);
         Assert.Contains("au moins un chiffre", weak.Message);
         Assert.Contains("au moins une majuscule", weak.Message);
+        Assert.Contains("au moins 12 caractères", weak.Message);
+        Assert.Contains("au moins 12 caractères", (await _accounts.RegisterAsync("Ondine", "ondine@azuria.fr", "Psyko-kwak1", Invite)).Message); // 11
         Assert.Contains("Le pseudo doit faire", (await _accounts.RegisterAsync("O", "ondine@azuria.fr", Password, Invite)).Message);
     }
 

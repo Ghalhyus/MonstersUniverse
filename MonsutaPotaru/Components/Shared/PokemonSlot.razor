@@ -18,7 +18,7 @@
     @if (Sprite is not null)
     {
         <img src="@Sprite" alt="@Title" loading="lazy" draggable="false"
-             onerror="if (!this.src.endsWith('/inconnu.png')) this.src = 'images/pokemon/inconnu.png'" />
+             data-remplacement="images/pokemon/inconnu.png" />
         @if (Shiny) { <span class="shiny" aria-label="Chromatique">★</span> }
         @if (Level > 0) { <span class="lvl">N.@Level</span> }
         @if (Marker is not null) { <span class="marker" aria-hidden="true">@Marker</span> }

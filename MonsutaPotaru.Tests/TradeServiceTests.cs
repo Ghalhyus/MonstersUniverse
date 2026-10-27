@@ -8,7 +8,7 @@ namespace MonsutaPotaru.Tests;
 /// <summary>Échanges : sauvegardes compatibles, Pokémon proposés, échange des deux sauvegardes, évolutions, statistiques.</summary>
 public sealed class TradeServiceTests : IDisposable
 {
-    private readonly TestDatabase _db = new("sacha", "ondine");
+    private readonly TestDatabase _db = new("sacha", "ondine", "pierre");
     private readonly TradeService _trades;
     private readonly StoredSaveService _saves;
 
@@ -16,6 +16,13 @@ public sealed class TradeServiceTests : IDisposable
     {
         _trades = _db.Trades();
         _saves = _db.StoredSaves();
+
+        // Sacha et Ondine sont amis (une ligne par compte, comme FriendService) ; Pierre n'est l'ami de personne.
+        using var db = _db.NewContext();
+        db.Friendships.AddRange(
+            new Friendship { UserId = "sacha", FriendId = "ondine", Since = DateTime.UtcNow },
+            new Friendship { UserId = "ondine", FriendId = "sacha", Since = DateTime.UtcNow });
+        db.SaveChanges();
     }
 
     public void Dispose() => _db.Dispose();
@@ -56,6 +63,18 @@ public sealed class TradeServiceTests : IDisposable
 
         var pair = Assert.Single(await _trades.SavePairsAsync("sacha", "ondine")); // Platine (4e) ne va pas avec Noire 2 (5e)
         Assert.Equal((sachaB2, ondineB2), (pair.Mine.Id, pair.Theirs.Id));
+    }
+
+    [Fact]
+    public async Task SavePairs_NothingFromSomeoneWhoIsNotAFriend()
+    {
+        await Store("sacha", "b2.sav", Bw2("Sacha", 1, [25]));
+        await Store("pierre", "b2.sav", Bw2("Pierre", 3, [74]));
+
+        // Identifiant envoyé par un navigateur modifié : les sauvegardes de Pierre (jeu, dresseur) ne sortent pas.
+        Assert.Empty(await _trades.SavePairsAsync("sacha", "pierre"));
+        Assert.Empty(await _trades.SavePairsAsync("pierre", "sacha"));
+        Assert.Empty(await _trades.SavePairsAsync("sacha", "sacha"));
     }
 
     [Fact]

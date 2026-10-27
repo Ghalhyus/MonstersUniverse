@@ -3,8 +3,10 @@
 @using System.ComponentModel.DataAnnotations
 @using Microsoft.AspNetCore.Identity
 @using MonsutaPotaru.Data
+@using MonsutaPotaru.Services
 
 @inject UserManager<ApplicationUser> UserManager
+@inject AccountService Accounts
 @inject SignInManager<ApplicationUser> SignInManager
 @inject IdentityUserAccessor UserAccessor
 @inject IdentityRedirectManager RedirectManager
@@ -62,9 +64,10 @@
 
     private async Task OnValidSubmitAsync()
     {
-        if (requirePassword && !await UserManager.CheckPasswordAsync(user, Input.Password))
+        // Vérifié en comptant les échecs (blocage partagé avec la connexion).
+        if (requirePassword && await Accounts.CheckPasswordAsync(user, Input.Password) is not PasswordCheck.Ok and var refused)
         {
-            message = "Erreur : mot de passe incorrect.";
+            message = AccountService.AsError(AccountService.PasswordCheckMessage(refused));
             return;
         }
 

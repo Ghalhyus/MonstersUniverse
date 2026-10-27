@@ -258,13 +258,7 @@ else
         }
     }
 
-    private static async Task<byte[]> ReadFile(InputFileChangeEventArgs e)
-    {
-        await using var stream = e.File.OpenReadStream(maxAllowedSize: 32 * 1024 * 1024);
-        using var ms = new MemoryStream();
-        await stream.CopyToAsync(ms);
-        return ms.ToArray();
-    }
+    private static Task<byte[]> ReadFile(InputFileChangeEventArgs e) => StoredSaveService.ReadUploadAsync(e.File);
 
     private void Show(string text, bool isError = false)
     {

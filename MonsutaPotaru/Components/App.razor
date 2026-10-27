@@ -10,7 +10,8 @@
     <link rel="stylesheet" href="@Assets["app.css"]" />
     <link rel="stylesheet" href="@Assets["themes/pokedex.css"]" />
     <link rel="stylesheet" href="@Assets["MonsutaPotaru.styles.css"]" />
-    <ImportMap />
+    @* Scripts du site : dans un fichier, la CSP interdit les scripts écrits dans la page (SecurityHeaders.cs) *@
+    <script src="@Assets["js/app.js"]"></script>
     <link rel="icon" type="image/png" href="favicon.png" />
     <HeadOutlet @rendermode="PageRenderMode" />
 </head>
@@ -18,97 +19,6 @@
 <body>
     <Routes @rendermode="PageRenderMode" />
     <script src="_framework/blazor.web.js"></script>
-    <script>
-        // Téléchargement d'un fichier envoyé par le serveur (sauvegarde modifiée, .pk5...).
-        window.downloadFileFromStream = async (fileName, streamRef) => {
-            const blob = new Blob([await streamRef.arrayBuffer()]);
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = fileName ?? "";
-            a.click();
-            URL.revokeObjectURL(url);
-        };
-
-        // Largeur de la fenêtre (« Ma collection ») : 0 pour une fenêtre étroite (téléphone), sinon 1 + le nombre de largeurs
-        // dépassées, en pixels physiques (une fenêtre plein écran sur un 3440 × 1440 compte pour 3440, quelle que soit la
-        // mise à l'échelle de Windows ou le zoom : les deux sont compensés par devicePixelRatio). Le composant est prévenu
-        // à chaque changement de tranche (fenêtre redimensionnée ou déplacée sur un autre écran, téléphone tourné).
-        window.watchScreenSize = (narrowWidth, windowWidths, component) => {
-            const size = () => {
-                if (innerWidth < narrowWidth) return 0;
-                const physicalWidth = Math.round(innerWidth * devicePixelRatio);
-                return 1 + windowWidths.filter(w => physicalWidth > w).length;
-            };
-            let last = size();
-            const onResize = () => {
-                const current = size();
-                if (current === last) return;
-                last = current;
-                component.invokeMethodAsync("OnScreenSizeChanged", current);
-            };
-            addEventListener("resize", onResize);
-            return {
-                size,
-                dispose: () => removeEventListener("resize", onResize),
-            };
-        };
-
-        // Nombre de colonnes de la grille automatique d'objets (« Inventaire ») : mesuré sur une grille vide de même largeur
-        // (.item-grid-probe), dont le navigateur calcule les colonnes avec les règles de .item-grid. Le composant est prévenu
-        // à chaque changement (fenêtre redimensionnée, journal ouvert ou fermé).
-        window.watchGridColumns = (probe, component) => {
-            const count = () => getComputedStyle(probe).gridTemplateColumns.split(" ").filter(t => t).length;
-            let last = count();
-            const observer = new ResizeObserver(() => {
-                const current = count();
-                if (current === last) return;
-                last = current;
-                component.invokeMethodAsync("OnGridColumnsChanged", current);
-            });
-            observer.observe(probe);
-            return {
-                count,
-                dispose: () => observer.disconnect(),
-            };
-        };
-
-        // Glisser-déposer des Pokémon : la logique est côté serveur (Bank.razor), qui marque les zones
-        // acceptant le Pokémon en cours de glissement (.drop-active / .drop-target). Ici, uniquement ce
-        // que le navigateur exige de façon synchrone (un aller-retour serveur à chaque "dragover" serait trop lent).
-        const dropZone = e => e.target instanceof Element ? e.target.closest(".drop-active, .drop-target") : null;
-        document.addEventListener("dragstart", e => {
-            if (e.target instanceof Element && e.target.matches(".slot[draggable=true]")) {
-                e.dataTransfer.effectAllowed = "move";
-                e.dataTransfer.setData("text/plain", ""); // Firefox ne démarre pas le glissement sans données
-
-                // Sélection multiple : image de glissement en forme de pile, avec le nombre de Pokémon emportés.
-                const count = e.target.dataset.dragCount;
-                if (count) {
-                    const ghost = e.target.cloneNode(true);
-                    ghost.className = "slot drag-ghost";
-                    ghost.style.width = e.target.offsetWidth + "px";
-                    ghost.style.height = e.target.offsetHeight + "px";
-                    const badge = document.createElement("span");
-                    badge.className = "drag-count";
-                    badge.textContent = count;
-                    ghost.appendChild(badge);
-                    document.body.appendChild(ghost);
-                    e.dataTransfer.setDragImage(ghost, e.offsetX, e.offsetY);
-                    setTimeout(() => ghost.remove());
-                }
-            }
-        });
-        document.addEventListener("dragover", e => {
-            if (dropZone(e)) {
-                e.preventDefault(); // autorise le lâcher
-                e.dataTransfer.dropEffect = "move";
-            }
-        });
-        document.addEventListener("drop", e => {
-            if (dropZone(e)) e.preventDefault(); // pas de comportement par défaut (texte inséré dans un champ...)
-        });
-    </script>
 </body>
 
 </html>

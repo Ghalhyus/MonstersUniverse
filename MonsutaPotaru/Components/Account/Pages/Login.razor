@@ -8,7 +8,7 @@
 
 @inject SignInManager<ApplicationUser> SignInManager
 @inject AccountService Accounts
-@inject LoginLimiter Limiter
+@inject AccountLimiter Limiter
 @inject ILogger<Login> Logger
 @inject NavigationManager NavigationManager
 @inject IdentityRedirectManager RedirectManager
@@ -81,9 +81,9 @@
     {
         // Contre les essais de mots de passe : limite par adresse IP, puis blocage du compte après plusieurs échecs
         // (FindForLoginAsync). Pas de double authentification.
-        if (!Limiter.TryAttempt(HttpContext.Connection.RemoteIpAddress?.ToString()))
+        if (!Limiter.TryLogin(HttpContext.Connection.RemoteIpAddress?.ToString()))
         {
-            errorMessage = AccountService.AsError(LoginLimiter.TooManyAttemptsMessage);
+            errorMessage = AccountService.AsError(AccountLimiter.TooManyLoginsMessage);
             return;
         }
         var user = await Accounts.FindForLoginAsync(Input.Email, Input.Password);

@@ -18,7 +18,8 @@ sudo ufw --force enable
 
 echo "== 3/6 Docker"
 if ! command -v docker > /dev/null; then
-    curl -fsSL https://get.docker.com | sudo sh
+    # HTTPS exigé, redirections comprises : le script téléchargé est lancé avec sudo.
+    curl -fsSL --proto '=https' --tlsv1.2 https://get.docker.com | sudo sh
 fi
 sudo usermod -aG docker "$USER" # docker sans sudo, à partir de la prochaine connexion
 
@@ -46,7 +47,8 @@ echo "Monsuta Potaru est lancé."
 if [ -n "$domain" ]; then
     echo "  Adresse : https://$domain  (le certificat HTTPS est obtenu à la première visite)"
 else
-    echo "  Adresse : http://$(curl -fsS https://api.ipify.org 2> /dev/null || echo IP_DU_VPS)  (test seulement : pas de HTTPS sans nom de domaine)"
+    ip=$(curl -fsS --proto '=https' https://api.ipify.org 2> /dev/null || echo IP_DU_VPS)
+    echo "  Adresse IP : $ip, en HTTP simple, sans chiffrement (test seulement : pas de HTTPS sans nom de domaine)"
 fi
 echo "  Code d'invitation de départ : $(grep '^INVITE_CODE=' .env | cut -d= -f2-)  (ensuite : page « Administration »)"
 echo "  Déconnecte-toi puis reconnecte-toi pour utiliser « docker » sans sudo."

@@ -44,9 +44,18 @@ public sealed record TradeStats(int Total, int Partners);
 public sealed class TradeService(IDbContextFactory<ApplicationDbContext> dbFactory, StoredSaveService storedSaves, PokemonInfo info,
     ILogger<TradeService> logger)
 {
-    /// <summary>Paires de sauvegardes (la mienne, celle de l'ami) de même génération, les plus récentes d'abord.</summary>
+    /// <summary>
+    /// Paires de sauvegardes (la mienne, celle de l'ami) de même génération, les plus récentes d'abord. Vide si
+    /// <paramref name="friendId"/> n'est pas (ou plus) un ami : la page ne propose que ses amis, mais l'identifiant vient
+    /// du navigateur, et la liste montre les sauvegardes de l'autre (jeu, dresseur).
+    /// </summary>
     public async Task<List<TradeSavePair>> SavePairsAsync(string userId, string friendId)
     {
+        await using (var db = await dbFactory.CreateDbContextAsync())
+        {
+            if (await FriendService.RelationAsync(db, userId, friendId) != PlayerRelation.Friend)
+                return [];
+        }
         var mine = await storedSaves.ListAsync(userId);
         var theirs = await storedSaves.ListAsync(friendId);
         var contexts = await ContextsAsync(mine.Select(s => s.Id).Concat(theirs.Select(s => s.Id)));
