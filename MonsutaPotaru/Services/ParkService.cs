@@ -112,6 +112,19 @@ public sealed class ParkService(IDbContextFactory<ApplicationDbContext> dbFactor
         return await db.ParkMembers.Where(m => m.OwnerId == ownerId && m.BankPokemonId == bankPokemonId).ExecuteDeleteAsync() > 0;
     }
 
+    /// <summary>Vide le parc (bouton « Vider le parc ») : ses Pokémon restent dans la collection.</summary>
+    public async Task<ParkResult> ClearAsync(string ownerId)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+        var count = await db.ParkMembers.Where(m => m.OwnerId == ownerId).ExecuteDeleteAsync();
+        if (count == 0)
+            return new(false, "Le parc est déjà vide.");
+        logger.LogInformation("Utilisateur {User} : parc vidé ({Count} Pokémon).", ownerId, count);
+        return new(true, count == 1
+            ? "Le parc est vide : son Pokémon reste dans ta collection."
+            : $"Le parc est vide : ses {count} Pokémon restent dans ta collection.");
+    }
+
     private static IQueryable<BankPokemon> Eligible(ApplicationDbContext db, string ownerId) =>
         db.BankPokemon.AsNoTracking().Where(p => p.OwnerId == ownerId && !p.IsEgg && p.Species >= 1);
 

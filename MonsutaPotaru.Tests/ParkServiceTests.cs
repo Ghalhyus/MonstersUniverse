@@ -95,6 +95,24 @@ public sealed class ParkServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Clear_EmptiesOnlyThatPark_AndKeepsTheCollection()
+    {
+        var (a, b) = (Add(1), Add(4));
+        var misty = Add(120, owner: "ondine");
+        await _park.SetAsync("sacha", [a, b]);
+        await _park.SetAsync("ondine", [misty]);
+
+        var result = await _park.ClearAsync("sacha");
+        Assert.True(result.Ok, result.Message);
+        Assert.Equal("Le parc est vide : ses 2 Pokémon restent dans ta collection.", result.Message);
+        Assert.Empty(await _park.ListAsync("sacha"));
+        Assert.Equal([misty], (await _park.ListAsync("ondine")).Select(p => p.Id)); // le parc d'Ondine ne bouge pas
+        using (var db = _db.NewContext())
+            Assert.Equal(2, db.BankPokemon.Count(p => p.OwnerId == "sacha"));
+        Assert.Equal("Le parc est déjà vide.", (await _park.ClearAsync("sacha")).Message);
+    }
+
+    [Fact]
     public async Task PokemonLeavesThePark_WhenItLeavesTheCollection()
     {
         var pikachu = Add(25);
