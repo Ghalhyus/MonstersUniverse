@@ -7,14 +7,20 @@
 // dormir près d'un congénère), un caractère tiré de sa nature (plus ou moins actif, dormeur, sociable) et de la curiosité
 // pour le pointeur de la souris.
 
-// Coordonnées du parc : 486 de haut (le fond, boîte « Forêt » de Diamant Étincelant, fait 576 × 486) ; la largeur suit celle
-// de la page (le parc prend toute la largeur et la hauteur visible, le fond se répète) : 576 au moins, comme sur un téléphone.
-const BACKGROUND_W = 576, WORLD_H = 486;
+// Fond : une clairière (outils/clairiere.py) de 384 × 320 pixels, raccordée à gauche et à droite. Chacun de ses pixels fait
+// 1,5 unité du parc : coordonnées du parc de 480 de haut, fond de 576 de large (la taille de l'ancienne boîte PC,
+// 576 × 486). La largeur suit celle de la page (toute la largeur, le fond se répète sans couture).
+const MAP_W = 384, MAP_H = 320, MAP_PIXEL = 1.5;
+const BACKGROUND_W = MAP_W * MAP_PIXEL, WORLD_H = MAP_H * MAP_PIXEL;
+const GRASS = "#59cf93"; // couleur de l'herbe, sans l'image (pas encore chargée, ou absente)
 let worldW = BACKGROUND_W;
-const SPRITE_SCALE = 1.5; // taille des sprites dans le parc (arrondie à un nombre entier de pixels d'écran au dessin)
+// Taille d'un pixel de sprite par rapport à un pixel du fond (deux tiers : ×2 quand le fond est à ×3), arrondie à un nombre
+// entier de pixels d'écran (dessin net), jamais moins de 2 pixels d'écran tant que le fond en a autant.
+const SPRITE_SIZE = 2 / 3;
 const WALK_SPEED = 40; // vitesse de marche (pixels du parc par seconde), selon le caractère
-const WALK_ANIMATION_SPEED = 45; // vitesse à laquelle l'animation de marche joue à son rythme normal (pieds sans glisser)
-const MARGIN_X = 22, MARGIN_TOP = 40, MARGIN_BOTTOM = 14; // le Pokémon (ses pieds) reste dans ces limites
+const WALK_ANIMATION_SPEED = 45; // vitesse à laquelle l'animation de marche joue à son rythme normal (pieds sans glisser),
+                                 // pour des sprites à la taille des pixels du fond (plus petits : foulée plus courte)
+const MARGIN_X = 22, MARGIN_TOP = 100, MARGIN_BOTTOM = 14; // le Pokémon (ses pieds) reste dans ces limites (en haut : sous les arbres)
 const ANIMATIONS = ["Idle", "Walk", "Sleep"];
 // Énergie (par seconde) : 3 à 5 minutes d'activité le jour avant une sieste d'environ une minute ; la nuit, ils
 // s'endorment plus tôt et récupèrent lentement (longues nuits).
@@ -136,9 +142,9 @@ class Pokemon {
     face(other) { this.dir = directionOf(other.x - this.x, other.y - this.y); }
 
     /** Avance l'animation ; la marche joue au rythme de la vitesse (les pieds ne glissent pas, ne patinent pas). */
-    advanceFrame(dtMs) {
+    advanceFrame(dtMs, size) {
         const anim = this.anim;
-        const rate = this.state === "walk" ? clamp(Math.hypot(this.vx, this.vy) / WALK_ANIMATION_SPEED, 0.35, 1.4) : 1;
+        const rate = this.state === "walk" ? clamp(Math.hypot(this.vx, this.vy) / (WALK_ANIMATION_SPEED * size), 0.35, 1.4) : 1;
         this.frameTime += dtMs * rate;
         while (this.frameTime >= anim.durations[this.frame % anim.durations.length]) {
             this.frameTime -= anim.durations[this.frame % anim.durations.length];
@@ -153,7 +159,7 @@ export function create(container, component) {
     container.appendChild(canvas);
     const context = canvas.getContext("2d");
     const background = new Image();
-    background.src = "images/parc/foret.png";
+    background.src = "images/parc/clairiere.png";
 
     let pokemon = [];
     let mouse = null; // position du pointeur dans le parc, null hors du parc
@@ -161,20 +167,28 @@ export function create(container, component) {
     let last = performance.now();
     let frameRequest = 0;
     let scale = 1;
+    let spriteK = 1; // pixels d'écran par pixel de sprite
+    let spriteScale = MAP_PIXEL * SPRITE_SIZE; // unités du parc par pixel de sprite
 
-    // ---------- Taille : toute la largeur du conteneur, et la hauteur visible sous le parc (pas plus que les proportions du
-    // fond : un téléphone garde la boîte entière) ; le terrain s'élargit, les sprites gardent leur taille ----------
+    // ---------- Taille : toute la largeur du conteneur ; en hauteur, un nombre entier de fois la carte en pixels d'écran
+    // (chaque pixel du fond et des sprites couvre autant de pixels d'écran : dessin net), le plus grand qui tient dans la
+    // hauteur visible sous le parc (sur un téléphone : pas plus que la carte entière en largeur) ; le terrain s'élargit, les
+    // sprites gardent leur taille ----------
     const resize = () => {
         const width = container.clientWidth;
         const top = container.getBoundingClientRect().top + window.scrollY;
-        const height = Math.max(240, Math.min(window.innerHeight - top - 24, width * WORLD_H / BACKGROUND_W));
         const ratio = window.devicePixelRatio || 1;
-        canvas.style.width = `${width}px`;
-        canvas.style.height = `${height}px`;
+        const visible = Math.max(240, window.innerHeight - top - 24) * ratio;
+        const fitWidth = Math.round(width * ratio / MAP_W); // carte à peu près entière en largeur
+        const k = Math.max(1, Math.round(240 * ratio / MAP_H), Math.min(Math.floor(visible / MAP_H), fitWidth));
         canvas.width = Math.round(width * ratio);
-        canvas.height = Math.round(height * ratio);
+        canvas.height = k * MAP_H;
+        canvas.style.width = `${width}px`;
+        canvas.style.height = `${canvas.height / ratio}px`;
         scale = canvas.height / WORLD_H;
-        worldW = Math.max(BACKGROUND_W * 0.5, canvas.width / scale);
+        spriteK = Math.max(Math.min(k, 2), Math.round(k * SPRITE_SIZE));
+        spriteScale = spriteK / scale;
+        worldW = Math.max(BACKGROUND_W / 2, canvas.width / scale); // un minimum si le conteneur est caché
         for (const p of pokemon) p.x = clamp(p.x, MARGIN_X, worldW - MARGIN_X); // terrain rétréci : personne dehors
     };
     const observer = new ResizeObserver(resize);
@@ -189,7 +203,7 @@ export function create(container, component) {
     };
     /** Pokémon sous le pointeur (le plus en avant d'abord). */
     const at = point => [...pokemon].sort((a, b) => b.y - a.y).find(p => {
-        const a = p.anim, w = a.fw * SPRITE_SCALE / 2, h = a.fh * SPRITE_SCALE;
+        const a = p.anim, w = a.fw * spriteScale / 2, h = a.fh * spriteScale;
         return Math.abs(point.x - p.x) < w * 0.7 && point.y < p.y + 6 && point.y > p.y - h * 0.75;
     });
     const onMove = e => { mouse = toWorld(e); hovered = at(mouse); canvas.style.cursor = hovered ? "pointer" : "default"; };
@@ -355,19 +369,21 @@ export function create(container, component) {
     function draw(night) {
         context.imageSmoothingEnabled = false;
         context.setTransform(1, 0, 0, 1, 0, 0);
-        context.clearRect(0, 0, canvas.width, canvas.height);
-        context.setTransform(scale, 0, 0, scale, 0, 0);
+        // Fond en pixels d'écran : la carte fait exactement la hauteur du canvas (un nombre entier de pixels d'écran par
+        // pixel), répétée en largeur, centrée.
+        context.fillStyle = GRASS;
+        context.fillRect(0, 0, canvas.width, canvas.height);
         if (background.complete && background.naturalWidth) {
-            // Le fond se répète en largeur, centré (un parc large garde la boîte au milieu).
-            const offset = ((worldW - BACKGROUND_W) / 2) % BACKGROUND_W;
-            for (let x = offset - BACKGROUND_W * Math.ceil(offset / BACKGROUND_W); x < worldW; x += BACKGROUND_W)
-                context.drawImage(background, Math.floor(x), 0, BACKGROUND_W + 1, WORLD_H);
+            const mapW = MAP_W * canvas.height / MAP_H;
+            let x = Math.round((canvas.width - mapW) / 2) % mapW;
+            if (x > 0) x -= mapW;
+            for (; x < canvas.width; x += mapW) context.drawImage(background, x, 0, mapW, canvas.height);
         }
 
         // Les sprites se dessinent en pixels d'écran : position arrondie au pixel d'écran (déplacement continu, pas par
         // bonds d'un pixel du parc) et chaque pixel du sprite sur un nombre entier de pixels d'écran (pas d'ondulation).
         context.setTransform(1, 0, 0, 1, 0, 0);
-        const k = Math.max(1, Math.round(SPRITE_SCALE * scale));
+        const k = spriteK;
         for (const p of [...pokemon].sort((a, b) => a.y - b.y)) { // les plus bas passent devant
             const anim = p.anim;
             const w = anim.fw * k, h = anim.fh * k;
@@ -375,7 +391,7 @@ export function create(container, component) {
             // Ombre au sol, puis l'image : SpriteCollab centre le Pokémon dans chaque image, les pieds un peu sous le centre.
             context.fillStyle = "rgba(0, 0, 0, 0.18)";
             context.beginPath();
-            context.ellipse(x, y, Math.min(w, 48 * k / SPRITE_SCALE) * 0.28, 4.5 * scale, 0, 0, Math.PI * 2);
+            context.ellipse(x, y, Math.min(anim.fw, 32) * k * 0.28, 3 * k, 0, 0, Math.PI * 2);
             context.fill();
             const row = Math.min(p.state === "sleep" ? 0 : p.dir, anim.rows - 1);
             context.drawImage(anim.image, p.frame * anim.fw, row * anim.fh, anim.fw, anim.fh,
@@ -403,7 +419,7 @@ export function create(container, component) {
     }
 
     function drawName(p) {
-        const h = p.anim.fh * SPRITE_SCALE;
+        const h = p.anim.fh * spriteScale;
         context.font = "bold 12px sans-serif";
         const width = context.measureText(p.nickname).width + 10;
         const x = clamp(p.x - width / 2, 2, worldW - width - 2), y = Math.max(2, p.y - h * 0.75 - 18);
@@ -424,7 +440,7 @@ export function create(container, component) {
                 p.walkTo(target.x, target.y, intent);
             }
             update(p, dt, night);
-            p.advanceFrame(dt * 1000);
+            p.advanceFrame(dt * 1000, spriteScale / MAP_PIXEL);
         }
     }
 

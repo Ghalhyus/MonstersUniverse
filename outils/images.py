@@ -13,7 +13,8 @@ Rassemble les images servies par le site, dans MonsutaPotaru/wwwroot/images/ :
   Chaque dossier a ses planches <Animation>-Anim.png et un AnimData.xml réduit à ces animations (taille des images,
   durées) ; donjon/credits.txt liste les auteurs de chaque dossier (licence CC BY-NC 4.0 : à citer), donjon/formes.json
   le dossier de chaque forme par espèce (« 0026 » : {« Alola » : « 0001 », « Mega_X » : « 0002 »...}) ;
-- parc/foret.png : fond du « Parc », le fond de boîte PC « Forêt » de Diamant Étincelant / Perle Scintillante (PKHeX) ;
+- (parc/clairiere.png, fond du « Parc », ne vient pas d'ici : outils/clairiere.py l'assemble en local, deploy/fond-parc.cmd
+  l'envoie sur le serveur) ;
 - livingdex/ : sprites des jeux de chaque living dex (livingdex/rouge-bleu/<numéro>.png : Super Game Boy, livingdex/jaune/ :
   Game Boy Color, livingdex/or/, argent/, cristal/, rubis-saphir/, emeraude/, rouge-feu-vert-feuille/, diamant-perle/,
   platine/, heartgold-soulsilver/, noire-blanche/ ; PokéAPI, versions/generation-i à v/<jeu> ; à partir de la 6e, les
@@ -40,7 +41,7 @@ jeton, seulement des fichiers bruts.
 Les objets qu'aucune source n'a (objets rares, objets de Légendes Arceus, accessoires de pique-nique...)
 gardent inconnu.png : il suffit de déposer leur image sous leur numéro pour la remplacer.
 
-Lancement (Python 3, rien à installer) : python outils/images.py [pokemon] [objets] [donjon] [fonds] [livingdex] [combats] [--sortie <dossier>]
+Lancement (Python 3, rien à installer) : python outils/images.py [pokemon] [objets] [donjon] [livingdex] [combats] [--sortie <dossier>]
 (tout, sans argument ; dans MonsutaPotaru/wwwroot/images, sauf --sortie : le serveur l'utilise pour ~/monsuta-potaru-images, voir
 deploy/images-serveur.ps1). Les images ne sont pas dans le dépôt Git : en local, outils/recuperer-images.cmd les copie
 depuis le serveur, plus vite que les reconstruire.
@@ -233,11 +234,6 @@ def donjon_jobs():
     return jobs, missing
 
 
-def fonds_jobs():
-    """Fonds de boîte PC (PKHeX) : celui du « Parc »."""
-    return {"parc/foret.png": f"{PKHEX}/PKHeX.Drawing.Misc/Resources/img/box/bdsp/box_wp01bdsp.png"}, []
-
-
 # Living dex : dossier des sprites de chaque groupe de jeux (dossier PokéAPI, avec fond transparent : « transparent » en 1re et
 # 2e génération, ceux de la 3e le sont déjà ; nombre d'espèces), formes de chaque groupe (fichier du site ← fichier PokéAPI)
 # et jaquettes (fichier Bulbagarden Archives). À garder en accord avec LivingDexGames (MonsutaPotaru/Services/LivingDexService.cs).
@@ -370,7 +366,7 @@ def main():
         del args[i:i + 2]
     failed = False
     parts = {"pokemon": ("Pokémon", pokemon_jobs), "objets": ("objets", item_jobs), "donjon": ("sprites Donjon Mystère", donjon_jobs),
-             "fonds": ("fonds", fonds_jobs), "livingdex": ("living dex", livingdex_jobs), "combats": ("combats", combats_jobs)}
+             "livingdex": ("living dex", livingdex_jobs), "combats": ("combats", combats_jobs)}
     chosen = [parts[a] for a in args if a in parts] or list(parts.values())
     for kind, make in chosen:
         jobs, missing = make()

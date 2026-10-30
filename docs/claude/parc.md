@@ -12,8 +12,27 @@ README : « Parc ». Page `Park.razor`, service `ParkService`, animation `wwwroo
 - SpriteCollab centre chaque image sur le même point, les pieds 4 à 10 px sous le centre (le dessin remonte l'image de
   6 px × l'échelle pour poser les pieds sur l'ombre).
 
+## Fond (clairière)
+- `images/parc/clairiere.png`, 384 × 320 = l'ancienne boîte (576 × 486 unités) en pixels de sprite, pour garder la taille
+  des sprites et la surface d'avant. Refusées : bandeau de 1536 × 320 (parc à ×1, trop petit), 320 × 256 (×4, Pokémon
+  trop gros et entassés). Assemblée par `outils/clairiere.py` (graine 3 sans embranchement ; Pillow
+  absent de son Python : `pip install pillow`, ou `pip install --target <scratchpad>/pylib pillow` + `PYTHONPATH`). Pack
+  Tiny Tales dans `C:\Users\ghalh\Downloads\Tiny Tales_2D_Overworld_2.0.1\Tiled`.
+- **Jamais dans Git** (licence : pas de redistribution des tuiles ni de leurs dérivés tels quels), ni dans `images.py` (rien
+  à télécharger) : `deploy\fond-parc.cmd` l'envoie dans `~/monsuta-potaru-images/parc/` (servie aussitôt, pas de
+  redémarrage), `recuperer-images.cmd` la rapatrie. Sans elle : herbe unie (`GRASS`), pas d'erreur.
+- Netteté : un pixel de la carte = `MAP_PIXEL` (1,5) unités du parc. La hauteur du canvas en pixels physiques est
+  `k × 320` (`resize`, `k` le plus grand qui tient dans la hauteur visible : 3 chez l'utilisateur), donc `k` pixels d'écran
+  par pixel de carte ; le fond se dessine en pixels d'écran. Ne pas revenir à un étirement à la hauteur disponible.
+- Sprites : `spriteK = round(k × SPRITE_SIZE)` pixels d'écran par pixel de sprite (2/3, jamais moins de 2 si `k` ≥ 2) :
+  ×2 chez l'utilisateur. Il les a voulus 20 % plus petits que ×3 ; 2,4 n'étant pas net, il a choisi ×2 (−33 %) plutôt que
+  des pixels inégaux. `spriteScale` (unités du parc par pixel de sprite) sert au clic, au nom, aux « z » ; l'animation de
+  marche suit la taille (foulée plus courte).
+- `MARGIN_TOP` (100) : pieds sous la lisière (bas des arbres ~52 px de carte en médiane, buissons devant jusqu'à ~75).
+  Nouvelle carte avec une autre lisière : remesurer.
+
 ## Animation (`parc.js`)
-- Réglages en tête du fichier (`ENERGY`, `SPRITE_SCALE`, marges) et dans `decide` / `update`.
+- Réglages en tête du fichier (`ENERGY`, `SPRITE_SIZE`, marges) et dans `decide` / `update`.
 - Fluidité : sprites dessinés en pixels d'écran, position arrondie au pixel d'écran, échelle entière (`k`) ; la vitesse
   rejoint progressivement celle voulue (`vx`, `vy`), freine à l'arrivée ; l'animation de marche suit la vitesse
   (`WALK_ANIMATION_SPEED`). Une image coûte ~0,1 ms pour 30 Pokémon : une saccade vient du dessin, pas du calcul.

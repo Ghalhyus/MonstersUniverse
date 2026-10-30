@@ -536,13 +536,21 @@ Dissuasif, pas infaillible : rien n'oblige le joueur à remplacer réellement sa
 
 ### Parc
 
-Le menu « Parc » (`/parc`) est une boîte PC (fond « Forêt » de Diamant Étincelant, répété en largeur) qui prend toute la
-largeur de la page et la hauteur visible (sur un téléphone : les proportions de la boîte), où vivent jusqu'à **30 Pokémon** de la
+Le menu « Parc » (`/parc`) est une clairière en pixel art (lisière de forêt en haut, chemin, fleurs ; répétée en largeur
+sans couture) qui prend toute la largeur de la page, où vivent jusqu'à **30 Pokémon** de la
 collection, stockage interne ou sauvegardes stockées, de **toutes les générations** (hors œufs ; `ParkService.Capacity`).
 « Choisir les Pokémon » ouvre la collection avec la recherche, les pastilles de filtres de « Ma collection » (génération,
 type, forme...) et le compteur. Les espèces dont SpriteCollab n'a pas encore les sprites (64, surtout de 9e génération)
 y sont grisées (🔒) et refusées ; elles viendront quand il les aura (relancer `outils/images.py donjon`, puis
-`images-serveur`). Pour gérer son parc : l'interrupteur **« Seulement ceux du parc »** de la fenêtre ne montre que les
+`images-serveur`). **Fond** : carte de 384 × 320 pixels, la taille de l'ancienne boîte PC en pixels de sprite
+(`images/parc/clairiere.png`), assemblée par `outils/clairiere.py` avec les tuiles du pack Tiny Tales 2D Overworld
+(graine 3, sans embranchement ; voir « Crédits »). La hauteur du parc est le plus grand nombre entier de fois la carte en
+pixels d'écran qui tient dans la hauteur visible (3, soit 960 pixels, sur un écran de 1440 à 150 %) ; sur un téléphone, pas
+plus que la carte entière en largeur. Les sprites sont dessinés aux deux tiers des pixels du fond, arrondis à un nombre
+entier de pixels d'écran (×2 quand le fond est à ×3, jamais moins de ×2) : dessin net, sans pixels de tailles inégales.
+Les Pokémon restent sous les arbres (`MARGIN_TOP`). Le pack ne se redistribue pas : la carte n'est ni dans Git ni
+téléchargée par `images.py`, `deploy\fond-parc.cmd` l'envoie sur le serveur (une fois, et après une nouvelle carte) ;
+sans elle, le parc est sur de l'herbe unie. Pour gérer son parc : l'interrupteur **« Seulement ceux du parc »** de la fenêtre ne montre que les
 Pokémon choisis (avec la recherche et les pastilles) ; la liste est figée quand on l'allume, un Pokémon décoché reste affiché
 pour pouvoir le recocher. **« Tout retirer »** décoche tout (rien ne change avant « Valider »), et **« Vider le parc »**, à
 côté de « Choisir les Pokémon », le vide d'un coup après confirmation (`ParkService.ClearAsync`) : ses Pokémon restent dans
@@ -822,7 +830,7 @@ est incompatible (espèce, attaques ou objets inexistants dans le jeu, conversio
 | `MonsutaPotaru/Services/PokemonFingerprint.cs` | Empreinte d'un Pokémon et recherche de ses doublons dans le compte (vieille copie d'une sauvegarde) |
 | `MonsutaPotaru/Services/PokemonInfo.cs` | Noms français (dont « Rouge / Bleu », « Or / Argent », « Diamant / Perle », « Or HeartGold / Argent SoulSilver » pour les groupes de jeux : une sauvegarde de ces jeux ne dit pas lequel des deux ; migrations `GameNames` et `GameGroupNames` pour les noms déjà enregistrés), sprites, légalité |
 | `MonsutaPotaru/Components/Pages/Bank.razor` | Page « Transfert et stockage interne » (`/transfert`) : boîtes, glisser-déposer, sélection multiple |
-| `MonsutaPotaru/Components/Pages/Park.razor` | Page « Parc » : boîte où vivent jusqu'à 30 Pokémon, fenêtre de choix (« Seulement ceux du parc », « Tout retirer »), « Vider le parc », fiche au clic |
+| `MonsutaPotaru/Components/Pages/Park.razor` | Page « Parc » : clairière où vivent jusqu'à 30 Pokémon, fenêtre de choix (« Seulement ceux du parc », « Tout retirer »), « Vider le parc », fiche au clic |
 | `MonsutaPotaru/SecurityHeaders.cs` | En-têtes de sécurité de toutes les réponses : nosniff, Referrer-Policy, CSP stricte (plus aucun script écrit dans la page) |
 | `MonsutaPotaru/wwwroot/js/app.js` | Scripts du site (chargés dans le `<head>`) : images de remplacement (`data-remplacement`), téléchargement, largeur d'écran, glisser-déposer, menu sur téléphone, cadre du thème Ardoise (repli du menu, rubriques, menu du compte) |
 | `MonsutaPotaru/wwwroot/js/parc.js` | Animation et comportement des Pokémon du parc (énergie, intentions, famille, nuit, curiosité) ; `simulate` pour les essais |
@@ -852,7 +860,9 @@ est incompatible (espèce, attaques ou objets inexistants dans le jeu, conversio
 | `MonsutaPotaru/Services/PokemonTraits.cs` | Caractéristiques d'un Pokémon enregistrées pour ces filtres (types récents, nature, talent, IV, forme, Méga) |
 | `MonsutaPotaru/Services/PokemonSprites.cs` | Choix de l'image d'un Pokémon : forme (noms de PKHeX → noms de PokéAPI), Méga-Évolution selon l'objet tenu, femelle, chromatique |
 | `MonsutaPotaru/wwwroot/images/` | Hors du dépôt Git (voir « Lancer en local ») ; images servies par le site : `pokemon/<numéro d'espèce>.png`, `pokemon/<numéro>-<forme>.png` (`19-alola.png`, `6-mega-x.png`, `6-gmax.png`), `pokemon/femelle/`, `pokemon/chromatique/` (mêmes sous-dossiers), `objets/<numéro d'objet>.png`, `objets/ct-<type>.png` pour les CT/DT, un `inconnu.png` dans chaque dossier |
-| `MonsutaPotaru/wwwroot/images/parc/foret.png` | Fond du parc (boîte « Forêt » de Diamant Étincelant, PKHeX) |
+| `MonsutaPotaru/wwwroot/images/parc/clairiere.png` | Fond du parc (hors Git : `outils/clairiere.py`, envoyé par `deploy/fond-parc.cmd`) |
+| `outils/clairiere.py` | Assemble la clairière du parc avec les tuiles du pack Tiny Tales (Python et Pillow, dossier du pack en argument) |
+| `deploy/fond-parc.cmd` (`fond-parc.ps1`) | Envoie la clairière du parc dans les images du serveur, par SSH |
 | `MonsutaPotaru/wwwroot/images/donjon/` | Sprites animés de SpriteCollab (Idle, Walk, Sleep) dans les dossiers de SpriteCollab (`0025/`, `0025/0000/0001/` chromatique...) : planches `<Animation>-Anim.png` et `AnimData.xml` réduit à ces animations ; `credits.txt` (auteurs) |
 | `outils/recuperer-images.cmd` | Copie les images du serveur dans `wwwroot/images` par SSH (après un clonage) |
 | `deploy/images-serveur.cmd` (`images-serveur.ps1`) | Remplit ou met à jour les images du serveur (`~/monsuta-potaru-images`) et redémarre le site |
@@ -895,7 +905,8 @@ l'IP du VPS.
 2. Sur le VPS (`ssh ubuntu@IP_DU_VPS`) : `bash ~/monsuta-potaru/deploy/installer-serveur.sh`
    (demande le nom de domaine et le pseudo de ton compte, futur administrateur ; génère le code d'invitation de départ et
    l'affiche à la fin). Inscris-toi ensuite avec ce pseudo : le compte devient administrateur.
-3. Depuis Windows : `deploy\images-serveur.cmd ubuntu@IP_DU_VPS` (images, voir plus bas).
+3. Depuis Windows : `deploy\images-serveur.cmd ubuntu@IP_DU_VPS` (images, voir plus bas), puis
+   `deploy\fond-parc.cmd ubuntu@IP_DU_VPS` (fond du parc, assemblé en local).
 
 **Mises à jour** : par GitHub (« CI/CD » ci-dessous), ou `deploy\publier.cmd ubuntu@IP_DU_VPS` depuis Windows. Les
 migrations de la base s'appliquent au démarrage ; les données restent dans le volume Docker.
@@ -964,7 +975,8 @@ et servi depuis le disque (`Program.cs` : `MapStaticAssets` ne connaît que les 
 `deploy\images-serveur.cmd ubuntu@IP_DU_VPS` lance `outils/images.py --sortie ~/monsuta-potaru-images` sur le VPS (téléchargement
 depuis les projets d'origine, ~10 minutes la première fois, les images présentes sont gardées), puis redémarre le site,
 qui lit la liste des images au démarrage. À relancer pour mettre les images à jour. Les développeurs les copient depuis le
-VPS avec `outils\recuperer-images.cmd` (voir « Lancer en local »).
+VPS avec `outils\recuperer-images.cmd` (voir « Lancer en local »). Seule exception : le fond du parc, qui ne se télécharge
+nulle part (`outils/clairiere.py`, voir « Parc ») ; `deploy\fond-parc.cmd ubuntu@IP_DU_VPS` l'envoie depuis le PC.
 
 **Sauvegardes** : la sauvegarde de l'hébergeur ne couvre souvent que 24 h, or la base est le seul endroit où sont les
 Pokémon déposés. `deploy/sauvegarder.sh` archive chaque nuit le volume dans `~/sauvegardes` sur le VPS ; en garder aussi
@@ -997,11 +1009,12 @@ Monsuta Potaru s'appuie sur le travail d'autres projets :
 | Projet | Utilisé pour | Licence |
 |---|---|---|
 | [Pokémon Showdown](https://github.com/smogon/pokemon-showdown) (Guangcong Luo et contributeurs), paquet [`@pkmn/sim`](https://github.com/pkmn/ps) | Simulateur des combats (`showdown/combat.js`) : règles, capacités, talents, objets de chaque génération | MIT |
-| [PKHeX](https://github.com/kwsch/PKHeX) (Kaphotics et contributeurs), paquet `PKHeX.Core` | Lecture et écriture des sauvegardes, Pokémon, sacs, noms français, légalité ; images d'objets « Big Items » et « Artwork Items », fond de boîte « Forêt » de Diamant Étincelant du parc (`outils/images.py`) | GPL-3.0 |
+| [PKHeX](https://github.com/kwsch/PKHeX) (Kaphotics et contributeurs), paquet `PKHeX.Core` | Lecture et écriture des sauvegardes, Pokémon, sacs, noms français, légalité ; images d'objets « Big Items » et « Artwork Items » (`outils/images.py`) | GPL-3.0 |
 | [PokéAPI sprites](https://github.com/PokeAPI/sprites) | Images des Pokémon (normales et chromatiques, formes, femelles, Méga-Évolutions, Gigamax), de la plupart des objets et des CT (`wwwroot/images`) ; sprites de Rouge / Bleu, Jaune, Or, Argent, Cristal, Rubis / Saphir, Émeraude, Rouge Feu / Vert Feuille, Diamant / Perle, Platine, HeartGold / SoulSilver et Noire / Blanche des living dex, formes comprises (`versions/generation-i` à `generation-v`, `wwwroot/images/livingdex`) ; sprites de dos et chromatiques de Rubis / Saphir, Émeraude et Rouge Feu / Vert Feuille des combats (`back/`, `shiny/`) | CC0 1.0 pour le dépôt ; images © The Pokémon Company |
 | [PokéAPI](https://github.com/PokeAPI/pokeapi) (données) | Liste des formes de chaque espèce et des espèces dont la femelle est différente (tables `pokemon`, `pokemon_forms`, `pokemon_species`, lues par `outils/images.py` ; `has_gender_differences` reprise dans `GlobalLivingDex.GenderDifferences`) ; ordre des Pokédex régionaux des living dex (`pokemon_dex_numbers`, Pokédex « original-johto », « hoenn », « original-sinnoh », « extended-sinnoh », « updated-johto », « original-unova », « updated-unova », « kalos-central », « kalos-coastal », « kalos-mountain », « updated-hoenn », « original-alola », « updated-alola », « letsgo-kanto », « galar », « isle-of-armor », « crown-tundra », « hisui », « paldea », « kitakami » et « blueberry », repris dans `LivingDexGames`) | BSD-3-Clause |
 | [PokéSprite](https://github.com/msikma/pokesprite) (msikma) | Images d'objets absentes de PokéAPI, retrouvées par numéro d'objet (`data/item-map.json`) | MIT ; images © Nintendo / Creatures Inc. / GAME FREAK Inc. |
 | [SpriteCollab](https://github.com/PMDCollab/SpriteCollab) (PMD Collab, [sprites.pmdcollab.org](https://sprites.pmdcollab.org)) | Sprites animés façon Donjon Mystère du « Parc », animations Idle, Walk et Sleep (`wwwroot/images/donjon`, par `outils/images.py donjon`) ; auteurs de chaque sprite dans `wwwroot/images/donjon/credits.txt` | CC BY-NC 4.0 (usage non commercial, auteurs à citer) |
+| Tiny Tales 2D Overworld 2.0.1 (Megatiles, artiste Rayane Félix) | Tuiles de la clairière du « Parc », assemblées par `outils/clairiere.py` (`wwwroot/images/parc/clairiere.png`, hors Git) | Licence du pack : usage dans des jeux, même commerciaux, modifications permises ; redistribution des fichiers ou de leurs dérivés tels quels interdite (ni le pack ni la carte dans le dépôt) |
 | [Bootstrap](https://getbootstrap.com) | Mise en page et composants de l'interface (`wwwroot/lib/bootstrap`) | MIT |
 | [Bootstrap Icons](https://icons.getbootstrap.com) | Icônes des menus (dessins SVG dans `wwwroot/app.css`, « Icônes des menus ») | MIT |
 | [ASP.NET Core, Blazor, Identity, Entity Framework Core](https://dotnet.microsoft.com) (Microsoft) | Site, comptes, accès à la base | MIT |

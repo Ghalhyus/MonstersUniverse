@@ -307,7 +307,7 @@ button.livingdex-slot:hover { border-color: var(--bs-primary); box-shadow: 0 0 0
 /* ---------- Parc : boîte PC où les Pokémon se promènent (wwwroot/js/parc.js) ---------- */
 /* Toute la largeur ; la hauteur (celle visible sous le parc) est réglée par parc.js. */
 .park { position: relative; width: 100%; }
-.park-stage { width: 100%; border-radius: 12px; overflow: hidden; box-shadow: 0 0 0 4px #4e8f4a, 0 .5rem 1rem rgba(0, 0, 0, .2); background: #7bc67b; }
+.park-stage { width: 100%; border-radius: 12px; overflow: hidden; box-shadow: 0 0 0 4px #4e8f4a, 0 .5rem 1rem rgba(0, 0, 0, .2); background: #59cf93; }
 .park-canvas { display: block; touch-action: manipulation; }
 .park-empty {
     position: absolute;
