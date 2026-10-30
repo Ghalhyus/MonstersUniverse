@@ -246,6 +246,28 @@ clé du thème du compte sur la page dès le premier rendu (`<html data-theme="p
   le site** : le menu, la barre du haut et le contenu des pages (`main`, dialogues compris). Le parc garde son décor.
   Les styles du menu sont isolés par composant (`NavMenu.razor.css`, chargés après) : ses sélecteurs commencent par
   `html` pour passer devant.
+- **Ardoise** (`wwwroot/themes/ardoise.css`) : sobre, comme un outil de gestion. Le seul thème qui a **son propre cadre**
+  (`Components/Layout/ArdoiseLayout.razor`, choisi par `MainLayout` d'après la clé du thème, transmise par `App.razor` →
+  `Routes.razor` en valeur en cascade `SiteTheme`) :
+  - menu latéral ardoise (`#232d3b`), lien de la page affichée marqué d'orange (`#e8751a`) ; rubriques Sauvegardes et
+    Multijoueurs ouvertes d'un clic, et d'elles-mêmes sur l'une de leurs pages ;
+  - bouton « Replier le menu » : colonne d'icônes (nom en bulle), pages d'une rubrique affichées à côté au survol.
+    Choix gardé dans le cookie `menu=replie`, que `App.razor` relit pour poser `data-menu="replie"` sur la page dès le
+    premier rendu (pas de menu qui se replie sous les yeux) ;
+  - barre du haut blanche : fil d'Ariane (`Components/Layout/Breadcrumbs.cs`, le chemin de la page dans le menu, déduit
+    de son adresse : « Multijoueurs › Rechercher un joueur › Sacha › Parc »), porte-monnaie (lien vers « Inventaire »),
+    menu du compte en haut à droite (pastille à l'initiale du pseudo : paramètres du profil, statistiques,
+    déconnexion) ; sans compte, « Inscription » et « Connexion » ;
+  - téléphone : le menu s'ouvre par-dessus la page (bouton de la barre du haut), le fil d'Ariane ne garde que la page
+    affichée ;
+  - tout marche sans interactivité (pages du compte en rendu statique) : clics gérés par `wwwroot/js/app.js`, menu du
+    compte en élément `details`.
+
+  Contenu des pages (sous `[data-theme="ardoise"]`) : fond gris clair, cartes et tableaux en blocs blancs à bordure
+  fine, onglets soulignés d'orange, bouton principal orange, autres boutons gris, grilles de Pokémon gris clair à la
+  place du bleu ciel ; dialogues et fiches de Pokémon surélevés, liseré orange. Le parc garde son décor. Compteurs du
+  menu (porte-monnaie, demandes d'ami, d'échange et de combat) : `Components/Layout/SiteMenuBase.cs`, communs aux deux
+  menus.
 - `app.css` fixe certaines couleurs en dur (`.btn-primary`, `.btn-link`, anneau bleu du focus) : un thème doit les
   écraser explicitement, pas seulement changer les variables de Bootstrap.
 
@@ -387,7 +409,7 @@ Toutes sauf la liaison demandent `Authorization: Bearer <jeton>` (401 sinon, jet
 
 ### Filtres de « Ma collection »
 
-Sous la recherche, des **pastilles** à la façon d'iTop (« Type : Feu, Eau ▾ × ») : un clic ouvre les valeurs à cocher, la
+Sous la recherche, des **pastilles** (« Type : Feu, Eau ▾ × ») : un clic ouvre les valeurs à cocher, la
 croix retire le filtre, « + Filtre » en ajoute un, « Tout effacer » les retire tous. Filtres : **génération** (d'après le
 numéro de Pokédex : 1re = Bulbizarre à Mew...), **type** (types des jeux
 récents de l'espèce et de sa forme : Mélofée est Fée même venu de Rouge/Bleu), **sexe** (mâle, femelle, asexué), **nature**,
@@ -771,6 +793,10 @@ est incompatible (espèce, attaques ou objets inexistants dans le jeu, conversio
 | `MonsutaPotaru/Services/SiteThemes.cs` | Thèmes du site (clé, nom, description) et thème par défaut |
 | `MonsutaPotaru/Components/Account/Pages/Manage/Themes.razor` | « Mon compte » → « Thèmes » : choix du thème, miniatures en CSS |
 | `MonsutaPotaru/wwwroot/themes/pokedex.css` | Thème Pokédex, sous `[data-theme="pokedex"]` : menu, barre du haut, contenu de toutes les pages |
+| `MonsutaPotaru/wwwroot/themes/ardoise.css` | Thème Ardoise : son cadre (classes `ardoise-…`, menu replié, téléphone) et le contenu des pages sous `[data-theme="ardoise"]` |
+| `MonsutaPotaru/Components/Layout/ArdoiseLayout.razor` | Cadre du thème Ardoise (choisi par `MainLayout`) : menu repliable, barre du haut (fil d'Ariane, porte-monnaie, menu du compte) |
+| `MonsutaPotaru/Components/Layout/SiteMenuBase.cs` | Commun aux menus (`NavMenu`, `ArdoiseLayout`) : adresse de la page, solde, demandes reçues en direct, rubriques ouvertes |
+| `MonsutaPotaru/Components/Layout/Breadcrumbs.cs` | Fil d'Ariane du thème Ardoise, déduit de l'adresse de la page (`BreadcrumbsTests`) |
 | `MonsutaPotaru/Data/SiteSetting.cs` | Table des réglages du site (code d'invitation) et rôles des comptes (`SiteRoles`) |
 | `MonsutaPotaru/Services/AccountService.cs` | Comptes : règles du pseudo, inscription, connexion par l'adresse (blocage après 5 échecs), choix du pseudo des anciens comptes, changement d'adresse ; réglages d'Identity, messages d'Identity en français |
 | `MonsutaPotaru/Services/AccountLimiter.cs` | Limites d'envois par adresse IP : connexion (10 par minute), inscription (10 par heure) |
@@ -782,7 +808,7 @@ est incompatible (espèce, attaques ou objets inexistants dans le jeu, conversio
 | `MonsutaPotaru/Components/Pages/Bank.razor` | Page « Transfert et stockage interne » (`/transfert`) : boîtes, glisser-déposer, sélection multiple |
 | `MonsutaPotaru/Components/Pages/Park.razor` | Page « Parc » : boîte où vivent jusqu'à 30 Pokémon, fenêtre de choix (« Seulement ceux du parc », « Tout retirer »), « Vider le parc », fiche au clic |
 | `MonsutaPotaru/SecurityHeaders.cs` | En-têtes de sécurité de toutes les réponses : nosniff, Referrer-Policy, CSP stricte (plus aucun script écrit dans la page) |
-| `MonsutaPotaru/wwwroot/js/app.js` | Scripts du site (chargés dans le `<head>`) : images de remplacement (`data-remplacement`), téléchargement, largeur d'écran, glisser-déposer, menu sur téléphone |
+| `MonsutaPotaru/wwwroot/js/app.js` | Scripts du site (chargés dans le `<head>`) : images de remplacement (`data-remplacement`), téléchargement, largeur d'écran, glisser-déposer, menu sur téléphone, cadre du thème Ardoise (repli du menu, rubriques, menu du compte) |
 | `MonsutaPotaru/wwwroot/js/parc.js` | Animation et comportement des Pokémon du parc (énergie, intentions, famille, nuit, curiosité) ; `simulate` pour les essais |
 | `MonsutaPotaru/Services/ParkService.cs` | Pokémon du parc : liste, choix (30 au plus, avec des sprites Donjon Mystère), retrait, vidage, famille d'évolution |
 | `MonsutaPotaru/Data/ParkMember.cs` | Table des Pokémon au parc (supprimée avec le Pokémon) |
@@ -961,6 +987,7 @@ Monsuta Potaru s'appuie sur le travail d'autres projets :
 | [PokéSprite](https://github.com/msikma/pokesprite) (msikma) | Images d'objets absentes de PokéAPI, retrouvées par numéro d'objet (`data/item-map.json`) | MIT ; images © Nintendo / Creatures Inc. / GAME FREAK Inc. |
 | [SpriteCollab](https://github.com/PMDCollab/SpriteCollab) (PMD Collab, [sprites.pmdcollab.org](https://sprites.pmdcollab.org)) | Sprites animés façon Donjon Mystère du « Parc », animations Idle, Walk et Sleep (`wwwroot/images/donjon`, par `outils/images.py donjon`) ; auteurs de chaque sprite dans `wwwroot/images/donjon/credits.txt` | CC BY-NC 4.0 (usage non commercial, auteurs à citer) |
 | [Bootstrap](https://getbootstrap.com) | Mise en page et composants de l'interface (`wwwroot/lib/bootstrap`) | MIT |
+| [Bootstrap Icons](https://icons.getbootstrap.com) | Icônes des menus (dessins SVG dans `wwwroot/app.css`, « Icônes des menus ») | MIT |
 | [ASP.NET Core, Blazor, Identity, Entity Framework Core](https://dotnet.microsoft.com) (Microsoft) | Site, comptes, accès à la base | MIT |
 | [SQLite](https://sqlite.org) | Base de données | Domaine public |
 | [xUnit](https://xunit.net), [coverlet](https://github.com/coverlet-coverage/coverlet) | Tests, couverture des tests (envoyée à SonarCloud) | Apache-2.0, MIT |

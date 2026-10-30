@@ -1,24 +1,41 @@
 ﻿@inherits LayoutComponentBase
 
-<div class="page">
-    <div class="sidebar">
-        <NavMenu />
-    </div>
-
-    <main>
-        <div class="top-row px-4">
+@* Thème Ardoise : son propre cadre (menu repliable, barre du haut). Les autres thèmes : menu latéral classique. *@
+@if (Theme == MonsutaPotaru.Services.SiteThemes.Ardoise)
+{
+    <ArdoiseLayout>
+        <MonsutaPotaru.Components.Account.Shared.PseudoGuard>
+            @Body
+        </MonsutaPotaru.Components.Account.Shared.PseudoGuard>
+    </ArdoiseLayout>
+}
+else
+{
+    <div class="page">
+        <div class="sidebar">
+            <NavMenu />
         </div>
 
-        <article class="content px-4">
-            <MonsutaPotaru.Components.Account.Shared.PseudoGuard>
-                @Body
-            </MonsutaPotaru.Components.Account.Shared.PseudoGuard>
-        </article>
-    </main>
-</div>
+        <main>
+            <div class="top-row px-4">
+            </div>
+
+            <article class="content px-4">
+                <MonsutaPotaru.Components.Account.Shared.PseudoGuard>
+                    @Body
+                </MonsutaPotaru.Components.Account.Shared.PseudoGuard>
+            </article>
+        </main>
+    </div>
+}
 
 <div id="blazor-error-ui" data-nosnippet>
     Une erreur inattendue s'est produite.
     <a href="." class="reload">Recharger</a>
     <span class="dismiss">🗙</span>
 </div>
+
+@code {
+    /// <summary>Clé du thème du compte, transmise par Routes.razor.</summary>
+    [CascadingParameter(Name = "SiteTheme")] private string? Theme { get; set; }
+}

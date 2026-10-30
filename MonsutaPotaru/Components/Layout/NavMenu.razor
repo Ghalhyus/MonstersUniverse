@@ -1,12 +1,7 @@
-﻿@implements IDisposable
+﻿@* Menu des thèmes Classique et Pokédex. Compteurs et adresse de la page : SiteMenuBase (communs au thème Ardoise). *@
+@inherits SiteMenuBase
 
-@using System.Security.Claims
 @using MonsutaPotaru.Services
-@inject NavigationManager NavigationManager
-@inject WalletState Wallet
-@inject FriendService Friends
-@inject TradeHub Trades
-@inject BattleHub Battles
 
 <div class="top-row ps-3 navbar navbar-dark">
     <div class="container-fluid">
@@ -75,9 +70,9 @@
             <details open="@playersOpen">
                 <summary class="nav-link">
                     <span class="bi bi-person-badge-nav-menu" aria-hidden="true"></span> Multijoueurs
-                    @if (pendingRequests + tradeRequests + battleRequests > 0 && !playersOpen)
+                    @if (PlayerRequests > 0 && !playersOpen)
                     {
-                        <span class="badge bg-danger ms-2" title="Demandes d'ami, d'échange et de combat reçues">@(pendingRequests + tradeRequests + battleRequests)</span>
+                        <span class="badge bg-danger ms-2" title="Demandes d'ami, d'échange et de combat reçues">@PlayerRequests</span>
                     }
                 </summary>
                 <div class="nav-subitems">
@@ -160,94 +155,3 @@
         </AuthorizeView>
     </nav>
 </div>
-
-@code {
-    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
-
-    private string? currentUrl;
-
-    /// <summary>Menu « Sauvegardes » ouvert : sur « Mes sauvegardes » ou « Synchronisation 3DS ».</summary>
-    private bool savesOpen => currentUrl is { } url && (url == "sauvegardes" || url.StartsWith("sauvegardes/") || url.StartsWith("sauvegardes?"));
-
-    /// <summary>Menu « Multijoueurs » ouvert : sur la recherche ou les pages d'un joueur.</summary>
-    private bool playersOpen => currentUrl is { } url
-        && (url == "joueurs" || url.StartsWith("joueurs/") || url.StartsWith("joueurs?") || url == "amis" || url.StartsWith("amis?")
-            || url == "echanges" || url.StartsWith("echanges?") || url == "combats" || url.StartsWith("combats?"));
-
-    /// <summary>Menu du pseudo ouvert : sur les paramètres du profil ou les statistiques.</summary>
-    private bool accountOpen => currentUrl is { } url && (url.StartsWith("Account/Manage", StringComparison.OrdinalIgnoreCase) || url == "statistiques");
-
-    private string? userId;
-    private int pendingRequests; // demandes d'ami reçues, relues à chaque navigation
-    private int tradeRequests; // demandes d'échange reçues (en direct, TradeHub)
-    private int battleRequests; // demandes de combat reçues (en direct, BattleHub)
-
-    protected override async Task OnInitializedAsync()
-    {
-        currentUrl = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
-        NavigationManager.LocationChanged += OnLocationChanged;
-        Wallet.Changed += OnWalletChanged;
-        Friends.Changed += OnFriendsChanged;
-        Trades.RequestsChanged += OnTradeRequestsChanged;
-        Battles.RequestsChanged += OnBattleRequestsChanged;
-
-        // Solde du porte-monnaie pour l'utilisateur connecté (rafraîchi par « Inventaire » après un retrait).
-        userId = AuthState is null ? null : (await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (userId is not null)
-        {
-            await Wallet.RefreshAsync(userId);
-            pendingRequests = await Friends.PendingCountAsync(userId);
-            tradeRequests = Trades.Incoming(userId).Count;
-            battleRequests = Battles.Incoming(userId).Count;
-        }
-    }
-
-    private void OnBattleRequestsChanged(string user)
-    {
-        if (user != userId)
-            return;
-        InvokeAsync(() =>
-        {
-            battleRequests = Battles.Incoming(user).Count;
-            StateHasChanged();
-        });
-    }
-
-    private void OnTradeRequestsChanged(string user)
-    {
-        if (user != userId)
-            return;
-        InvokeAsync(() =>
-        {
-            tradeRequests = Trades.Incoming(user).Count;
-            StateHasChanged();
-        });
-    }
-
-    private void OnWalletChanged() => InvokeAsync(StateHasChanged);
-
-    private void OnFriendsChanged() => InvokeAsync(async () =>
-    {
-        if (userId is not null)
-            pendingRequests = await Friends.PendingCountAsync(userId);
-        StateHasChanged();
-    });
-
-    private void OnLocationChanged(object? sender, LocationChangedEventArgs e) => InvokeAsync(async () =>
-    {
-        currentUrl = NavigationManager.ToBaseRelativePath(e.Location);
-        if (userId is not null)
-            pendingRequests = await Friends.PendingCountAsync(userId);
-        StateHasChanged();
-    });
-
-    public void Dispose()
-    {
-        NavigationManager.LocationChanged -= OnLocationChanged;
-        Wallet.Changed -= OnWalletChanged;
-        Friends.Changed -= OnFriendsChanged;
-        Trades.RequestsChanged -= OnTradeRequestsChanged;
-        Battles.RequestsChanged -= OnBattleRequestsChanged;
-    }
-}
-

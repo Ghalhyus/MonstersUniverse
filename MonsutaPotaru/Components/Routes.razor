@@ -1,20 +1,28 @@
 ﻿@using MonsutaPotaru.Components.Account.Shared
-<Router AppAssembly="typeof(Program).Assembly">
-    <Found Context="routeData">
-        <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)">
-            <NotAuthorized>
-                @if (context.User.Identity?.IsAuthenticated == true)
-                {
-                    @* Connecté, mais sans le rôle demandé (page « Administration ») *@
-                    <h1 class="text-danger">Accès refusé</h1>
-                    <p>Tu n'as pas accès à cette page.</p>
-                }
-                else
-                {
-                    <RedirectToLogin />
-                }
-            </NotAuthorized>
-        </AuthorizeRouteView>
-        <FocusOnNavigate RouteData="routeData" Selector="h1" />
-    </Found>
-</Router>
+@* Thème du compte (App.razor), transmis aux mises en page : MainLayout choisit son cadre (Ardoise ou menu classique). *@
+<CascadingValue Name="SiteTheme" Value="Theme" IsFixed="true">
+    <Router AppAssembly="typeof(Program).Assembly">
+        <Found Context="routeData">
+            <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)">
+                <NotAuthorized>
+                    @if (context.User.Identity?.IsAuthenticated == true)
+                    {
+                        @* Connecté, mais sans le rôle demandé (page « Administration ») *@
+                        <h1 class="text-danger">Accès refusé</h1>
+                        <p>Tu n'as pas accès à cette page.</p>
+                    }
+                    else
+                    {
+                        <RedirectToLogin />
+                    }
+                </NotAuthorized>
+            </AuthorizeRouteView>
+            <FocusOnNavigate RouteData="routeData" Selector="h1" />
+        </Found>
+    </Router>
+</CascadingValue>
+
+@code {
+    /// <summary>Clé du thème du compte (<c>SiteThemes</c>), posée par App.razor.</summary>
+    [Parameter] public string? Theme { get; set; }
+}

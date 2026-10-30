@@ -1,0 +1,183 @@
+@* Cadre du thème Ardoise (choisi par MainLayout) : menu latéral sombre repliable en colonne d'icônes, barre du haut avec
+   le fil d'Ariane, le porte-monnaie et le menu du compte. Styles : wwwroot/themes/ardoise.css. Compteurs et adresse de la
+   page : SiteMenuBase (communs au menu des autres thèmes).
+   Doit marcher sans interactivité (pages du compte, rendu statique) : replier le menu, ouvrir une rubrique ou le menu du
+   compte passe par wwwroot/js/app.js, jamais par un @onclick. *@
+@inherits SiteMenuBase
+
+@using MonsutaPotaru.Services
+
+<div class="ardoise">
+    <aside class="ardoise-menu" id="ardoise-menu" aria-label="Menu du site">
+        <a class="ardoise-brand" href="" title="Monsuta Potaru">
+            <span class="ardoise-logo" aria-hidden="true">M</span>
+            <span class="ardoise-label">Monsuta Potaru</span>
+        </a>
+
+        <nav class="ardoise-nav">
+            <NavLink class="ardoise-link" href="" Match="NavLinkMatch.All" title="Accueil">
+                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span><span class="ardoise-label">Accueil</span>
+            </NavLink>
+            <NavLink class="ardoise-link" href="transfert" title="Transfert">
+                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span><span class="ardoise-label">Transfert</span>
+            </NavLink>
+            <NavLink class="ardoise-link" href="collection" title="Ma collection">
+                <span class="bi bi-grid-nav-menu" aria-hidden="true"></span><span class="ardoise-label">Ma collection</span>
+            </NavLink>
+            <NavLink class="ardoise-link" href="parc" title="Parc">
+                <span class="bi bi-tree-nav-menu" aria-hidden="true"></span><span class="ardoise-label">Parc</span>
+            </NavLink>
+            <NavLink class="ardoise-link" href="inventaire" title="Inventaire">
+                <span class="bi bi-bag-nav-menu" aria-hidden="true"></span><span class="ardoise-label">Inventaire</span>
+            </NavLink>
+            <NavLink class="ardoise-link" href="livingdex" title="Living dex">
+                <span class="bi bi-book-nav-menu" aria-hidden="true"></span><span class="ardoise-label">Living dex</span>
+            </NavLink>
+
+            @* Rubriques : ouvertes d'elles-mêmes sur l'une de leurs pages (classe « ouvert »), ouvertes et fermées d'un clic
+               (app.js). Menu replié : leurs pages s'affichent à côté, au survol. *@
+            <div class="ardoise-group @(savesOpen ? "ouvert" : "")">
+                <button type="button" class="ardoise-link ardoise-group-title" aria-expanded="@(savesOpen ? "true" : "false")" title="Sauvegardes">
+                    <span class="bi bi-save-nav-menu" aria-hidden="true"></span><span class="ardoise-label">Sauvegardes</span>
+                </button>
+                <div class="ardoise-subitems">
+                    <span class="ardoise-subitems-title">Sauvegardes</span>
+                    <NavLink class="ardoise-link" href="sauvegardes" Match="NavLinkMatch.All">
+                        <span class="ardoise-label">Mes sauvegardes</span>
+                    </NavLink>
+                    <NavLink class="ardoise-link" href="sauvegardes/3ds">
+                        <span class="ardoise-label">Synchronisation 3DS</span>
+                    </NavLink>
+                </div>
+            </div>
+            <div class="ardoise-group @(playersOpen ? "ouvert" : "")">
+                <button type="button" class="ardoise-link ardoise-group-title" aria-expanded="@(playersOpen ? "true" : "false")" title="Multijoueurs">
+                    <span class="bi bi-person-badge-nav-menu" aria-hidden="true"></span><span class="ardoise-label">Multijoueurs</span>
+                    @if (PlayerRequests > 0)
+                    {
+                        <span class="ardoise-badge ardoise-group-badge" title="Demandes d'ami, d'échange et de combat reçues">@PlayerRequests</span>
+                    }
+                </button>
+                <div class="ardoise-subitems">
+                    <span class="ardoise-subitems-title">Multijoueurs</span>
+                    <NavLink class="ardoise-link" href="joueurs">
+                        <span class="ardoise-label">Rechercher un joueur</span>
+                    </NavLink>
+                    <NavLink class="ardoise-link" href="amis">
+                        <span class="ardoise-label">Amis</span>
+                        @if (pendingRequests > 0)
+                        {
+                            <span class="ardoise-badge" title="Demandes d'ami reçues">@pendingRequests</span>
+                        }
+                    </NavLink>
+                    <NavLink class="ardoise-link" href="echanges">
+                        <span class="ardoise-label">Échanges</span>
+                        @if (tradeRequests > 0)
+                        {
+                            <span class="ardoise-badge" title="Demandes d'échange reçues">@tradeRequests</span>
+                        }
+                    </NavLink>
+                    <NavLink class="ardoise-link" href="combats">
+                        <span class="ardoise-label">Combats</span>
+                        @if (battleRequests > 0)
+                        {
+                            <span class="ardoise-badge" title="Demandes de combat reçues">@battleRequests</span>
+                        }
+                    </NavLink>
+                </div>
+            </div>
+
+            <AuthorizeView Roles="@MonsutaPotaru.Data.SiteRoles.Admin">
+                <NavLink class="ardoise-link" href="administration" title="Administration">
+                    <span class="bi bi-lock-nav-menu" aria-hidden="true"></span><span class="ardoise-label">Administration</span>
+                </NavLink>
+            </AuthorizeView>
+        </nav>
+
+        <button type="button" class="ardoise-link ardoise-collapse" title="Replier ou déplier le menu">
+            <span class="ardoise-collapse-icon" aria-hidden="true"></span><span class="ardoise-label">Replier le menu</span>
+        </button>
+    </aside>
+    @* Téléphone : le menu s'ouvre par-dessus la page ; un clic à côté le referme (app.js). *@
+    <div class="ardoise-backdrop" aria-hidden="true"></div>
+
+    <div class="ardoise-main">
+        <header class="ardoise-topbar">
+            <button type="button" class="ardoise-burger" aria-controls="ardoise-menu" aria-label="Ouvrir le menu"></button>
+
+            <nav class="ardoise-breadcrumb" aria-label="Fil d'Ariane">
+                <ol>
+                    <li>
+                        <a href="" title="Accueil"><span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span><span class="visually-hidden">Accueil</span></a>
+                    </li>
+                    @{ var crumbs = Breadcrumbs.For(currentUrl); }
+                    @for (var i = 0; i < crumbs.Count; i++)
+                    {
+                        var crumb = crumbs[i];
+                        <li>
+                            @if (crumb.Href is null)
+                            {
+                                <span aria-current="@(i == crumbs.Count - 1 ? "page" : null)">@crumb.Label</span>
+                            }
+                            else
+                            {
+                                <a href="@crumb.Href">@crumb.Label</a>
+                            }
+                        </li>
+                    }
+                </ol>
+            </nav>
+
+            <div class="ardoise-topbar-end">
+                <AuthorizeView>
+                    <Authorized>
+                        @if (Wallet.Balance is { } balance)
+                        {
+                            <a class="ardoise-wallet" href="inventaire" title="Ton porte-monnaie (Inventaire)">
+                                <span class="bi bi-bag-nav-menu" aria-hidden="true"></span>@InventoryService.FormatMoney(balance)
+                            </a>
+                        }
+                        @* Menu du compte : élément details (marche sans interactivité) ; app.js le referme après un clic. *@
+                        <details class="ardoise-account">
+                            <summary title="Ton compte">
+                                <span class="ardoise-avatar" aria-hidden="true">@Initial(context.User.Identity?.Name)</span>
+                                <span class="ardoise-account-name">@context.User.Identity?.Name</span>
+                            </summary>
+                            <div class="ardoise-account-menu">
+                                <a href="Account/Manage">
+                                    <span class="bi bi-person-nav-menu" aria-hidden="true"></span> Paramètres du profil
+                                </a>
+                                <a href="statistiques">
+                                    <span class="bi bi-grid-nav-menu" aria-hidden="true"></span> Statistiques
+                                </a>
+                                <form action="Account/Logout" method="post">
+                                    <AntiforgeryToken />
+                                    <input type="hidden" name="ReturnUrl" value="@currentUrl" />
+                                    <button type="submit">
+                                        <span class="bi bi-arrow-bar-left-nav-menu" aria-hidden="true"></span> Déconnexion
+                                    </button>
+                                </form>
+                            </div>
+                        </details>
+                    </Authorized>
+                    <NotAuthorized>
+                        <a class="btn btn-sm btn-outline-secondary" href="Account/Register">Inscription</a>
+                        <a class="btn btn-sm btn-primary" href="Account/Login">Connexion</a>
+                    </NotAuthorized>
+                </AuthorizeView>
+            </div>
+        </header>
+
+        <main class="ardoise-content">
+            @ChildContent
+        </main>
+    </div>
+</div>
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>Première lettre du pseudo, en majuscule : la pastille du compte.</summary>
+    private static string Initial(string? pseudo) =>
+        string.IsNullOrEmpty(pseudo) ? "?" : char.ToUpper(pseudo[0], System.Globalization.CultureInfo.GetCultureInfo("fr-FR")).ToString();
+}

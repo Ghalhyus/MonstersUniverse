@@ -1,6 +1,6 @@
 ﻿@inject MonsutaPotaru.Services.AccountService Accounts
 <!DOCTYPE html>
-<html lang="fr" data-theme="@theme">
+<html lang="fr" data-theme="@theme" data-menu="@(menuCollapsed ? "replie" : null)">
 
 <head>
     <meta charset="utf-8" />
@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="@Assets["lib/bootstrap/dist/css/bootstrap.min.css"]" />
     <link rel="stylesheet" href="@Assets["app.css"]" />
     <link rel="stylesheet" href="@Assets["themes/pokedex.css"]" />
+    <link rel="stylesheet" href="@Assets["themes/ardoise.css"]" />
     <link rel="stylesheet" href="@Assets["MonsutaPotaru.styles.css"]" />
     @* Scripts du site : dans un fichier, la CSP interdit les scripts écrits dans la page (SecurityHeaders.cs) *@
     <script src="@Assets["js/app.js"]"></script>
@@ -17,7 +18,7 @@
 </head>
 
 <body>
-    <Routes @rendermode="PageRenderMode" />
+    <Routes Theme="@theme" @rendermode="PageRenderMode" />
     <script src="_framework/blazor.web.js"></script>
 </body>
 
@@ -29,9 +30,16 @@
 
     private string theme = MonsutaPotaru.Services.SiteThemes.Classic;
 
+    // Menu du thème Ardoise replié en colonne d'icônes : choix gardé dans un cookie (posé par wwwroot/js/app.js), lu ici
+    // pour que la page arrive déjà dans le bon état, sans menu qui se replie sous les yeux.
+    private bool menuCollapsed;
+
     // Thème du compte, posé sur la page dès le rendu du serveur (pas de passage par l'ancien thème).
-    protected override async Task OnInitializedAsync() =>
+    protected override async Task OnInitializedAsync()
+    {
         theme = await Accounts.ThemeAsync(HttpContext.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value);
+        menuCollapsed = HttpContext.Request.Cookies["menu"] == "replie";
+    }
 
     private IComponentRenderMode? PageRenderMode =>
         HttpContext.AcceptsInteractiveRouting() ? InteractiveServer : null;

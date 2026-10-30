@@ -38,6 +38,15 @@ README : « Comptes », « Administration », « Thèmes ».
   orange) doit y recevoir sa version.
 - L'utilisateur veut du **sobre** : thème trop chargé refusé (fond rayé, pastilles et bordures épaisses partout) ; rouge
   du Pokédex `#c2323d` (`#dc0a2d` trop vif).
+- **Ardoise** : inspiré de l'interface d'un logiciel de gestion, mais **aucune référence à ce logiciel** nulle part (code,
+  commentaires, textes, README). Seul thème à cadre propre (`ArdoiseLayout`, choisi par `MainLayout` via la valeur en
+  cascade `SiteTheme` de `Routes.razor`) : un lien ou une rubrique ajoutés au menu vont dans `NavMenu` **et**
+  `ArdoiseLayout`, une nouvelle page dans `Breadcrumbs.For` (sinon fil d'Ariane vide), un compteur dans `SiteMenuBase`.
+- Le cadre Ardoise sert aussi aux pages du compte (rendu statique) : aucun `@onclick` dedans, tout par `app.js`. La
+  classe `ouvert` d'une rubrique est posée par Blazor (page de la rubrique) puis changée par `app.js` : Blazor ne la
+  réécrit que si sa propre valeur change.
+- Icônes des menus : dans `app.css` (globales), plus dans `NavMenu.razor.css` ; blanches, `filter: invert(...)` sur fond clair.
+- Test du menu replié : cookie `menu=replie` ; le survol d'une rubrique ne se vérifie qu'avec `computer` `hover` + capture.
 
 ## Tests
 - `AccountServiceTests` monte Identity comme `Program.cs` (`AccountService.ConfigureIdentity`) sur la base de test.

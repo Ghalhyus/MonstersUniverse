@@ -23,6 +23,45 @@ document.addEventListener("click", e => {
     document.querySelector(".navbar-toggler")?.click();
 });
 
+// Cadre du thème Ardoise (ArdoiseLayout.razor) : tout passe par ici, pour marcher aussi sur les pages du compte (rendu
+// statique, sans Blazor interactif).
+// - « Replier le menu » : attribut data-menu="replie" de la page, gardé dans un cookie qu'App.razor relit (la page
+//   suivante arrive déjà repliée) ;
+// - une rubrique (Sauvegardes, Multijoueurs) s'ouvre et se ferme d'un clic (classe « ouvert ») ;
+// - téléphone : le bouton de la barre du haut ouvre le menu par-dessus la page (data-menu-ouvert) ; un clic sur un lien
+//   ou à côté le referme ;
+// - le menu du compte (élément details) se referme après un clic dedans ou à côté, et avec Échap.
+document.addEventListener("click", e => {
+    if (!(e.target instanceof Element)) return;
+    const root = document.documentElement;
+    for (const account of document.querySelectorAll(".ardoise-account[open]")) {
+        if (!account.contains(e.target) || e.target.closest(".ardoise-account-menu a, .ardoise-account-menu button"))
+            account.open = false;
+    }
+    if (e.target.closest(".ardoise-collapse")) {
+        const collapse = root.dataset.menu !== "replie";
+        if (collapse) root.dataset.menu = "replie"; else delete root.dataset.menu;
+        document.cookie = collapse ? "menu=replie; path=/; max-age=31536000; samesite=lax" : "menu=; path=/; max-age=0; samesite=lax";
+        return;
+    }
+    const groupTitle = e.target.closest(".ardoise-group-title");
+    if (groupTitle) {
+        const open = groupTitle.parentElement.classList.toggle("ouvert");
+        groupTitle.setAttribute("aria-expanded", open ? "true" : "false");
+        return;
+    }
+    if (e.target.closest(".ardoise-burger")) {
+        root.toggleAttribute("data-menu-ouvert");
+        return;
+    }
+    if (e.target.closest(".ardoise-backdrop") || e.target.closest(".ardoise-menu a")) root.removeAttribute("data-menu-ouvert");
+});
+document.addEventListener("keydown", e => {
+    if (e.key !== "Escape") return;
+    document.documentElement.removeAttribute("data-menu-ouvert");
+    for (const account of document.querySelectorAll(".ardoise-account[open]")) account.open = false;
+});
+
 // Téléchargement d'un fichier envoyé par le serveur (sauvegarde modifiée, .pk5...).
 window.downloadFileFromStream = async (fileName, streamRef) => {
     const blob = new Blob([await streamRef.arrayBuffer()]);

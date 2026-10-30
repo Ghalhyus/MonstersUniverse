@@ -1,0 +1,592 @@
+/*
+ * Thème « Ardoise » (Services/SiteThemes.cs) : sobre, comme un outil de gestion. Menu latéral ardoise repliable en colonne
+ * d'icônes, barre du haut blanche (fil d'Ariane, porte-monnaie, menu du compte), fond gris clair, contenus en blocs blancs
+ * à bordure fine, l'orange pour les accents (bouton principal, lien du menu choisi, onglet choisi).
+ * Son cadre est un composant à lui (Components/Layout/ArdoiseLayout.razor, choisi par MainLayout) : ses classes
+ * commencent par « ardoise- » ; le reste (contenu des pages, dialogues compris) est rangé sous [data-theme="ardoise"].
+ * Menu replié : html[data-menu="replie"] (cookie lu par App.razor) ; menu ouvert sur téléphone : html[data-menu-ouvert]
+ * (wwwroot/js/app.js).
+ */
+
+[data-theme="ardoise"] {
+    --ard-menu: #232d3b;
+    --ard-menu-deep: #1a222d;
+    --ard-menu-text: #b9c2cf;
+    --ard-menu-hover: rgba(255, 255, 255, .07);
+    --ard-menu-active: rgba(255, 255, 255, .12);
+    --ard-menu-width: 15.5rem;
+    --ard-accent: #e8751a;
+    --ard-accent-dark: #c9620f;
+    --ard-accent-ink: #a5520c; /* texte orange lisible sur fond clair */
+    --ard-accent-soft: #fdf0e4;
+    --ard-accent-ring: rgba(232, 117, 26, .3);
+    --ard-bg: #f2f4f7;
+    --ard-line: #dfe3e9;
+    --ard-head: #f6f7f9;
+    --ard-ink: #1f2933;
+    --ard-muted: #66727f;
+    --ard-link: #1d6fa5;
+}
+[data-theme="ardoise"] body { background-color: var(--ard-bg); color: var(--ard-ink); }
+
+/* ---------- Cadre ---------- */
+
+.ardoise { display: flex; min-height: 100vh; }
+
+/* Icônes blanches (app.css, « Icônes des menus ») */
+.ardoise .bi {
+    flex: none;
+    display: inline-block;
+    width: 1.1rem;
+    height: 1.1rem;
+    background-size: cover;
+    opacity: .85;
+}
+
+/* Menu latéral */
+.ardoise-menu {
+    position: sticky;
+    top: 0;
+    z-index: 20; /* ses rubriques dépliées au survol (menu replié) passent devant la page */
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    width: var(--ard-menu-width);
+    height: 100vh;
+    background: var(--ard-menu);
+    color: var(--ard-menu-text);
+}
+.ardoise-brand {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: .65rem;
+    height: 3.5rem;
+    padding: 0 .85rem;
+    background: var(--ard-menu-deep);
+    color: #fff;
+    font-weight: 600;
+    text-decoration: none;
+    white-space: nowrap;
+    overflow: hidden;
+}
+.ardoise-brand:hover { color: #fff; }
+.ardoise-logo {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 2rem;
+    height: 2rem;
+    border-radius: .4rem;
+    background: var(--ard-accent);
+    color: #fff;
+    font-weight: 700;
+}
+.ardoise-nav {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: .5rem;
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+.ardoise-link {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    width: 100%;
+    min-height: 2.5rem;
+    padding: 0 .6rem;
+    border: 0;
+    border-radius: .35rem;
+    background: none;
+    color: var(--ard-menu-text);
+    font-size: .9rem;
+    text-align: left;
+    text-decoration: none;
+    white-space: nowrap;
+}
+.ardoise-link:hover { background: var(--ard-menu-hover); color: #fff; }
+.ardoise-link:focus-visible { outline: 2px solid var(--ard-accent); outline-offset: -2px; }
+a.ardoise-link.active {
+    background: var(--ard-menu-active);
+    color: #fff;
+    box-shadow: inset 3px 0 0 var(--ard-accent);
+}
+.ardoise-label { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+.ardoise-badge {
+    flex: none;
+    display: inline-grid;
+    place-items: center;
+    min-width: 1.25rem;
+    height: 1.25rem;
+    padding: 0 .35rem;
+    border-radius: .65rem;
+    background: var(--ard-accent);
+    color: #fff;
+    font-size: .72rem;
+    font-weight: 700;
+    line-height: 1;
+}
+
+/* Rubriques (Sauvegardes, Multijoueurs) : flèche à droite, tournée quand elles sont ouvertes */
+.ardoise-group-title::after {
+    content: "";
+    flex: none;
+    width: .45rem;
+    height: .45rem;
+    margin: 0 .2rem 0 .25rem;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    transform: rotate(-45deg);
+    transition: transform .15s;
+}
+.ardoise-group.ouvert > .ardoise-group-title::after { transform: rotate(45deg); }
+.ardoise-group.ouvert .ardoise-group-badge { display: none; } /* ouverte : les pastilles sont sur ses pages */
+.ardoise-subitems {
+    display: none;
+    flex-direction: column;
+    gap: 2px;
+    padding: 2px 0 4px 1.85rem; /* sous le nom de la rubrique */
+}
+.ardoise-group.ouvert > .ardoise-subitems { display: flex; }
+.ardoise-subitems .ardoise-link { min-height: 2.1rem; font-size: .85rem; }
+.ardoise-subitems-title { display: none; }
+
+/* « Replier le menu » : en bas, double chevron tourné quand le menu est replié */
+.ardoise-collapse {
+    flex: none;
+    width: auto;
+    margin: .5rem;
+    border-top: 1px solid rgba(255, 255, 255, .08);
+    border-radius: 0 0 .35rem .35rem;
+}
+.ardoise-collapse-icon { position: relative; flex: none; width: 1.1rem; height: 1.1rem; }
+.ardoise-collapse-icon::before,
+.ardoise-collapse-icon::after {
+    content: "";
+    position: absolute;
+    top: .3rem;
+    width: .45rem;
+    height: .45rem;
+    border-left: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    transform: rotate(45deg);
+}
+.ardoise-collapse-icon::before { left: .2rem; }
+.ardoise-collapse-icon::after { left: .55rem; }
+
+/* Partie droite : barre du haut et page */
+.ardoise-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.ardoise-topbar {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    height: 3.5rem; /* app.css place les barres collantes des pages juste dessous (3,5 rem) */
+    padding: 0 1.5rem 0 2rem;
+    background: #fff;
+    border-bottom: 1px solid var(--ard-line);
+}
+.ardoise-burger { display: none; }
+
+/* Fil d'Ariane */
+.ardoise-breadcrumb { flex: 1; min-width: 0; font-size: .9rem; }
+.ardoise-breadcrumb ol {
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    white-space: nowrap;
+}
+.ardoise-breadcrumb li { display: flex; align-items: center; gap: .4rem; min-width: 0; }
+.ardoise-breadcrumb li + li::before { content: "›"; color: #a3acb8; }
+.ardoise-breadcrumb a { color: var(--ard-muted); text-decoration: none; }
+.ardoise-breadcrumb a:hover { color: var(--ard-accent-ink); }
+.ardoise-breadcrumb span { overflow: hidden; text-overflow: ellipsis; color: var(--ard-muted); }
+.ardoise-breadcrumb [aria-current="page"] { color: var(--ard-ink); font-weight: 600; }
+.ardoise-breadcrumb .bi { filter: invert(.55); opacity: 1; vertical-align: -2px; }
+
+/* Porte-monnaie et menu du compte */
+.ardoise-topbar-end { flex: none; display: flex; align-items: center; gap: .75rem; }
+.ardoise-wallet {
+    display: inline-flex;
+    align-items: center;
+    gap: .45rem;
+    padding: .25rem .75rem;
+    border: 1px solid var(--ard-line);
+    border-radius: 1rem;
+    color: var(--ard-ink);
+    font-size: .85rem;
+    font-variant-numeric: tabular-nums;
+    text-decoration: none;
+    white-space: nowrap;
+}
+.ardoise-wallet:hover { border-color: var(--ard-accent); color: var(--ard-ink); }
+.ardoise-wallet .bi,
+.ardoise-account-menu .bi { filter: invert(.6); opacity: 1; width: 1rem; height: 1rem; }
+.ardoise-account { position: relative; }
+.ardoise-account summary {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .25rem .5rem;
+    border-radius: .4rem;
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+}
+.ardoise-account summary::-webkit-details-marker { display: none; }
+.ardoise-account summary:hover,
+.ardoise-account[open] summary { background: var(--ard-bg); }
+.ardoise-account summary::after {
+    content: "";
+    width: .4rem;
+    height: .4rem;
+    margin: 0 .15rem 0 .1rem;
+    border-right: 2px solid var(--ard-muted);
+    border-bottom: 2px solid var(--ard-muted);
+    transform: translateY(-2px) rotate(45deg);
+}
+.ardoise-avatar {
+    display: grid;
+    place-items: center;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 50%;
+    background: var(--ard-accent);
+    color: #fff;
+    font-weight: 700;
+}
+.ardoise-account-name { font-size: .9rem; font-weight: 600; max-width: 12rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ardoise-account-menu {
+    position: absolute;
+    top: calc(100% + .4rem);
+    right: 0;
+    min-width: 14rem;
+    padding: .35rem;
+    background: #fff;
+    border: 1px solid var(--ard-line);
+    border-radius: .5rem;
+    box-shadow: 0 .5rem 1.5rem rgba(16, 24, 40, .12);
+}
+.ardoise-account-menu a,
+.ardoise-account-menu button {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    width: 100%;
+    padding: .5rem .7rem;
+    border: 0;
+    border-radius: .35rem;
+    background: none;
+    color: var(--ard-ink);
+    font-size: .9rem;
+    text-align: left;
+    text-decoration: none;
+}
+.ardoise-account-menu a:hover,
+.ardoise-account-menu button:hover { background: var(--ard-bg); color: var(--ard-ink); }
+.ardoise-account-menu form { margin: .25rem 0 0; padding-top: .25rem; border-top: 1px solid var(--ard-line); }
+
+.ardoise-content { flex: 1; padding: 1.25rem 1.5rem 2rem 2rem; }
+
+/* Menu replié en colonne d'icônes (grand écran seulement) : les noms disparaissent (bulle au survol : title), les
+   pages d'une rubrique s'affichent à côté au survol. */
+@media (min-width: 641px) {
+    html[data-menu="replie"] .ardoise { --ard-menu-width: 3.75rem; }
+    html[data-menu="replie"] .ardoise-label,
+    html[data-menu="replie"] .ardoise-group-title::after { display: none; }
+    html[data-menu="replie"] .ardoise-brand { justify-content: center; padding: 0; }
+    html[data-menu="replie"] .ardoise-nav { overflow: visible; }
+    html[data-menu="replie"] .ardoise-link { justify-content: center; padding: 0; }
+    html[data-menu="replie"] .ardoise-collapse-icon { transform: rotate(180deg); }
+    html[data-menu="replie"] .ardoise-group { position: relative; }
+    html[data-menu="replie"] .ardoise-group-badge {
+        position: absolute;
+        top: .15rem;
+        right: .1rem;
+        min-width: 1rem;
+        height: 1rem;
+        padding: 0 .25rem;
+        font-size: .65rem;
+    }
+    html[data-menu="replie"] .ardoise-group.ouvert .ardoise-group-badge { display: inline-grid; }
+    html[data-menu="replie"] .ardoise-group.ouvert > .ardoise-subitems { display: none; }
+    html[data-menu="replie"] .ardoise-group:hover > .ardoise-subitems,
+    html[data-menu="replie"] .ardoise-group:focus-within > .ardoise-subitems {
+        position: absolute;
+        top: 0;
+        left: 100%;
+        display: flex;
+        min-width: 13rem;
+        padding: .35rem;
+        background: var(--ard-menu);
+        border-radius: 0 .4rem .4rem 0;
+        box-shadow: .5rem .5rem 1.5rem rgba(0, 0, 0, .25);
+    }
+    html[data-menu="replie"] .ardoise-subitems .ardoise-link { justify-content: flex-start; padding: 0 .6rem; }
+    html[data-menu="replie"] .ardoise-subitems .ardoise-label { display: block; }
+    html[data-menu="replie"] .ardoise-subitems-title {
+        display: block;
+        padding: .35rem .6rem .45rem;
+        color: #fff;
+        font-size: .8rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+    }
+}
+
+/* Téléphone : le menu s'ouvre par-dessus la page avec le bouton de la barre du haut ; le fil d'Ariane ne garde que la
+   page affichée. */
+@media (max-width: 640.98px) {
+    .ardoise-menu {
+        position: fixed;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        z-index: 1045;
+        width: 16rem;
+        height: auto;
+        transform: translateX(-100%);
+        transition: transform .2s;
+    }
+    html[data-menu-ouvert] .ardoise-menu { transform: none; box-shadow: .5rem 0 1.5rem rgba(0, 0, 0, .3); }
+    html[data-menu-ouvert] .ardoise-backdrop { position: fixed; inset: 0; z-index: 1044; background: rgba(15, 20, 28, .45); }
+    .ardoise-collapse { display: none; }
+    .ardoise-burger {
+        display: block;
+        flex: none;
+        width: 2.25rem;
+        height: 2.25rem;
+        border: 1px solid var(--ard-line);
+        border-radius: .4rem;
+        background:
+            linear-gradient(var(--ard-ink), var(--ard-ink)) center calc(50% - 6px) / 1.1rem 2px no-repeat,
+            linear-gradient(var(--ard-ink), var(--ard-ink)) center / 1.1rem 2px no-repeat,
+            linear-gradient(var(--ard-ink), var(--ard-ink)) center calc(50% + 6px) / 1.1rem 2px no-repeat,
+            #fff;
+    }
+    .ardoise-topbar { gap: .6rem; padding: 0 .75rem; }
+    .ardoise-breadcrumb li:not(:first-child):not(:last-child) { display: none; }
+    .ardoise-account-name { display: none; }
+    .ardoise-content { padding: 1rem .75rem 1.5rem; }
+}
+
+/* ---------- Contenu des pages ---------- */
+
+[data-theme="ardoise"] main {
+    --bs-primary: var(--ard-accent);
+    --bs-primary-rgb: 232, 117, 26;
+    --bs-link-color-rgb: 29, 111, 165;
+    --bs-link-hover-color-rgb: 165, 82, 12;
+    color: var(--ard-ink);
+}
+[data-theme="ardoise"] main h1 { font-size: 1.65rem; font-weight: 600; margin-bottom: 1rem; }
+[data-theme="ardoise"] main h2,
+[data-theme="ardoise"] main h3 { font-weight: 600; }
+
+/* Boutons : le principal en orange, les autres gris ardoise (app.css fixe en dur .btn-primary, .btn-link et le focus) */
+[data-theme="ardoise"] main .btn-primary,
+.ardoise-topbar .btn-primary {
+    --bs-btn-color: #fff;
+    --bs-btn-bg: var(--ard-accent);
+    --bs-btn-border-color: var(--ard-accent);
+    --bs-btn-hover-color: #fff;
+    --bs-btn-hover-bg: var(--ard-accent-dark);
+    --bs-btn-hover-border-color: var(--ard-accent-dark);
+    --bs-btn-active-color: #fff;
+    --bs-btn-active-bg: var(--ard-accent-ink);
+    --bs-btn-active-border-color: var(--ard-accent-ink);
+    --bs-btn-disabled-bg: var(--ard-accent);
+    --bs-btn-disabled-border-color: var(--ard-accent);
+    color: var(--bs-btn-color);
+    background-color: var(--bs-btn-bg);
+    border-color: var(--bs-btn-border-color);
+}
+[data-theme="ardoise"] main .btn-primary:hover,
+.ardoise-topbar .btn-primary:hover {
+    color: var(--bs-btn-hover-color);
+    background-color: var(--bs-btn-hover-bg);
+    border-color: var(--bs-btn-hover-border-color);
+}
+[data-theme="ardoise"] main .btn-outline-primary,
+[data-theme="ardoise"] main .btn-outline-secondary,
+.ardoise-topbar .btn-outline-secondary {
+    --bs-btn-color: #3d4a59;
+    --bs-btn-bg: #fff;
+    --bs-btn-border-color: #c5ccd5;
+    --bs-btn-hover-color: var(--ard-ink);
+    --bs-btn-hover-bg: #eef1f4;
+    --bs-btn-hover-border-color: #b3bcc7;
+    --bs-btn-active-color: var(--ard-ink);
+    --bs-btn-active-bg: #e3e7ec;
+    --bs-btn-active-border-color: #b3bcc7;
+    --bs-btn-disabled-color: #8c96a2;
+    --bs-btn-disabled-bg: #fff;
+    --bs-btn-disabled-border-color: #d5dae1;
+}
+/* Bouton de choix enfoncé (filtres, modes) : marqué d'orange */
+[data-theme="ardoise"] main .btn-check:checked + .btn-outline-primary,
+[data-theme="ardoise"] main .btn-outline-primary.active {
+    color: var(--ard-accent-ink);
+    background-color: var(--ard-accent-soft);
+    border-color: var(--ard-accent);
+}
+[data-theme="ardoise"] main .btn-secondary {
+    --bs-btn-bg: #4a5868;
+    --bs-btn-border-color: #4a5868;
+    --bs-btn-hover-bg: #3a4655;
+    --bs-btn-hover-border-color: #3a4655;
+}
+[data-theme="ardoise"] main .btn-light {
+    --bs-btn-bg: #fff;
+    --bs-btn-border-color: var(--ard-line);
+    --bs-btn-hover-bg: #eef1f4;
+    --bs-btn-hover-border-color: #c5ccd5;
+}
+[data-theme="ardoise"] main .btn-link {
+    --bs-btn-color: var(--ard-link);
+    --bs-btn-hover-color: var(--ard-accent-ink);
+    color: var(--bs-btn-color);
+}
+[data-theme="ardoise"] main .btn-link:hover { color: var(--bs-btn-hover-color); }
+[data-theme="ardoise"] main .btn:focus,
+[data-theme="ardoise"] main .btn:active:focus,
+[data-theme="ardoise"] main .btn:focus-visible { box-shadow: 0 0 0 .2rem var(--ard-accent-ring); }
+
+/* Liens (app.css les fixe en bleu) */
+[data-theme="ardoise"] main a:not(.btn):not(.nav-link):not(.livingdex-card) { color: var(--ard-link); }
+[data-theme="ardoise"] main a:not(.btn):not(.nav-link):not(.livingdex-card):hover { color: var(--ard-accent-ink); }
+
+/* Onglets : soulignés d'orange, sans cadre */
+[data-theme="ardoise"] main .nav-tabs { border-bottom: 1px solid var(--ard-line); gap: .25rem; }
+[data-theme="ardoise"] main .nav-tabs .nav-link {
+    margin-bottom: -1px;
+    border: 0;
+    border-bottom: 3px solid transparent;
+    border-radius: 0;
+    background: none;
+    color: var(--ard-muted);
+    font-weight: 500;
+}
+[data-theme="ardoise"] main .nav-tabs .nav-link:hover { color: var(--ard-ink); border-bottom-color: #c5ccd5; }
+[data-theme="ardoise"] main .nav-tabs .nav-link.active { color: var(--ard-ink); border-bottom-color: var(--ard-accent); font-weight: 600; }
+/* Menu de « Mon compte » */
+[data-theme="ardoise"] main .nav-pills .nav-link { color: #3d4a59; }
+[data-theme="ardoise"] main .nav-pills .nav-link:hover { background: #e9ecf0; }
+[data-theme="ardoise"] main .nav-pills .nav-link.active {
+    color: var(--ard-accent-ink);
+    background-color: var(--ard-accent-soft);
+    box-shadow: inset 3px 0 0 var(--ard-accent);
+    font-weight: 600;
+}
+
+/* Champs : focus orange */
+[data-theme="ardoise"] main .form-control:focus,
+[data-theme="ardoise"] main .form-select:focus,
+[data-theme="ardoise"] main .form-check-input:focus {
+    border-color: var(--ard-accent);
+    box-shadow: 0 0 0 .2rem var(--ard-accent-ring);
+}
+[data-theme="ardoise"] main .form-check-input:checked { background-color: var(--ard-accent); border-color: var(--ard-accent); }
+[data-theme="ardoise"] main .form-range::-webkit-slider-thumb { background-color: var(--ard-accent); }
+[data-theme="ardoise"] main .form-range::-moz-range-thumb { background-color: var(--ard-accent); }
+[data-theme="ardoise"] main .progress { --bs-progress-bg: #e3e7ec; --bs-progress-bar-bg: var(--ard-accent); }
+
+/* Blocs : cartes blanches à bordure fine, en-tête blanc séparé d'un trait */
+[data-theme="ardoise"] main .card {
+    --bs-card-bg: #fff;
+    --bs-card-border-color: var(--ard-line);
+    --bs-card-border-radius: .5rem;
+    --bs-card-inner-border-radius: calc(.5rem - 1px);
+    --bs-card-cap-bg: #fff;
+    box-shadow: 0 1px 2px rgba(16, 24, 40, .05);
+}
+[data-theme="ardoise"] main .card-header { font-weight: 600; border-bottom-color: var(--ard-line); }
+[data-theme="ardoise"] main .journal-panel .card-header { background: #fff; }
+/* Dialogues et fiche d'un Pokémon : un bloc surélevé, liseré orange en haut */
+[data-theme="ardoise"] main .dialog-panel.card,
+[data-theme="ardoise"] main .collection-dialog > .card {
+    border-top: 3px solid var(--ard-accent);
+    box-shadow: 0 1rem 2.5rem rgba(16, 24, 40, .2);
+}
+
+/* Listes des panneaux */
+[data-theme="ardoise"] main .list-group {
+    --bs-list-group-border-color: var(--ard-line);
+    --bs-list-group-action-hover-bg: var(--ard-head);
+    --bs-list-group-active-color: var(--ard-accent-ink);
+    --bs-list-group-active-bg: var(--ard-accent-soft);
+    --bs-list-group-active-border-color: var(--ard-line);
+}
+[data-theme="ardoise"] main .list-group-item-action:not(:disabled):hover { box-shadow: inset 3px 0 0 var(--ard-accent); }
+
+/* Tableaux : un bloc blanc, en-tête gris clair */
+[data-theme="ardoise"] main .table {
+    --bs-table-bg: #fff;
+    --bs-table-border-color: var(--ard-line);
+    --bs-table-hover-bg: var(--ard-head);
+    border-collapse: separate;
+    border-spacing: 0;
+    overflow: hidden;
+    border: 1px solid var(--ard-line);
+    border-radius: .5rem;
+}
+[data-theme="ardoise"] main .table > thead th {
+    color: #3d4a59;
+    background: var(--ard-head);
+    font-size: .85rem;
+    font-weight: 600;
+}
+[data-theme="ardoise"] main .table > tbody > tr:last-child > td { border-bottom: 0; }
+[data-theme="ardoise"] main .table > * > tr > :first-child { padding-left: .75rem; }
+[data-theme="ardoise"] main .table > * > tr > :last-child { padding-right: .75rem; }
+[data-theme="ardoise"] main .table > tbody > tr.table-active > td { --bs-table-bg-state: var(--ard-accent-soft); }
+[data-theme="ardoise"] main .table > tbody > tr.table-active > td:first-child { box-shadow: inset 3px 0 0 var(--ard-accent); }
+
+/* Objets de l'inventaire */
+[data-theme="ardoise"] main .item-tile { background: #fff; border-color: var(--ard-line); }
+[data-theme="ardoise"] main .item-tile-button:hover,
+[data-theme="ardoise"] main .item-tile-button.selected { border-color: var(--ard-accent); }
+
+/* Boîtes (Transfert) et grilles de Pokémon (Ma collection, choix du parc) : gris ardoise clair à la place du bleu ciel */
+[data-theme="ardoise"] main .box-grid,
+[data-theme="ardoise"] main .collection,
+[data-theme="ardoise"] main .park-candidates {
+    background: #e3e7ec;
+    box-shadow: inset 0 0 0 1px #d3d9e0;
+}
+[data-theme="ardoise"] main .slot { background: rgba(255, 255, 255, .75); }
+[data-theme="ardoise"] main .slot:hover:not(.empty) { background: #fff; }
+[data-theme="ardoise"] main .slot.empty { background: rgba(255, 255, 255, .35); }
+[data-theme="ardoise"] main .slot.selected { border-color: var(--ard-accent); background: #fff; }
+[data-theme="ardoise"] main .slot:focus-visible { outline-color: var(--ard-accent); }
+[data-theme="ardoise"] main .box-grid.drop-active { box-shadow: inset 0 0 0 1px #d3d9e0, 0 0 0 3px var(--ard-accent); }
+[data-theme="ardoise"] main .bank-zone.drop-active { background: rgba(232, 117, 26, .06); box-shadow: 0 0 0 3px var(--ard-accent); }
+[data-theme="ardoise"] .drag-ghost { border-color: var(--ard-accent); }
+[data-theme="ardoise"] .drag-count { background: var(--ard-accent); }
+
+/* Filtres de « Ma collection » */
+[data-theme="ardoise"] main .filter-chip.active { border-color: var(--ard-accent); }
+[data-theme="ardoise"] main .filter-chip-caret,
+[data-theme="ardoise"] main .filter-chip-remove { color: var(--ard-accent-ink); }
+
+/* Living dex : cartes, choix du jeu, cases */
+[data-theme="ardoise"] main .livingdex-card { background: #fff; border-color: var(--ard-line); box-shadow: 0 1px 2px rgba(16, 24, 40, .05); }
+[data-theme="ardoise"] main .livingdex-card:hover { border-color: var(--ard-accent); }
+[data-theme="ardoise"] main .livingdex-game { background: #fff; }
+[data-theme="ardoise"] main .livingdex-game.selected { box-shadow: 0 0 0 .2rem var(--ard-accent-ring); }
+[data-theme="ardoise"] main button.livingdex-slot:hover { border-color: var(--ard-accent); box-shadow: 0 0 0 .15rem var(--ard-accent-ring); }
+[data-theme="ardoise"] main .livingdex-slot.missing { background: var(--ard-head); }
+
+/* « Mon compte » : choix du thème */
+[data-theme="ardoise"] main .theme-choice { border-width: 1px; }
+[data-theme="ardoise"] main .theme-choice.selected { box-shadow: 0 0 0 .2rem var(--ard-accent-ring); }
