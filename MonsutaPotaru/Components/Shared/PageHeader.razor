@@ -1,6 +1,7 @@
 @* En-tête d'une page : titre (h1, cible du focus après une navigation), nombre en pastille, description et boutons
-   d'action à droite. Thèmes Classique et Pokédex : le titre et sa description comme avant, les actions sur la même
-   ligne. Thème Ardoise : un bandeau blanc, l'icône de la page dans un carré orange (wwwroot/themes/ardoise.css). *@
+   d'action dessous (jamais collés à droite, sauf Aside : le journal de l'inventaire). Thèmes Classique et Pokédex : le
+   titre et sa description comme avant. Thème Ardoise : un bandeau blanc, l'icône de la page dans un carré orange
+   (wwwroot/themes/ardoise.css). *@
 
 <header class="page-header @(Small ? "page-header-small" : "")">
     @if (Icon is not null)
@@ -23,11 +24,15 @@
         {
             <div class="page-header-description small text-muted">@Description</div>
         }
+        @if (Actions is not null)
+        {
+            <div class="page-header-actions">@Actions</div>
+        }
         @ChildContent
     </div>
-    @if (Actions is not null)
+    @if (Aside is not null)
     {
-        <div class="page-header-actions">@Actions</div>
+        <div class="page-header-aside">@Aside</div>
     }
 </header>
 
@@ -50,8 +55,11 @@
     /// <summary>Texte d'explication sous le titre (petit, grisé).</summary>
     [Parameter] public RenderFragment? Description { get; set; }
 
-    /// <summary>Boutons d'action, à droite du titre.</summary>
+    /// <summary>Boutons d'action, sous le titre et la description.</summary>
     [Parameter] public RenderFragment? Actions { get; set; }
+
+    /// <summary>Bouton à droite du titre : l'exception (le journal de l'inventaire), les autres vont dans <c>Actions</c>.</summary>
+    [Parameter] public RenderFragment? Aside { get; set; }
 
     /// <summary>Contenu de plus sous le titre et sa description (choix d'un mode...).</summary>
     [Parameter] public RenderFragment? ChildContent { get; set; }

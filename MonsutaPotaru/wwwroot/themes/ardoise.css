@@ -593,7 +593,7 @@ a.ardoise-link.active {
 
 /* ---------- En-tête de page et blocs (Shared/PageHeader.razor, Block.razor) ---------- */
 
-/* En-tête : un bandeau blanc, l'icône de la page dans un carré orange, les actions à droite */
+/* En-tête : un bandeau blanc, l'icône de la page dans un carré orange, les actions sous la description */
 [data-theme="ardoise"] main .page-header {
     gap: .75rem 1.25rem;
     margin-bottom: 1.25rem;
@@ -644,6 +644,7 @@ a.ardoise-link.active {
 }
 [data-theme="ardoise"] main .block-header {
     min-height: 3rem;
+    justify-content: center;
     margin: 0;
     padding: .5rem 1rem;
     border-bottom: 1px solid var(--ard-line);

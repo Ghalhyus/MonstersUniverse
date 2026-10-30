@@ -1,4 +1,4 @@
-@* Bloc d'une page : une partie avec son titre (h2) et ses boutons d'action. Thèmes Classique et Pokédex : le titre
+@* Bloc d'une page : une partie avec son titre (h2) et ses boutons d'action dessous (jamais collés à droite). Thèmes Classique et Pokédex : le titre
    comme un sous-titre, le contenu dessous, sans cadre. Thème Ardoise : un panneau blanc à en-tête
    (wwwroot/themes/ardoise.css). *@
 
@@ -31,7 +31,7 @@
     /// <summary>Nombre affiché en pastille après le titre.</summary>
     [Parameter] public string? Count { get; set; }
 
-    /// <summary>Boutons d'action, à droite du titre.</summary>
+    /// <summary>Boutons d'action, sous le titre.</summary>
     [Parameter] public RenderFragment? Actions { get; set; }
 
     [Parameter] public RenderFragment? ChildContent { get; set; }
