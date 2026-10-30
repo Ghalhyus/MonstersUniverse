@@ -15,7 +15,16 @@ import * as Phaser from "../lib/phaser/phaser.esm.min.js";
 const MAP_URL = "parc/parc-1.json";
 const TILES_URL = "images/parc/tuiles/"; // planches du pack, hors de Git (deploy/fond-parc.cmd)
 const TILE = 16;
-const GRASS = "#33984b"; // couleur de l'herbe, sans les planches (absentes, ou pas encore chargées)
+const GRASS = 0x33984b; // couleur de l'herbe, sans les planches (absentes, ou pas encore chargées)
+const OUTSIDE = "#132a1c"; // autour de la carte, quand on a dézoomé plus large qu'elle
+// Icônes des boutons sur la carte (Bootstrap Icons : dash-lg, plus-lg, fullscreen, fullscreen-exit)
+const svg = path => `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true"><path fill-rule="evenodd" d="${path}"/></svg>`;
+const ICONS = {
+    minus: svg("M2 8a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 0 1h-11A.5.5 0 0 1 2 8"),
+    plus: svg("M8 2a.5.5 0 0 1 .5.5v5h5a.5.5 0 0 1 0 1h-5v5a.5.5 0 0 1-1 0v-5h-5a.5.5 0 0 1 0-1h5v-5A.5.5 0 0 1 8 2"),
+    expand: svg("M1.5 1a.5.5 0 0 0-.5.5v4a.5.5 0 0 1-1 0v-4A1.5 1.5 0 0 1 1.5 0h4a.5.5 0 0 1 0 1zM10 .5a.5.5 0 0 1 .5-.5h4A1.5 1.5 0 0 1 16 1.5v4a.5.5 0 0 1-1 0v-4a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 1-.5-.5M.5 10a.5.5 0 0 1 .5.5v4a.5.5 0 0 0 .5.5h4a.5.5 0 0 1 0 1h-4A1.5 1.5 0 0 1 0 14.5v-4a.5.5 0 0 1 .5-.5m15 0a.5.5 0 0 1 .5.5v4a1.5 1.5 0 0 1-1.5 1.5h-4a.5.5 0 0 1 0-1h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 1 .5-.5"),
+    shrink: svg("M5.5 0a.5.5 0 0 1 .5.5v4A1.5 1.5 0 0 1 4.5 6h-4a.5.5 0 0 1 0-1h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 1 .5-.5m5 0a.5.5 0 0 1 .5.5v4a.5.5 0 0 0 .5.5h4a.5.5 0 0 1 0 1h-4A1.5 1.5 0 0 1 10 4.5v-4a.5.5 0 0 1 .5-.5M0 10.5a.5.5 0 0 1 .5-.5h4A1.5 1.5 0 0 1 6 11.5v4a.5.5 0 0 1-1 0v-4a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 1-.5-.5m10 1a1.5 1.5 0 0 1 1.5-1.5h4a.5.5 0 0 1 0 1h-4a.5.5 0 0 0-.5.5v4a.5.5 0 0 1-1 0z"),
+};
 const FOG = { color: 0x0b1222, alpha: 0.55 }; // hors de la zone « Départ »
 const NIGHT = { color: 0x101848, alpha: 0.38 };
 // Taille d'un pixel de sprite par rapport à un pixel de la carte (deux tiers : ×2 quand la carte est à ×3), arrondie à un
@@ -108,10 +117,12 @@ class Ground {
         this.start = zone
             ? { x: Math.round(zone.x / TILE), y: Math.round(zone.y / TILE), w: Math.round(zone.width / TILE), h: Math.round(zone.height / TILE) }
             : { x: 0, y: 0, w: this.columns, h: this.lines };
+        // Partie de la carte où vivent les Pokémon (le reste est assombri) : la zone « Départ », plus tard agrandie
+        this.area = this.start;
         const collisions = data?.layers.find(l => l.name === "Collisions" && l.type === "tilelayer")?.data ?? [];
         this.walkable = new Uint8Array(this.columns * this.lines);
         this.free = []; // cases libres, pour tirer un endroit au hasard
-        const { x: sx, y: sy, w: sw, h: sh } = this.start;
+        const { x: sx, y: sy, w: sw, h: sh } = this.area;
         for (let y = sy; y < sy + sh; y++) {
             for (let x = sx; x < sx + sw; x++) {
                 const i = y * this.columns + x;
@@ -126,7 +137,9 @@ class Ground {
         this.previous = new Int32Array(n);
         this.seen = new Uint32Array(n); // numéro de la recherche qui a vu la case (évite de tout remettre à zéro)
         this.closed = new Uint32Array(n);
-        this.open = new Int32Array(n);
+        // Cases à explorer : tas binaire (la plus prometteuse d'abord), une case peut y être plusieurs fois
+        this.heap = new Int32Array(8 * n + 1);
+        this.heapScore = new Float64Array(8 * n + 1);
         this.search = 0;
     }
 
@@ -172,7 +185,29 @@ class Ground {
         const startTile = Math.floor(start.y / TILE) * this.columns + Math.floor(start.x / TILE);
         const goalTile = Math.floor(to.y / TILE) * this.columns + Math.floor(to.x / TILE);
         const gx = goalTile % this.columns, gy = Math.floor(goalTile / this.columns);
-        const columns = this.columns, cost = this.cost, previous = this.previous, seen = this.seen, closed = this.closed, open = this.open;
+        const columns = this.columns, cost = this.cost, previous = this.previous, seen = this.seen, closed = this.closed;
+        const heap = this.heap, score = this.heapScore;
+        let size = 0;
+        const push = (tile, value) => {
+            let i = size++;
+            while (i > 0) {
+                const parent = (i - 1) >> 1;
+                if (score[parent] <= value) break;
+                heap[i] = heap[parent]; score[i] = score[parent]; i = parent;
+            }
+            heap[i] = tile; score[i] = value;
+        };
+        const pop = () => {
+            const top = heap[0], tile = heap[--size], value = score[size];
+            let i = 0;
+            for (let child = 1; child < size; child = 2 * i + 1) {
+                if (child + 1 < size && score[child + 1] < score[child]) child++;
+                if (score[child] >= value) break;
+                heap[i] = heap[child]; score[i] = score[child]; i = child;
+            }
+            heap[i] = tile; score[i] = value;
+            return top;
+        };
         const estimate = i => {
             const dx = Math.abs(i % columns - gx), dy = Math.abs(Math.floor(i / columns) - gy);
             return cost[i] + Math.max(dx, dy) + (Math.SQRT2 - 1) * Math.min(dx, dy);
@@ -180,13 +215,11 @@ class Ground {
         const search = ++this.search;
         cost[startTile] = 0;
         seen[startTile] = search;
-        open[0] = startTile;
-        let openCount = 1, found = false;
-        while (openCount) {
-            let best = 0;
-            for (let i = 1; i < openCount; i++) if (estimate(open[i]) < estimate(open[best])) best = i;
-            const current = open[best];
-            open[best] = open[--openCount];
+        push(startTile, estimate(startTile));
+        let found = false;
+        while (size) {
+            const current = pop();
+            if (closed[current] === search) continue; // déjà exploré par un chemin plus court
             if (current === goalTile) { found = true; break; }
             closed[current] = search;
             const cx = current % columns, cy = Math.floor(current / columns);
@@ -197,22 +230,22 @@ class Ground {
                     const next = (cy + dy) * columns + cx + dx;
                     const c = cost[current] + (dx && dy ? Math.SQRT2 : 1);
                     if (closed[next] === search || (seen[next] === search && c >= cost[next])) continue;
-                    if (seen[next] !== search) open[openCount++] = next; // pas encore dans la liste
                     seen[next] = search;
                     cost[next] = c;
                     previous[next] = current;
+                    push(next, estimate(next));
                 }
             }
         }
         if (!found) return null;
         const tiles = [];
         for (let t = goalTile; t !== startTile; t = previous[t]) tiles.unshift(t);
-        // Lissage : du point actuel, aller tout droit au point de passage le plus loin qu'on voit.
+        // Lissage : du point actuel, aller tout droit tant qu'on voit le point de passage suivant.
         const points = [start, ...tiles.slice(0, -1).map(t => this.center(t)), to];
         const result = [];
         for (let i = 0; i < points.length - 1;) {
-            let j = points.length - 1;
-            while (j > i + 1 && !this.lineFree(points[i], points[j])) j--;
+            let j = i + 1;
+            while (j + 1 < points.length && this.lineFree(points[i], points[j + 1])) j++;
             result.push(points[j]);
             i = j;
         }
@@ -318,35 +351,103 @@ export async function create(container, component) {
 
     // ---------- Taille : toute la largeur du conteneur ; en hauteur, un nombre entier de fois la zone « Départ » en
     // pixels d'écran (chaque pixel de la carte et des sprites couvre autant de pixels d'écran : dessin net), le plus grand
-    // qui tient dans la hauteur visible sous le parc (sur un téléphone : pas plus que la zone entière en largeur) ----------
+    // qui tient dans la hauteur visible sous le parc (sur un téléphone : pas plus que la zone entière en largeur). En plein
+    // écran : tout l'écran, et le plus grand zoom où la zone « Départ » tient en hauteur ----------
+    const isFullscreen = () => document.fullscreenElement === container;
     const measure = () => {
+        const ratio = window.devicePixelRatio || 1;
+        if (isFullscreen()) {
+            const height = Math.round(container.clientHeight * ratio);
+            return { ratio, zoom: Math.max(1, Math.floor(height / viewH)), width: Math.round(container.clientWidth * ratio), height };
+        }
         const width = container.clientWidth || viewW;
         const top = container.getBoundingClientRect().top + window.scrollY;
-        const ratio = window.devicePixelRatio || 1;
         const visible = Math.max(240, window.innerHeight - top - 24) * ratio;
         const fitWidth = Math.round(width * ratio / viewW); // zone à peu près entière en largeur
         const zoom = Math.max(1, Math.round(240 * ratio / viewH), Math.min(Math.floor(visible / viewH), fitWidth));
         return { ratio, zoom, width: Math.round(width * ratio), height: zoom * viewH };
     };
+    let maxZoom = 1; // zoom par défaut, et le plus grand permis (on dézoome de là jusqu'à ×1)
     const applyZoom = zoom => {
         k = zoom;
         spriteK = Math.max(Math.min(k, 2), Math.round(k * SPRITE_SIZE));
         spriteScale = spriteK / k;
+        if (!scene) return;
+        camera.setZoom(k);
+        // Limites de la vue : la carte, ou plus large qu'elle et centrée quand on a dézoomé au-delà de ses bords
+        const vw = camera.width / k, vh = camera.height / k;
+        const bw = Math.max(ground.width, vw), bh = Math.max(ground.height, vh);
+        camera.setBounds((ground.width - bw) / 2, (ground.height - bh) / 2, bw, bh);
+        for (const p of pokemon) for (const text of p.texts) text.setResolution(k);
+        labelText.setResolution(k);
+        zoomOutButton.disabled = k <= 1;
+        zoomInButton.disabled = k >= maxZoom;
     };
+    /** Centre de la vue, en pixels de la carte (camera.midPoint n'est mis à jour qu'au dessin). */
+    const viewCenter = () => ({ x: camera.scrollX + camera.width / 2, y: camera.scrollY + camera.height / 2 });
+    /** Change le zoom (un nombre entier, de ×1 au zoom par défaut) en gardant fixe le point (en pixels du canvas) visé. */
+    function zoomTo(zoom, sx = camera.width / 2, sy = camera.height / 2) {
+        zoom = clamp(zoom, 1, maxZoom);
+        if (zoom === k) return;
+        const center = viewCenter();
+        const wx = center.x + (sx - camera.width / 2) / k, wy = center.y + (sy - camera.height / 2) / k;
+        applyZoom(zoom);
+        camera.centerOn(wx - (sx - camera.width / 2) / k, wy - (sy - camera.height / 2) / k);
+    }
     const resize = () => {
         if (!scene) return;
         const size = measure();
-        const center = { x: camera.midPoint.x, y: camera.midPoint.y };
+        const center = viewCenter();
         game.scale.setZoom(1 / size.ratio); // canvas en pixels physiques, affiché en pixels CSS
         game.scale.resize(size.width, size.height);
-        applyZoom(size.zoom);
-        camera.setZoom(k);
+        if (size.zoom !== maxZoom) { maxZoom = size.zoom; applyZoom(maxZoom); } // autre taille (plein écran...) : zoom par défaut
+        else applyZoom(clamp(k, 1, maxZoom));
         camera.centerOn(center.x, center.y);
-        for (const p of pokemon) for (const text of p.texts ?? []) text.setResolution(k);
-        labelText?.setResolution(k);
     };
     const initial = measure();
+    maxZoom = initial.zoom;
     applyZoom(initial.zoom);
+
+    // ---------- Boutons sur la carte : dézoomer, zoomer, plein écran ----------
+    const controls = document.createElement("div");
+    controls.className = "park-controls";
+    const button = (title, icon, action) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.title = title;
+        b.setAttribute("aria-label", title);
+        b.innerHTML = icon;
+        b.addEventListener("click", action);
+        controls.appendChild(b);
+        return b;
+    };
+    const zoomOutButton = button("Dézoomer", ICONS.minus, () => zoomTo(k - 1));
+    const zoomInButton = button("Zoomer", ICONS.plus, () => zoomTo(k + 1));
+    const fullscreenButton = button("Plein écran", ICONS.expand, () => {
+        if (isFullscreen()) document.exitFullscreen();
+        else container.requestFullscreen().catch(() => { });
+    });
+    fullscreenButton.hidden = !document.fullscreenEnabled; // iPhone : pas de plein écran pour une page
+    container.appendChild(controls);
+    const onFullscreen = () => {
+        const full = isFullscreen();
+        fullscreenButton.innerHTML = full ? ICONS.shrink : ICONS.expand;
+        fullscreenButton.title = full ? "Quitter le plein écran (Échap)" : "Plein écran";
+        fullscreenButton.setAttribute("aria-label", fullscreenButton.title);
+        resize();
+    };
+    document.addEventListener("fullscreenchange", onFullscreen);
+    // Molette : zoom en plein écran seulement, autour du pointeur (sinon elle fait défiler la page)
+    let wheel = 0;
+    const onWheel = e => {
+        if (!isFullscreen() || !scene) return;
+        e.preventDefault();
+        wheel += e.deltaMode === 0 ? e.deltaY : Math.sign(e.deltaY) * 100; // pavé tactile : petits pas cumulés
+        if (Math.abs(wheel) < 100) return;
+        const r = game.canvas.getBoundingClientRect();
+        zoomTo(k - Math.sign(wheel), (e.clientX - r.left) * game.canvas.width / r.width, (e.clientY - r.top) * game.canvas.height / r.height);
+        wheel = 0;
+    };
 
     let ready;
     const started = new Promise(resolve => ready = resolve);
@@ -355,13 +456,13 @@ export async function create(container, component) {
         parent: container,
         width: initial.width,
         height: initial.height,
-        backgroundColor: GRASS,
+        backgroundColor: OUTSIDE,
         pixelArt: true,
         roundPixels: true,
         banner: false,
         audio: { noAudio: true },
         scale: { mode: Phaser.Scale.NONE, zoom: 1 / initial.ratio },
-        input: { mouse: { preventDefaultWheel: false } }, // la molette fait défiler la page
+        input: { mouse: { preventDefaultWheel: false }, activePointers: 2 }, // molette : voir onWheel ; deux doigts : pincement
         scene: {
             preload() {
                 for (const tileset of data?.tilesets ?? []) this.load.image("tuiles:" + tileset.image, TILES_URL + tileset.image);
@@ -377,6 +478,8 @@ export async function create(container, component) {
         scene = s;
         camera = s.cameras.main;
         game.canvas.classList.add("park-canvas");
+        game.canvas.addEventListener("wheel", onWheel, { passive: false });
+        s.add.rectangle(0, 0, ground.width, ground.height, GRASS).setOrigin(0).setDepth(-1); // sous la carte (planches absentes)
         // La carte ne bouge pas : ses calques sont dessinés une seule fois, dans une image sous les Pokémon (sol, décors) et
         // une devant (feuillages, brouillard). Des calques de tuiles redessinés à chaque image créaient des dizaines de Ko
         // de déchets par image : petites saccades au passage du ramasse-miettes.
@@ -397,7 +500,7 @@ export async function create(container, component) {
             }
         }
         const fog = s.add.graphics().fillStyle(FOG.color, FOG.alpha);
-        const { x, y, w, h } = ground.start;
+        const { x, y, w, h } = ground.area;
         const [zx, zy, zw, zh] = [x * TILE, y * TILE, w * TILE, h * TILE];
         fog.fillRect(0, 0, ground.width, zy);
         fog.fillRect(0, zy + zh, ground.width, ground.height - zy - zh);
@@ -410,10 +513,10 @@ export async function create(container, component) {
         labelText = s.add.text(0, 0, "", { fontFamily: "sans-serif", fontStyle: "bold", fontSize: "8px", color: "#ffffff", resolution: k })
             .setDepth(6.1).setVisible(false);
 
-        camera.setBounds(0, 0, ground.width, ground.height);
-        camera.setZoom(k);
-        camera.centerOn(zx + zw / 2, zy + zh / 2);
         camera.roundPixels = true;
+        applyZoom(k); // zoom et limites de la vue
+        const start = ground.start;
+        camera.centerOn((start.x + start.w / 2) * TILE, (start.y + start.h / 2) * TILE); // vue de départ : la zone « Départ »
         listen(s);
     }
 
@@ -427,10 +530,25 @@ export async function create(container, component) {
 
     function listen(s) {
         const worldOf = pointer => camera.getWorldPoint(pointer.x, pointer.y);
+        // Pincement à deux doigts : un cran de zoom chaque fois que l'écart change d'un tiers environ
+        const fingers = () => [s.input.pointer1, s.input.pointer2];
+        const pinching = () => fingers().every(f => f.isDown);
+        const spread = () => { const [a, b] = fingers(); return Math.hypot(a.x - b.x, a.y - b.y); };
+        let pinch = null;
         s.input.on("pointerdown", pointer => {
+            if (pinching()) { drag = null; pinch = { spread: spread() }; return; }
             drag = { x: pointer.x, y: pointer.y, scrollX: camera.scrollX, scrollY: camera.scrollY, moved: false };
         });
         s.input.on("pointermove", pointer => {
+            if (pinch) {
+                if (!pinching()) return;
+                const [a, b] = fingers(), now = spread();
+                if (now > pinch.spread * 1.35 || now < pinch.spread / 1.35) {
+                    zoomTo(k + (now > pinch.spread ? 1 : -1), (a.x + b.x) / 2, (a.y + b.y) / 2);
+                    pinch.spread = now;
+                }
+                return;
+            }
             if (drag && pointer.isDown) {
                 const dx = pointer.x - drag.x, dy = pointer.y - drag.y;
                 if (!drag.moved && Math.hypot(dx, dy) > DRAG_THRESHOLD * (window.devicePixelRatio || 1)) drag.moved = true;
@@ -442,6 +560,12 @@ export async function create(container, component) {
             cursor();
         });
         const release = pointer => {
+            if (pinch) { // un doigt levé : fin du pincement (sans clic ni glissement)
+                if (!pinching()) pinch = null;
+                drag = null;
+                mouse = hovered = null;
+                return;
+            }
             const click = drag && !drag.moved;
             drag = null;
             if (click) {
@@ -768,6 +892,9 @@ export async function create(container, component) {
         dispose() {
             observer.disconnect();
             window.removeEventListener("resize", resize);
+            document.removeEventListener("fullscreenchange", onFullscreen);
+            if (isFullscreen()) document.exitFullscreen();
+            controls.remove();
             game.destroy(true);
         },
     };

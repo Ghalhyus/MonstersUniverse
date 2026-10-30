@@ -62,8 +62,8 @@ public sealed class ParkServiceTests : IDisposable
             (await _park.SetAsync("sacha", [pikachu, simisear])).Message);
         Assert.False((await _park.SetAsync("sacha", [egg])).Ok);
         Assert.False((await _park.SetAsync("sacha", [misty])).Ok); // pas le sien
-        var many = Enumerable.Range(0, 31).Select(_ => Add(19)).ToList();
-        Assert.Equal("Le parc accueille 30 Pokémon au plus : retires-en 1.", (await _park.SetAsync("sacha", many)).Message);
+        var many = Enumerable.Range(0, ParkService.Capacity + 1).Select(_ => Add(19)).ToList();
+        Assert.Equal($"Le parc accueille {ParkService.Capacity} Pokémon au plus : retires-en 1.", (await _park.SetAsync("sacha", many)).Message);
         Assert.Empty(await _park.ListAsync("sacha"));
 
         var result = await _park.SetAsync("sacha", [mew, pikachu, chikorita]);

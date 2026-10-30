@@ -41,6 +41,16 @@ Projet à venir (refuge, agrandissements, IA par espèce) : `docs/projet-parc.md
   les sprites 20 % plus petits que ×3 ; 2,4 n'étant pas net, il a choisi ×2. Ne pas revenir à un étirement.
 - Glisser : au-delà de 6 px CSS, un appui devient un glissement (pas de clic) ; `pointerupoutside` aussi ; vue bornée à la
   carte par la caméra. `touch-action: none` sur le canvas ; `.park-empty` laisse passer les appuis (sauf son bouton).
+- Zoom (`zoomTo`, `applyZoom`) : crans entiers de ×1 à `maxZoom` (zoom de départ), point visé gardé fixe. Limites de la
+  caméra recalculées à chaque zoom : Phaser colle la carte à gauche quand la vue est plus large qu'elle (`clampX`), d'où
+  des limites élargies et centrées. Hors carte : `OUTSIDE` (couleur de fond) ; sous la carte : rectangle `GRASS`.
+- Boutons `.park-controls` créés par `parc.js` dans le conteneur (DOM, pas Blazor ; icônes SVG de Bootstrap Icons en
+  `innerHTML`, pas de script : CSP respectée). Plein écran : `requestFullscreen` sur le conteneur (`.park-stage:fullscreen`),
+  `fullscreenchange` → `resize` (zoom de départ recalculé sur la hauteur de l'écran). Molette : seulement en plein écran,
+  cumulée par 100 (pavé tactile). Pincement : `activePointers: 2`, un cran par écart ×1,35.
+- **Le panneau de navigateur de l'app refuse le plein écran** (« Permissions check failed », même sur un vrai clic) : pour
+  l'essayer, simuler (`Object.defineProperty(document, "fullscreenElement", …)`, conteneur en `position: fixed; inset: 0`,
+  puis événement `fullscreenchange`), ou demander à l'utilisateur.
 - Textures : planches de SpriteCollab ajoutées à Phaser (`textures.addImage`, une image par case) ; textes à
   `resolution: k` (nets à la caméra).
 
@@ -59,6 +69,9 @@ Projet à venir (refuge, agrandissements, IA par espèce) : `docs/projet-parc.md
 - Sprites absents (images pas récupérées) : le Pokémon n'apparaît pas, sans erreur.
 
 ## Tester
+- **Après chaque modification de `parc.js`, recharger le parc et lire la console** : `node --check` ne voit que la
+  syntaxe. Une constante passée par erreur dans un commentaire (`NIGHT is not defined`, 2026-10-30) arrêtait `build` :
+  carte collée à gauche, aucun Pokémon, chez l'utilisateur.
 - Panneau du navigateur de test souvent **masqué** : Phaser ne dessine que pendant les captures (`camera.worldView` pas à
   jour : `view()` la recalcule). Pour juger le comportement : `import("/js/parc.js?v=…")` dans la page, `create` sur un
   `div` (en `position: fixed`) avec un faux composant `{ invokeMethodAsync }`, `setPokemon`, puis `simulate(secondes,

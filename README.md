@@ -552,7 +552,13 @@ doigt) pour explorer les alentours ; la vue s'arrête aux bords. La hauteur du p
 fois la zone « Départ » en pixels d'écran qui tient dans la hauteur visible (3, soit 960 pixels, sur un écran de 1440 à
 150 %) ; sur un téléphone, pas plus que la zone entière en largeur. Les sprites sont dessinés aux deux tiers des pixels de
 la carte, arrondis à un nombre entier de pixels d'écran (×2 quand la carte est à ×3, jamais moins de ×2) : dessin net,
-sans pixels de tailles inégales. **Nouvelle carte** : la dessiner dans Tiled (vue orthogonale, tuiles de 16 px, taille
+sans pixels de tailles inégales. **Zoom et plein écran** : boutons **−**, **+** et **plein écran** en haut à gauche de la
+carte (visiteurs compris). Le zoom va par crans entiers, du zoom de départ (le plus grand) jusqu'à ×1 ; les sprites
+suivent en arrondi (à ×2 et ×1 ils sont un peu plus gros par rapport à la carte). Dézoomé au-delà des bords, la carte
+est centrée. En plein écran, la hauteur de l'écran donne le zoom de départ (×4 sur un écran de 1440), la **molette**
+zoome autour du pointeur (hors plein écran, elle fait défiler la page) ; Échap ou le même bouton en sort. Sur téléphone,
+**pincement** à deux doigts (pas de plein écran sur iPhone : bouton caché). Le zoom n'est pas retenu d'une visite à
+l'autre. **Nouvelle carte** : la dessiner dans Tiled (vue orthogonale, tuiles de 16 px, taille
 fixe, jeux de tuiles incorporés, mêmes calques), puis `python outils/carte-parc.py <carte .tmx>` : la carte va dans
 `wwwroot/parc/parc-1.json` (dans Git : rien que des numéros de tuiles), les planches du pack qu'elle utilise dans
 `wwwroot/images/parc/tuiles/` (hors Git : le pack ne se redistribue pas), et `deploy\fond-parc.cmd` les envoie sur le
@@ -1033,7 +1039,7 @@ Monsuta Potaru s'appuie sur le travail d'autres projets :
 | [Phaser](https://phaser.io) 3.90.0 (Richard Davey, Phaser Studio) | Moteur de jeu 2D du « Parc » : carte en tuiles, caméra, dessin (`wwwroot/lib/phaser`) | MIT |
 | [Tiled](https://www.mapeditor.org) (Thorbjørn Lindeijer) | Éditeur de la carte du « Parc » (format lu par Phaser ; outil seulement, rien de Tiled dans le site) | GPL-2.0 (l'éditeur ; les cartes faites avec appartiennent à leur auteur) |
 | [Bootstrap](https://getbootstrap.com) | Mise en page et composants de l'interface (`wwwroot/lib/bootstrap`) | MIT |
-| [Bootstrap Icons](https://icons.getbootstrap.com) | Icônes des menus (dessins SVG dans `wwwroot/app.css`, « Icônes des menus ») | MIT |
+| [Bootstrap Icons](https://icons.getbootstrap.com) | Icônes des menus (dessins SVG dans `wwwroot/app.css`, « Icônes des menus ») et des boutons du « Parc » (`ICONS` dans `wwwroot/js/parc.js` : dash-lg, plus-lg, fullscreen, fullscreen-exit) | MIT |
 | [ASP.NET Core, Blazor, Identity, Entity Framework Core](https://dotnet.microsoft.com) (Microsoft) | Site, comptes, accès à la base | MIT |
 | [SQLite](https://sqlite.org) | Base de données | Domaine public |
 | [xUnit](https://xunit.net), [coverlet](https://github.com/coverlet-coverage/coverlet) | Tests, couverture des tests (envoyée à SonarCloud) | Apache-2.0, MIT |

@@ -27,7 +27,10 @@ Faire du parc un **refuge de Pokémon** :
 1. **Fondations** : plusieurs parcs (le parc actuel devient le n° 1), une carte Tiled affichée par Phaser, l'IA actuelle
    avec chemins et collisions, la vue qu'on fait glisser.
    *Fait le 30 octobre 2026 :* carte Tiled (`Parc_1`, 80 × 60 tuiles) affichée par Phaser, zone « Départ » de 24 × 20
-   tuiles (le reste assombri), vue qu'on fait glisser, chemins et collisions (README, « Parc »). *Reste :* plusieurs parcs
+   tuiles (le reste assombri), vue qu'on fait glisser, chemins et collisions, zoom par crans entiers et plein écran,
+   saccades corrigées (README, « Parc »). Essai de charge : 150 Pokémon sur toute la carte restent fluides (~0,5 ms de
+   calcul par image) ; l'utilisateur a essayé 150, 120 puis 100 avant de revenir à 30 (capacité des parcs agrandis encore
+   à choisir). *Reste :* plusieurs parcs
    en base, feuillages triés selon la hauteur (aujourd'hui toujours devant les Pokémon).
 2. **Agrandissements payants** : débit atomique des pokédollars, une zone cachée qui se dévoile.
 3. **IA par espèce** : profils tirés des types et des groupes d'œufs, à partir d'un fichier de comportements fourni par
