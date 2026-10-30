@@ -15,8 +15,9 @@
 
 <PageTitle>@(!Visitor ? "Parc" : player is null ? "Joueur introuvable" : $"Parc de {player.Pseudo}")</PageTitle>
 
-@* Jusqu'à 30 Pokémon de la collection se promènent dans une clairière (outils/clairiere.py) :
-   l'animation et leur comportement sont dans wwwroot/js/parc.js, la page ne gère que la liste et les fenêtres.
+@* Jusqu'à 30 Pokémon de la collection se promènent sur une carte faite dans Tiled (wwwroot/parc/parc-1.json,
+   outils/carte-parc.py) : l'affichage (Phaser) et leur comportement sont dans wwwroot/js/parc.js, la page ne gère que
+   la liste et les fenêtres.
    Parc d'un autre joueur (Multijoueurs, /joueurs/{pseudo}/parc) : on le regarde, sans choisir ni retirer de Pokémon. *@
 
 @if (Visitor && player is null)
@@ -35,7 +36,8 @@ else
 <PageHeader Title="Parc" Count="@($"{members.Count} / {ParkService.Capacity}")" Small="Visitor" Icon="@(Visitor ? null : "bi-tree-nav-menu")">
     <Description>
         @(Visitor ? $"Les Pokémon de {player!.Pseudo} vivent ici" : "Tes Pokémon vivent ici") : ils se promènent, se reposent,
-        rendent visite à leur famille et dorment quand ils sont fatigués (plus tôt le soir). Clique sur l'un d'eux pour voir sa fiche.
+        rendent visite à leur famille et dorment quand ils sont fatigués (plus tôt le soir). Clique sur l'un d'eux pour voir sa fiche,
+        fais glisser la carte pour explorer les alentours.
     </Description>
     <Actions>
         @if (!Visitor)

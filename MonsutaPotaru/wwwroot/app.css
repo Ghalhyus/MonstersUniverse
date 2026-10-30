@@ -306,14 +306,16 @@ button.livingdex-slot:hover { border-color: var(--bs-primary); box-shadow: 0 0 0
     overflow-y: auto;
 }
 
-/* ---------- Parc : boîte PC où les Pokémon se promènent (wwwroot/js/parc.js) ---------- */
-/* Toute la largeur ; la hauteur (celle visible sous le parc) est réglée par parc.js. */
+/* ---------- Parc : carte où les Pokémon se promènent (wwwroot/js/parc.js, Phaser) ---------- */
+/* Toute la largeur ; la hauteur (celle visible sous le parc) est réglée par parc.js. On fait glisser la carte (au doigt
+   aussi : pas de défilement de la page depuis le parc). */
 .park { position: relative; width: 100%; }
-.park-stage { width: 100%; border-radius: 12px; overflow: hidden; box-shadow: 0 0 0 4px #4e8f4a, 0 .5rem 1rem rgba(0, 0, 0, .2); background: #59cf93; }
-.park-canvas { display: block; touch-action: manipulation; }
+.park-stage { width: 100%; border-radius: 12px; overflow: hidden; box-shadow: 0 0 0 4px #4e8f4a, 0 .5rem 1rem rgba(0, 0, 0, .2); background: #33984b; }
+.park-canvas { display: block; touch-action: none; cursor: grab; }
 .park-empty {
     position: absolute;
     inset: 0;
+    pointer-events: none; /* la carte reste glissable ; seul le bouton reçoit le clic */
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -322,6 +324,7 @@ button.livingdex-slot:hover { border-color: var(--bs-primary); box-shadow: 0 0 0
     font-weight: 600;
     text-shadow: 0 1px 2px rgba(0, 0, 0, .5);
 }
+.park-empty .btn { pointer-events: auto; }
 .park-candidates {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(4.5rem, 1fr));

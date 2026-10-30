@@ -13,8 +13,8 @@ Rassemble les images servies par le site, dans MonsutaPotaru/wwwroot/images/ :
   Chaque dossier a ses planches <Animation>-Anim.png et un AnimData.xml réduit à ces animations (taille des images,
   durées) ; donjon/credits.txt liste les auteurs de chaque dossier (licence CC BY-NC 4.0 : à citer), donjon/formes.json
   le dossier de chaque forme par espèce (« 0026 » : {« Alola » : « 0001 », « Mega_X » : « 0002 »...}) ;
-- (parc/clairiere.png, fond du « Parc », ne vient pas d'ici : outils/clairiere.py l'assemble en local, deploy/fond-parc.cmd
-  l'envoie sur le serveur) ;
+- (parc/tuiles/, planches de la carte du « Parc », ne viennent pas d'ici : outils/carte-parc.py les copie depuis le pack
+  Cute Fantasy, deploy/fond-parc.cmd les envoie sur le serveur) ;
 - livingdex/ : sprites des jeux de chaque living dex (livingdex/rouge-bleu/<numéro>.png : Super Game Boy, livingdex/jaune/ :
   Game Boy Color, livingdex/or/, argent/, cristal/, rubis-saphir/, emeraude/, rouge-feu-vert-feuille/, diamant-perle/,
   platine/, heartgold-soulsilver/, noire-blanche/ ; PokéAPI, versions/generation-i à v/<jeu> ; à partir de la 6e, les

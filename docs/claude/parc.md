@@ -1,6 +1,8 @@
 # Parc
 
-README : « Parc ». Page `Park.razor`, service `ParkService`, animation `wwwroot/js/parc.js`.
+README : « Parc ». Page `Park.razor`, service `ParkService`, affichage et animation `wwwroot/js/parc.js` (Phaser).
+
+Projet à venir (refuge, agrandissements, IA par espèce) : `docs/projet-parc.md`.
 
 ## Sprites
 - `PokemonSprites.DonjonFolder` (forme, Méga, chromatique, femelle). Formes de SpriteCollab (`images/donjon/formes.json`,
@@ -10,39 +12,62 @@ README : « Parc ». Page `Park.razor`, service `ParkService`, animation `wwwroo
   SpriteCollab (casquettes de Pikachu, coupes de Couafarel...).
 - Une espèce peut aller au parc si `images/donjon/<espèce sur 4 chiffres>/AnimData.xml` existe (`HasDonjonSprites`).
 - SpriteCollab centre chaque image sur le même point, les pieds 4 à 10 px sous le centre (le dessin remonte l'image de
-  6 px × l'échelle pour poser les pieds sur l'ombre).
+  6 px de sprite pour poser les pieds sur l'ombre).
 
-## Fond (clairière)
-- `images/parc/clairiere.png`, 384 × 320 = l'ancienne boîte (576 × 486 unités) en pixels de sprite, pour garder la taille
-  des sprites et la surface d'avant. Refusées : bandeau de 1536 × 320 (parc à ×1, trop petit), 320 × 256 (×4, Pokémon
-  trop gros et entassés). Assemblée par `outils/clairiere.py` (graine 3 sans embranchement ; Pillow
-  absent de son Python : `pip install pillow`, ou `pip install --target <scratchpad>/pylib pillow` + `PYTHONPATH`). Pack
-  Tiny Tales dans `C:\Users\ghalh\Downloads\Tiny Tales_2D_Overworld_2.0.1\Tiled`.
-- **Jamais dans Git** (licence : pas de redistribution des tuiles ni de leurs dérivés tels quels), ni dans `images.py` (rien
-  à télécharger) : `deploy\fond-parc.cmd` l'envoie dans `~/monsuta-potaru-images/parc/` (servie aussitôt, pas de
-  redémarrage), `recuperer-images.cmd` la rapatrie. Sans elle : herbe unie (`GRASS`), pas d'erreur.
-- Netteté : un pixel de la carte = `MAP_PIXEL` (1,5) unités du parc. La hauteur du canvas en pixels physiques est
-  `k × 320` (`resize`, `k` le plus grand qui tient dans la hauteur visible : 3 chez l'utilisateur), donc `k` pixels d'écran
-  par pixel de carte ; le fond se dessine en pixels d'écran. Ne pas revenir à un étirement à la hauteur disponible.
-- Sprites : `spriteK = round(k × SPRITE_SIZE)` pixels d'écran par pixel de sprite (2/3, jamais moins de 2 si `k` ≥ 2) :
-  ×2 chez l'utilisateur. Il les a voulus 20 % plus petits que ×3 ; 2,4 n'étant pas net, il a choisi ×2 (−33 %) plutôt que
-  des pixels inégaux. `spriteScale` (unités du parc par pixel de sprite) sert au clic, au nom, aux « z » ; l'animation de
-  marche suit la taille (foulée plus courte).
-- `MARGIN_TOP` (100) : pieds sous la lisière (bas des arbres ~52 px de carte en médiane, buissons devant jusqu'à ~75).
-  Nouvelle carte avec une autre lisière : remesurer.
+## Carte (Tiled, pack Cute Fantasy)
+- `wwwroot/parc/parc-1.json` (dans Git : numéros de tuiles seulement), écrite par `outils/carte-parc.py <carte .tmx>`
+  (exporte le `.tmx` avec `tiled.exe --embed-tilesets --export-map json`, vérifie, copie les planches). Planches dans
+  `images/parc/tuiles/<nom du fichier du pack>` : **jamais dans Git** (licence : ni redistribution ni revente, même
+  modifié), envoyées par `deploy\fond-parc.cmd`, rapatriées par `recuperer-images.cmd`. Sans elles : herbe unie (`GRASS`).
+- Pack : `C:\Sources\Asset_Cute_Fantasy` (+ Desert, Dungeons, ShroomLands, Volcano), tuiles 16 px. Les jeux de couleurs
+  vont par numéro : `Grass_Tiles_2`, `Grass_2_Middle` et `Water_Tile_2` ont la même herbe.
+- Cartes de l'utilisateur : `C:\Sources\Parcs` (`Parc_1.tmx` = la carte du site ; `generer_parc.py`, hors du dépôt, l'a
+  générée : bordures d'eau et de chemin automatiques, forêt en quinconce). Tiled 1.12 installé (`C:\Program Files\Tiled`,
+  `tmxrasterizer.exe` rend une carte en PNG pour vérifier).
+- Calques lus, **dessinés une seule fois** au démarrage dans deux `RenderTexture` : « Sol » + « Décors » (profondeur 0),
+  « Devant » + brouillard hors « Départ » (3 ; feuillages : cachent aussi la tête d'un Pokémon devant un arbre, limite
+  connue). Entre les deux : ombres (1,9), Pokémon (2 + ligne). Nuit (4, cachée le jour), nom et « z » (6).
+  « Collisions » : toute tuile = case bloquée, jamais dessiné. « Zones » : rectangle « Départ » (les Pokémon y restent).
+  Agrandissements à venir : redessiner les deux images.
+- `ParkMapTests` : calques en CSV, jeux de tuiles incorporés avec un simple nom de fichier, « Départ » dans la carte,
+  toutes ses cases libres reliées (même règle de diagonale que `parc.js`).
 
-## Animation (`parc.js`)
-- Réglages en tête du fichier (`ENERGY`, `SPRITE_SIZE`, marges) et dans `decide` / `update`.
-- Fluidité : sprites dessinés en pixels d'écran, position arrondie au pixel d'écran, échelle entière (`k`) ; la vitesse
-  rejoint progressivement celle voulue (`vx`, `vy`), freine à l'arrivée ; l'animation de marche suit la vitesse
-  (`WALK_ANIMATION_SPEED`). Une image coûte ~0,1 ms pour 30 Pokémon : une saccade vient du dessin, pas du calcul.
+## Affichage (Phaser 3.90.0, `wwwroot/lib/phaser/phaser.esm.min.js`)
+- Importé par `parc.js` (module ES, CSP : rien à ajouter ; `img-src blob:` déjà permis pour le chargeur de Phaser ; son
+  `new Function("return this")` est dans un `try`). Phaser 4 existe (4.2.1 le 2026-10-30), pas adopté.
+- Netteté : canvas en pixels physiques (`scale.zoom = 1 / devicePixelRatio`, `Scale.NONE`), caméra à un zoom entier `k`
+  (hauteur = `k × 320`, la zone « Départ ») : chez l'utilisateur `k` = 3. Sprites : `spriteK = round(k × 2/3)` pixels
+  d'écran par pixel de sprite (jamais moins de 2 si `k` ≥ 2), positions arrondies au pixel d'écran (`snap`). Il a voulu
+  les sprites 20 % plus petits que ×3 ; 2,4 n'étant pas net, il a choisi ×2. Ne pas revenir à un étirement.
+- Glisser : au-delà de 6 px CSS, un appui devient un glissement (pas de clic) ; `pointerupoutside` aussi ; vue bornée à la
+  carte par la caméra. `touch-action: none` sur le canvas ; `.park-empty` laisse passer les appuis (sauf son bouton).
+- Textures : planches de SpriteCollab ajoutées à Phaser (`textures.addImage`, une image par case) ; textes à
+  `resolution: k` (nets à la caméra).
+
+## Animation et comportement (`parc.js`)
+- Unités : pixels de la carte (16 par tuile). Réglages en tête du fichier (`ENERGY`, `WALK_SPEED`...) et dans `decide` /
+  `update` ; distances divisées par 1,5 lors du passage à la carte (anciennes unités : 1,5 par pixel).
+- `Ground` : cases libres, `nearestFree`, `path` (A* 8 directions sans couper les coins, lissé en lignes droites,
+  vérifiées tous les 4 px). En marchant, une case bloquée n'est jamais franchie (glisse le long, sinon s'arrête).
+- Fluidité : la vitesse rejoint progressivement celle voulue, freine à l'arrivée ; l'animation de marche suit la vitesse.
+- **Pas de déchets à chaque image** (l'utilisateur a senti des saccades : ramasse-miettes) : 2 Mo/s à 144 Hz suffisent à en
+  causer. Mesuré le 2026-10-30 (30 Pokémon, 2750 × 960) : calques de tuiles redessinés + ombres en `Graphics` = 50-60 Ko
+  et 0,6 ms par image ; carte en `RenderTexture`, ombres en images toutes faites (`shadowOf`, adoucies, en pixels
+  d'écran), profondeur changée seulement au changement de ligne, nom redessiné seulement quand il change, heure lue une
+  fois par seconde, A* sur des tableaux gardés (`Ground`) = 2-5 Ko et 0,18 ms. Ne pas remettre de `Graphics` vidé et
+  redessiné à chaque image, ni de calque de tuiles affiché.
 - Sprites absents (images pas récupérées) : le Pokémon n'apparaît pas, sans erreur.
 
 ## Tester
-- Panneau du navigateur de test souvent **masqué** : la page ne s'anime que pendant les captures. Pour juger le
-  comportement : importer le module dans la page, créer un moteur dans un `div`, appeler `simulate(secondes, heure)`
-  (état de chaque Pokémon) : temps passé à dormir ou marcher, distance entre membres d'une famille, effet de la souris
-  (`PointerEvent` sur le canvas). Pour voir la nuit, remplacer `window.Date` le temps de la capture.
+- Panneau du navigateur de test souvent **masqué** : Phaser ne dessine que pendant les captures (`camera.worldView` pas à
+  jour : `view()` la recalcule). Pour juger le comportement : `import("/js/parc.js?v=…")` dans la page, `create` sur un
+  `div` (en `position: fixed`) avec un faux composant `{ invokeMethodAsync }`, `setPokemon`, puis `simulate(secondes,
+  heure)` (état, `free` : jamais sur une case bloquée) et `view()` (caméra). Clic et glissement : `MouseEvent` sur le canvas
+  (`mouseup` sur `window` = relâché dehors). Netteté : copier le canvas juste après un `game.step(...)` (pas de
+  `requestAnimationFrame` : panneau masqué) et compter les blocs `k × k` uniformes. Coût et déchets : exposer `game`
+  le temps de l'essai, enchaîner des `game.step(performance.now(), 16.7)` (fin par un `gl.readPixels` pour attendre le
+  GPU), déchets par `performance.memory.usedJSHeapSize` relevé tous les 50 pas (après un `setTimeout`, valeurs
+  grossières : répéter).
 - Sans les images : faux fichiers `MonsutaPotaru/wwwroot/images/donjon/<0001…1025>/AnimData.xml` (contenu `<AnimData/>`)
   pour que le parc accepte des Pokémon ; supprimer `wwwroot/images` après (vérifier d'abord qu'il ne contient que ces
   faux fichiers). Pour `ParkServiceTests` : `PokemonSprites.Load` sur un dossier temporaire du même genre, le temps de

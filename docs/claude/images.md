@@ -9,8 +9,8 @@ README : « Images des Pokémon », « Mise en ligne » (Images), « Lancer en l
 - Servies depuis le disque par `UseStaticFiles` (`Program.cs`) : `MapStaticAssets` ne connaît que les fichiers de la
   compilation, d'où aussi `Content Remove` dans le `.csproj`.
 - Rien n'est chargé depuis GitHub par le navigateur.
-- Exception : `parc/clairiere.png` (fond du parc) ne vient pas de `images.py` mais de `outils/clairiere.py`, envoyée par
-  `deploy\fond-parc.cmd` (voir `parc.md`).
+- Exception : `parc/tuiles/` (planches de la carte du parc, pack Cute Fantasy acheté) ne vient pas de `images.py` mais de
+  `outils/carte-parc.py`, envoyé par `deploy\fond-parc.cmd` (voir `parc.md`).
 
 ## Noms des fichiers
 - `pokemon/<numéro d'espèce>.png`, `<numéro>-<forme>.png` (nom de forme de PokéAPI), `femelle/`, et les mêmes sous

@@ -299,7 +299,8 @@ défaut) sont passés en Ardoise ; Classique, choisi de nouveau, est maintenant 
   l'inventaire, glisser-déposer, fermeture du menu sur téléphone) et `parc.js`. Pas de `onerror` / `onclick` dans le
   HTML : une image absente prend `data-remplacement="images/…/inconnu.png"` (ou `data-cacher-si-absente`), un seul
   écouteur d'`app.js` s'en charge. Pas d'`<ImportMap />` (script écrit dans la page) : `parc.js` est chargé par son
-  chemin. Test `SecurityHeadersTests.Pages_HaveNoInlineScript`.
+  chemin, et charge Phaser par le sien (`wwwroot/lib/phaser`, servi par le site). Test
+  `SecurityHeadersTests.Pages_HaveNoInlineScript`.
 - **Fichiers envoyés** : 8 Mo au plus depuis le navigateur (« Mes sauvegardes », « Transfert » :
   `StoredSaveService.ReadUploadAsync`), 4 Mo depuis la 3DS (`SyncEndpoints.MaxSaveBytes`) ; les sauvegardes Pokémon
   font au plus quelques Mo.
@@ -536,21 +537,28 @@ Dissuasif, pas infaillible : rien n'oblige le joueur à remplacer réellement sa
 
 ### Parc
 
-Le menu « Parc » (`/parc`) est une clairière en pixel art (lisière de forêt en haut, chemin, fleurs ; répétée en largeur
-sans couture) qui prend toute la largeur de la page, où vivent jusqu'à **30 Pokémon** de la
+Le menu « Parc » (`/parc`) est une carte en pixel art (forêt tout autour, chemins, étangs, prairie fleurie) qui prend
+toute la largeur de la page, où vivent jusqu'à **30 Pokémon** de la
 collection, stockage interne ou sauvegardes stockées, de **toutes les générations** (hors œufs ; `ParkService.Capacity`).
 « Choisir les Pokémon » ouvre la collection avec la recherche, les pastilles de filtres de « Ma collection » (génération,
 type, forme...) et le compteur. Les espèces dont SpriteCollab n'a pas encore les sprites (64, surtout de 9e génération)
 y sont grisées (🔒) et refusées ; elles viendront quand il les aura (relancer `outils/images.py donjon`, puis
-`images-serveur`). **Fond** : carte de 384 × 320 pixels, la taille de l'ancienne boîte PC en pixels de sprite
-(`images/parc/clairiere.png`), assemblée par `outils/clairiere.py` avec les tuiles du pack Tiny Tales 2D Overworld
-(graine 3, sans embranchement ; voir « Crédits »). La hauteur du parc est le plus grand nombre entier de fois la carte en
-pixels d'écran qui tient dans la hauteur visible (3, soit 960 pixels, sur un écran de 1440 à 150 %) ; sur un téléphone, pas
-plus que la carte entière en largeur. Les sprites sont dessinés aux deux tiers des pixels du fond, arrondis à un nombre
-entier de pixels d'écran (×2 quand le fond est à ×3, jamais moins de ×2) : dessin net, sans pixels de tailles inégales.
-Les Pokémon restent sous les arbres (`MARGIN_TOP`). Le pack ne se redistribue pas : la carte n'est ni dans Git ni
-téléchargée par `images.py`, `deploy\fond-parc.cmd` l'envoie sur le serveur (une fois, et après une nouvelle carte) ;
-sans elle, le parc est sur de l'herbe unie. Pour gérer son parc : l'interrupteur **« Seulement ceux du parc »** de la fenêtre ne montre que les
+`images-serveur`). **Carte** : faite dans [Tiled](https://www.mapeditor.org) avec les tuiles du pack Cute Fantasy (voir
+« Crédits »), 80 × 60 tuiles de 16 pixels, affichée par **Phaser** (moteur de jeu 2D, `wwwroot/lib/phaser`). Ses
+calques : « Sol », « Décors », « Devant » (feuillages, dessinés devant les Pokémon), « Collisions » (cases où l'on ne
+passe pas : eau, arbres, rochers, buissons, bancs) et « Zones », dont le rectangle **« Départ »** (24 × 20 tuiles) : les
+Pokémon y vivent, le reste de la carte est **assombri** (à débloquer plus tard). On **fait glisser la carte** (souris ou
+doigt) pour explorer les alentours ; la vue s'arrête aux bords. La hauteur du parc est le plus grand nombre entier de
+fois la zone « Départ » en pixels d'écran qui tient dans la hauteur visible (3, soit 960 pixels, sur un écran de 1440 à
+150 %) ; sur un téléphone, pas plus que la zone entière en largeur. Les sprites sont dessinés aux deux tiers des pixels de
+la carte, arrondis à un nombre entier de pixels d'écran (×2 quand la carte est à ×3, jamais moins de ×2) : dessin net,
+sans pixels de tailles inégales. **Nouvelle carte** : la dessiner dans Tiled (vue orthogonale, tuiles de 16 px, taille
+fixe, jeux de tuiles incorporés, mêmes calques), puis `python outils/carte-parc.py <carte .tmx>` : la carte va dans
+`wwwroot/parc/parc-1.json` (dans Git : rien que des numéros de tuiles), les planches du pack qu'elle utilise dans
+`wwwroot/images/parc/tuiles/` (hors Git : le pack ne se redistribue pas), et `deploy\fond-parc.cmd` les envoie sur le
+serveur. Sans les planches, le parc est sur de l'herbe unie, sans erreur. `ParkMapTests` vérifie la carte (calques,
+zone « Départ » dans la carte, chaque case libre accessible).
+Pour gérer son parc : l'interrupteur **« Seulement ceux du parc »** de la fenêtre ne montre que les
 Pokémon choisis (avec la recherche et les pastilles) ; la liste est figée quand on l'allume, un Pokémon décoché reste affiché
 pour pouvoir le recocher. **« Tout retirer »** décoche tout (rien ne change avant « Valider »), et **« Vider le parc »**, à
 côté de « Choisir les Pokémon », le vide d'un coup après confirmation (`ParkService.ClearAsync`) : ses Pokémon restent dans
@@ -560,7 +568,7 @@ doit pas lire ainsi le reste de la collection.
 Un Pokémon qui quitte la collection (retiré, sauvegarde mise à jour ou supprimée) quitte le parc (table `ParkMembers`,
 suppression en cascade).
 
-Animation dans le navigateur (`wwwroot/js/parc.js`), avec les sprites Donjon Mystère Idle, Walk et Sleep (8 directions)
+Animation dans le navigateur (`wwwroot/js/parc.js`, Phaser), avec les sprites Donjon Mystère Idle, Walk et Sleep (8 directions)
 de la **forme** du Pokémon (Raichu d'Alola, Ponyta de Galar, Zarbi B...) ou de sa **Méga-Évolution** s'il tient sa gemme,
 chromatique et femelle quand SpriteCollab les a, sinon ceux de l'espèce (`PokemonSprites.DonjonFolder` : noms de formes de
 PKHeX rapprochés de ceux de SpriteCollab, `images/donjon/formes.json`). Pour qu'ils aient l'air de vivre :
@@ -571,7 +579,10 @@ PKHeX rapprochés de ceux de SpriteCollab, `images/donjon/formes.json`). Pour qu
 - la **nuit** (heure de l'appareil, 22 h – 6 h, progressive le soir et à l'aube) : le parc s'assombrit, ils s'endorment plus
   tôt et dorment longtemps ;
 - la **curiosité** : un Pokémon éveillé se tourne vers le pointeur de la souris, et vient souvent voir de près ;
+- des **chemins** qui contournent les obstacles (recherche de chemin sur les cases de la carte, lissée en lignes droites) :
+  jamais sur une case bloquée, ni hors de la zone « Départ » ;
 - le nom au survol, des « z » au-dessus des dormeurs, les plus bas dessinés devant. Les positions ne sont pas gardées.
+  Limite connue : le feuillage (calque « Devant ») cache aussi la tête d'un Pokémon qui passe juste devant un arbre.
 
 ### Living dex
 
@@ -830,10 +841,12 @@ est incompatible (espèce, attaques ou objets inexistants dans le jeu, conversio
 | `MonsutaPotaru/Services/PokemonFingerprint.cs` | Empreinte d'un Pokémon et recherche de ses doublons dans le compte (vieille copie d'une sauvegarde) |
 | `MonsutaPotaru/Services/PokemonInfo.cs` | Noms français (dont « Rouge / Bleu », « Or / Argent », « Diamant / Perle », « Or HeartGold / Argent SoulSilver » pour les groupes de jeux : une sauvegarde de ces jeux ne dit pas lequel des deux ; migrations `GameNames` et `GameGroupNames` pour les noms déjà enregistrés), sprites, légalité |
 | `MonsutaPotaru/Components/Pages/Bank.razor` | Page « Transfert et stockage interne » (`/transfert`) : boîtes, glisser-déposer, sélection multiple |
-| `MonsutaPotaru/Components/Pages/Park.razor` | Page « Parc » : clairière où vivent jusqu'à 30 Pokémon, fenêtre de choix (« Seulement ceux du parc », « Tout retirer »), « Vider le parc », fiche au clic |
+| `MonsutaPotaru/Components/Pages/Park.razor` | Page « Parc » : carte où vivent jusqu'à 30 Pokémon, fenêtre de choix (« Seulement ceux du parc », « Tout retirer »), « Vider le parc », fiche au clic |
 | `MonsutaPotaru/SecurityHeaders.cs` | En-têtes de sécurité de toutes les réponses : nosniff, Referrer-Policy, CSP stricte (plus aucun script écrit dans la page) |
 | `MonsutaPotaru/wwwroot/js/app.js` | Scripts du site (chargés dans le `<head>`) : images de remplacement (`data-remplacement`), téléchargement, largeur d'écran, glisser-déposer, menu sur téléphone, cadre du thème Ardoise (repli du menu, rubriques, menu du compte) |
-| `MonsutaPotaru/wwwroot/js/parc.js` | Animation et comportement des Pokémon du parc (énergie, intentions, famille, nuit, curiosité) ; `simulate` pour les essais |
+| `MonsutaPotaru/wwwroot/js/parc.js` | Parc avec Phaser : carte Tiled, brouillard hors de la zone « Départ », vue qu'on fait glisser ; animation et comportement des Pokémon (énergie, intentions, famille, nuit, curiosité, chemins autour des obstacles) ; `simulate` et `view` pour les essais |
+| `MonsutaPotaru/wwwroot/lib/phaser/` | Phaser 3.90.0 (`phaser.esm.min.js`, module ES) et sa licence MIT |
+| `MonsutaPotaru/wwwroot/parc/parc-1.json` | Carte du parc (export de Tiled par `outils/carte-parc.py` : numéros de tuiles, calques, zone « Départ ») |
 | `MonsutaPotaru/Services/ParkService.cs` | Pokémon du parc : liste, choix (30 au plus, avec des sprites Donjon Mystère), retrait, vidage, famille d'évolution |
 | `MonsutaPotaru/Data/ParkMember.cs` | Table des Pokémon au parc (supprimée avec le Pokémon) |
 | `MonsutaPotaru/Components/Pages/LivingDexes.razor` | Page « Living dex » : cartes des living dex du compte (progression dans le mode choisi), création (jeu, générations repliables, puis sauvegarde) |
@@ -860,9 +873,10 @@ est incompatible (espèce, attaques ou objets inexistants dans le jeu, conversio
 | `MonsutaPotaru/Services/PokemonTraits.cs` | Caractéristiques d'un Pokémon enregistrées pour ces filtres (types récents, nature, talent, IV, forme, Méga) |
 | `MonsutaPotaru/Services/PokemonSprites.cs` | Choix de l'image d'un Pokémon : forme (noms de PKHeX → noms de PokéAPI), Méga-Évolution selon l'objet tenu, femelle, chromatique |
 | `MonsutaPotaru/wwwroot/images/` | Hors du dépôt Git (voir « Lancer en local ») ; images servies par le site : `pokemon/<numéro d'espèce>.png`, `pokemon/<numéro>-<forme>.png` (`19-alola.png`, `6-mega-x.png`, `6-gmax.png`), `pokemon/femelle/`, `pokemon/chromatique/` (mêmes sous-dossiers), `objets/<numéro d'objet>.png`, `objets/ct-<type>.png` pour les CT/DT, un `inconnu.png` dans chaque dossier |
-| `MonsutaPotaru/wwwroot/images/parc/clairiere.png` | Fond du parc (hors Git : `outils/clairiere.py`, envoyé par `deploy/fond-parc.cmd`) |
-| `outils/clairiere.py` | Assemble la clairière du parc avec les tuiles du pack Tiny Tales (Python et Pillow, dossier du pack en argument) |
-| `deploy/fond-parc.cmd` (`fond-parc.ps1`) | Envoie la clairière du parc dans les images du serveur, par SSH |
+| `MonsutaPotaru/wwwroot/images/parc/tuiles/` | Planches du pack Cute Fantasy utilisées par la carte du parc (hors Git : copiées par `outils/carte-parc.py`, envoyées par `deploy/fond-parc.cmd`) |
+| `outils/carte-parc.py` | Prépare une carte de Tiled pour le parc : vérifications, carte dans `wwwroot/parc/`, planches dans `images/parc/tuiles/` (Python seul ; un `.tmx` est exporté par Tiled en ligne de commande) |
+| `deploy/fond-parc.cmd` (`fond-parc.ps1`) | Envoie les planches du parc dans les images du serveur, par SSH |
+| `MonsutaPotaru.Tests/ParkMapTests.cs` | Carte du parc : ce que `parc.js` lit, zone « Départ » dans la carte, chaque case libre accessible |
 | `MonsutaPotaru/wwwroot/images/donjon/` | Sprites animés de SpriteCollab (Idle, Walk, Sleep) dans les dossiers de SpriteCollab (`0025/`, `0025/0000/0001/` chromatique...) : planches `<Animation>-Anim.png` et `AnimData.xml` réduit à ces animations ; `credits.txt` (auteurs) |
 | `outils/recuperer-images.cmd` | Copie les images du serveur dans `wwwroot/images` par SSH (après un clonage) |
 | `deploy/images-serveur.cmd` (`images-serveur.ps1`) | Remplit ou met à jour les images du serveur (`~/monsuta-potaru-images`) et redémarre le site |
@@ -906,7 +920,7 @@ l'IP du VPS.
    (demande le nom de domaine et le pseudo de ton compte, futur administrateur ; génère le code d'invitation de départ et
    l'affiche à la fin). Inscris-toi ensuite avec ce pseudo : le compte devient administrateur.
 3. Depuis Windows : `deploy\images-serveur.cmd ubuntu@IP_DU_VPS` (images, voir plus bas), puis
-   `deploy\fond-parc.cmd ubuntu@IP_DU_VPS` (fond du parc, assemblé en local).
+   `deploy\fond-parc.cmd ubuntu@IP_DU_VPS` (planches du parc, copiées en local depuis le pack).
 
 **Mises à jour** : par GitHub (« CI/CD » ci-dessous), ou `deploy\publier.cmd ubuntu@IP_DU_VPS` depuis Windows. Les
 migrations de la base s'appliquent au démarrage ; les données restent dans le volume Docker.
@@ -975,8 +989,9 @@ et servi depuis le disque (`Program.cs` : `MapStaticAssets` ne connaît que les 
 `deploy\images-serveur.cmd ubuntu@IP_DU_VPS` lance `outils/images.py --sortie ~/monsuta-potaru-images` sur le VPS (téléchargement
 depuis les projets d'origine, ~10 minutes la première fois, les images présentes sont gardées), puis redémarre le site,
 qui lit la liste des images au démarrage. À relancer pour mettre les images à jour. Les développeurs les copient depuis le
-VPS avec `outils\recuperer-images.cmd` (voir « Lancer en local »). Seule exception : le fond du parc, qui ne se télécharge
-nulle part (`outils/clairiere.py`, voir « Parc ») ; `deploy\fond-parc.cmd ubuntu@IP_DU_VPS` l'envoie depuis le PC.
+VPS avec `outils\recuperer-images.cmd` (voir « Lancer en local »). Seule exception : les planches du parc, qui ne se
+téléchargent nulle part (pack acheté, `outils/carte-parc.py`, voir « Parc ») ; `deploy\fond-parc.cmd ubuntu@IP_DU_VPS` les
+envoie depuis le PC.
 
 **Sauvegardes** : la sauvegarde de l'hébergeur ne couvre souvent que 24 h, or la base est le seul endroit où sont les
 Pokémon déposés. `deploy/sauvegarder.sh` archive chaque nuit le volume dans `~/sauvegardes` sur le VPS ; en garder aussi
@@ -1014,7 +1029,9 @@ Monsuta Potaru s'appuie sur le travail d'autres projets :
 | [PokéAPI](https://github.com/PokeAPI/pokeapi) (données) | Liste des formes de chaque espèce et des espèces dont la femelle est différente (tables `pokemon`, `pokemon_forms`, `pokemon_species`, lues par `outils/images.py` ; `has_gender_differences` reprise dans `GlobalLivingDex.GenderDifferences`) ; ordre des Pokédex régionaux des living dex (`pokemon_dex_numbers`, Pokédex « original-johto », « hoenn », « original-sinnoh », « extended-sinnoh », « updated-johto », « original-unova », « updated-unova », « kalos-central », « kalos-coastal », « kalos-mountain », « updated-hoenn », « original-alola », « updated-alola », « letsgo-kanto », « galar », « isle-of-armor », « crown-tundra », « hisui », « paldea », « kitakami » et « blueberry », repris dans `LivingDexGames`) | BSD-3-Clause |
 | [PokéSprite](https://github.com/msikma/pokesprite) (msikma) | Images d'objets absentes de PokéAPI, retrouvées par numéro d'objet (`data/item-map.json`) | MIT ; images © Nintendo / Creatures Inc. / GAME FREAK Inc. |
 | [SpriteCollab](https://github.com/PMDCollab/SpriteCollab) (PMD Collab, [sprites.pmdcollab.org](https://sprites.pmdcollab.org)) | Sprites animés façon Donjon Mystère du « Parc », animations Idle, Walk et Sleep (`wwwroot/images/donjon`, par `outils/images.py donjon`) ; auteurs de chaque sprite dans `wwwroot/images/donjon/credits.txt` | CC BY-NC 4.0 (usage non commercial, auteurs à citer) |
-| Tiny Tales 2D Overworld 2.0.1 (Megatiles, artiste Rayane Félix) | Tuiles de la clairière du « Parc », assemblées par `outils/clairiere.py` (`wwwroot/images/parc/clairiere.png`, hors Git) | Licence du pack : usage dans des jeux, même commerciaux, modifications permises ; redistribution des fichiers ou de leurs dérivés tels quels interdite (ni le pack ni la carte dans le dépôt) |
+| [Cute Fantasy RPG](https://kenmi-art.itch.io/cute-fantasy-rpg) (Kenmi), version premium, et ses extensions | Tuiles de la carte du « Parc » (herbe, chemins, eau, arbres, décors ; `wwwroot/images/parc/tuiles`, hors Git, copiées par `outils/carte-parc.py`) | Licence du pack (acheté) : usage dans tout projet, même commercial, modifications permises ; redistribution ou revente interdite, même modifié (ni le pack ni ses planches dans le dépôt) |
+| [Phaser](https://phaser.io) 3.90.0 (Richard Davey, Phaser Studio) | Moteur de jeu 2D du « Parc » : carte en tuiles, caméra, dessin (`wwwroot/lib/phaser`) | MIT |
+| [Tiled](https://www.mapeditor.org) (Thorbjørn Lindeijer) | Éditeur de la carte du « Parc » (format lu par Phaser ; outil seulement, rien de Tiled dans le site) | GPL-2.0 (l'éditeur ; les cartes faites avec appartiennent à leur auteur) |
 | [Bootstrap](https://getbootstrap.com) | Mise en page et composants de l'interface (`wwwroot/lib/bootstrap`) | MIT |
 | [Bootstrap Icons](https://icons.getbootstrap.com) | Icônes des menus (dessins SVG dans `wwwroot/app.css`, « Icônes des menus ») | MIT |
 | [ASP.NET Core, Blazor, Identity, Entity Framework Core](https://dotnet.microsoft.com) (Microsoft) | Site, comptes, accès à la base | MIT |
