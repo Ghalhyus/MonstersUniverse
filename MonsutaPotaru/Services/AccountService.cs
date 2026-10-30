@@ -193,11 +193,11 @@ public sealed class AccountService(UserManager<ApplicationUser> userManager, IDb
         return new(true, "Ton adresse mail a été changée : utilise-la pour te connecter.", user);
     }
 
-    /// <summary>Thème du compte (clé de <see cref="SiteThemes"/>), Classique sans compte ou sans choix.</summary>
+    /// <summary>Thème du compte (clé de <see cref="SiteThemes"/>), le thème par défaut (Ardoise) sans compte ou sans choix.</summary>
     public async Task<string> ThemeAsync(string? userId)
     {
         if (string.IsNullOrEmpty(userId))
-            return SiteThemes.Classic;
+            return SiteThemes.Default;
         await using var db = await dbFactory.CreateDbContextAsync();
         return SiteThemes.Normalize(await db.Users.Where(u => u.Id == userId).Select(u => u.Theme).FirstOrDefaultAsync());
     }
@@ -208,7 +208,7 @@ public sealed class AccountService(UserManager<ApplicationUser> userManager, IDb
         if (SiteThemes.All.FirstOrDefault(t => t.Key == key) is not { } theme)
             return new(false, "Ce thème n'existe pas.");
         await using var db = await dbFactory.CreateDbContextAsync();
-        var stored = theme.Key == SiteThemes.Classic ? null : theme.Key;
+        var stored = theme.Key == SiteThemes.Default ? null : theme.Key;
         if (await db.Users.Where(u => u.Id == userId).ExecuteUpdateAsync(u => u.SetProperty(x => x.Theme, stored)) == 0)
             return new(false, "Ce compte n'existe plus.");
         return new(true, $"Thème « {theme.Name} » appliqué.");

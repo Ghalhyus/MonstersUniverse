@@ -19,7 +19,7 @@
    Quitter la page pendant un échange demande confirmation, puis l'annule pour les deux. *@
 <NavigationLock ConfirmExternalNavigation="InTrade" OnBeforeInternalNavigation="BeforeLeaving" />
 
-<h1 class="mb-3">Échanges</h1>
+<PageHeader Title="Échanges" Icon="bi-list-nested-nav-menu" />
 
 @if (message is not null)
 {
@@ -33,131 +33,132 @@
 {
     var me = s.Me(userId);
     var other = s.Other(userId);
-    <div class="d-flex flex-wrap align-items-start gap-2 mb-3">
-        <div>
-            <h2 class="h5 mb-1">Échange avec @other.Pseudo</h2>
-            <div class="small text-muted">Ta sauvegarde : @me.SaveLabel · Sa sauvegarde : @other.SaveLabel</div>
-        </div>
-        @if (!s.IsOver && s.Stage != TradeStage.Trading)
-        {
-            <button type="button" class="btn btn-outline-danger ms-auto" @onclick="CancelTrade">Annuler l'échange</button>
-        }
-    </div>
-
-    @if (s.Notice is { } notice && s.Stage != TradeStage.Cancelled)
-    {
-        <div class="alert alert-warning">@notice</div>
-    }
-
-    @switch (s.Stage)
-    {
-        case TradeStage.Requested:
-            <p>En attente de la réponse de @other.Pseudo… La demande vaut jusqu'à @s.ExpiresAt.ToLocalTime().ToString("HH:mm"), tant que tu restes sur cette page.</p>
-            break;
-
-        case TradeStage.Choosing:
-        case TradeStage.Confirming:
-            var wants = s.Wants(userId);
-            var wantedFromMe = s.WantedFromMe(userId);
-            <div class="row g-3 mb-3">
-                <div class="col-md-6">
-                    <div class="card h-100">
-                        <div class="card-body">
-                            <div class="small text-muted mb-1">Tu reçois</div>
-                            @if (wants is null)
-                            {
-                                <em>Choisis ci-dessous le Pokémon de @other.Pseudo que tu veux.</em>
-                            }
-                            else
-                            {
-                                <TradePokemon Pokemon="wants" />
-                            }
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-6">
-                    <div class="card h-100">
-                        <div class="card-body">
-                            <div class="small text-muted mb-1">Tu donnes (choisi par @other.Pseudo)</div>
-                            @if (wantedFromMe is null)
-                            {
-                                <em>@other.Pseudo n'a pas encore choisi.</em>
-                            }
-                            else
-                            {
-                                <TradePokemon Pokemon="wantedFromMe" />
-                            }
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            @if (s.Stage == TradeStage.Confirming)
+    <Block Title="@($"Échange avec {other.Pseudo}")">
+        <Actions>
+            @if (!s.IsOver && s.Stage != TradeStage.Trading)
             {
-                <div class="alert alert-info d-flex flex-wrap align-items-center gap-2">
-                    <span>Tu donnes <strong>@wantedFromMe!.Name</strong> et tu reçois <strong>@wants!.Name</strong>.</span>
-                    @if (s.Confirmed(userId))
+                <button type="button" class="btn btn-outline-danger" @onclick="CancelTrade">Annuler l'échange</button>
+            }
+        </Actions>
+        <ChildContent>
+            <p class="small text-muted">Ta sauvegarde : @me.SaveLabel · Sa sauvegarde : @other.SaveLabel</p>
+
+            @if (s.Notice is { } notice && s.Stage != TradeStage.Cancelled)
+            {
+                <div class="alert alert-warning">@notice</div>
+            }
+
+            @switch (s.Stage)
+            {
+                case TradeStage.Requested:
+                    <p>En attente de la réponse de @other.Pseudo… La demande vaut jusqu'à @s.ExpiresAt.ToLocalTime().ToString("HH:mm"), tant que tu restes sur cette page.</p>
+                    break;
+
+                case TradeStage.Choosing:
+                case TradeStage.Confirming:
+                    var wants = s.Wants(userId);
+                    var wantedFromMe = s.WantedFromMe(userId);
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <div class="card h-100">
+                                <div class="card-body">
+                                    <div class="small text-muted mb-1">Tu reçois</div>
+                                    @if (wants is null)
+                                    {
+                                        <em>Choisis ci-dessous le Pokémon de @other.Pseudo que tu veux.</em>
+                                    }
+                                    else
+                                    {
+                                        <TradePokemon Pokemon="wants" />
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card h-100">
+                                <div class="card-body">
+                                    <div class="small text-muted mb-1">Tu donnes (choisi par @other.Pseudo)</div>
+                                    @if (wantedFromMe is null)
+                                    {
+                                        <em>@other.Pseudo n'a pas encore choisi.</em>
+                                    }
+                                    else
+                                    {
+                                        <TradePokemon Pokemon="wantedFromMe" />
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    @if (s.Stage == TradeStage.Confirming)
                     {
-                        <span class="ms-auto">✓ Validé, en attente de @other.Pseudo…</span>
+                        <div class="alert alert-info d-flex flex-wrap align-items-center gap-2">
+                            <span>Tu donnes <strong>@wantedFromMe!.Name</strong> et tu reçois <strong>@wants!.Name</strong>.</span>
+                            @if (s.Confirmed(userId))
+                            {
+                                <span class="ms-auto">✓ Validé, en attente de @other.Pseudo…</span>
+                            }
+                            else
+                            {
+                                @if (s.OtherConfirmed(userId))
+                                {
+                                    <span class="small">@other.Pseudo a validé.</span>
+                                }
+                                <button type="button" class="btn btn-primary ms-auto" @onclick="() => Confirm(true)" disabled="@busy">Valider l'échange</button>
+                                <button type="button" class="btn btn-outline-secondary" @onclick="() => Confirm(false)" disabled="@busy">Refuser</button>
+                            }
+                        </div>
+                    }
+
+                    <h3 class="h6 mt-3">Pokémon de @other.Pseudo que ta sauvegarde peut recevoir</h3>
+                    @if (theirs is null)
+                    {
+                        <p class="text-muted small">Chargement…</p>
+                    }
+                    else if (theirs.Count == 0)
+                    {
+                        <p class="text-muted small">Aucun : @other.Pseudo n'a rien que ton jeu puisse recevoir dans cette sauvegarde.</p>
                     }
                     else
                     {
-                        @if (s.OtherConfirmed(userId))
-                        {
-                            <span class="small">@other.Pseudo a validé.</span>
-                        }
-                        <button type="button" class="btn btn-primary ms-auto" @onclick="() => Confirm(true)" disabled="@busy">Valider l'échange</button>
-                        <button type="button" class="btn btn-outline-secondary" @onclick="() => Confirm(false)" disabled="@busy">Refuser</button>
+                        <div class="trade-candidates">
+                            @foreach (var candidate in theirs)
+                            {
+                                var c = candidate;
+                                <button type="button" class="trade-candidate @(wants?.Slot == c.Slot ? "selected" : "")" title="@c.Location"
+                                        @onclick="() => Choose(c)" disabled="@(busy || s.Confirmed(userId))">
+                                    <img src="@c.SpriteUrl" alt="" loading="lazy" data-remplacement="images/pokemon/inconnu.png" />
+                                    <span class="trade-candidate-name">@c.Name@(c.IsShiny ? " ✨" : "")</span>
+                                    <span class="small text-muted">@(c.IsEgg ? "Œuf" : $"N.{c.Level}") · @c.Location</span>
+                                </button>
+                            }
+                        </div>
                     }
-                </div>
-            }
+                    break;
 
-            <h3 class="h6 mt-3">Pokémon de @other.Pseudo que ta sauvegarde peut recevoir</h3>
-            @if (theirs is null)
-            {
-                <p class="text-muted small">Chargement…</p>
-            }
-            else if (theirs.Count == 0)
-            {
-                <p class="text-muted small">Aucun : @other.Pseudo n'a rien que ton jeu puisse recevoir dans cette sauvegarde.</p>
-            }
-            else
-            {
-                <div class="trade-candidates">
-                    @foreach (var candidate in theirs)
-                    {
-                        var c = candidate;
-                        <button type="button" class="trade-candidate @(wants?.Slot == c.Slot ? "selected" : "")" title="@c.Location"
-                                @onclick="() => Choose(c)" disabled="@(busy || s.Confirmed(userId))">
-                            <img src="@c.SpriteUrl" alt="" loading="lazy" data-remplacement="images/pokemon/inconnu.png" />
-                            <span class="trade-candidate-name">@c.Name@(c.IsShiny ? " ✨" : "")</span>
-                            <span class="small text-muted">@(c.IsEgg ? "Œuf" : $"N.{c.Level}") · @c.Location</span>
-                        </button>
-                    }
-                </div>
-            }
-            break;
+                case TradeStage.Trading:
+                    <p>Échange en cours…</p>
+                    break;
 
-        case TradeStage.Trading:
-            <p>Échange en cours…</p>
-            break;
+                case TradeStage.Done:
+                    <div class="alert alert-success">@(s.IsFirst(userId) ? s.Outcome!.FirstMessage : s.Outcome!.SecondMessage)</div>
+                    <div class="d-flex flex-wrap gap-2">
+                        <a class="btn btn-primary" href="sauvegardes">Mes sauvegardes</a>
+                        <button type="button" class="btn btn-outline-secondary" @onclick="NewTrade">Nouvel échange</button>
+                    </div>
+                    break;
 
-        case TradeStage.Done:
-            <div class="alert alert-success">@(s.IsFirst(userId) ? s.Outcome!.FirstMessage : s.Outcome!.SecondMessage)</div>
-            <div class="d-flex flex-wrap gap-2">
-                <a class="btn btn-primary" href="sauvegardes">Mes sauvegardes</a>
-                <button type="button" class="btn btn-outline-secondary" @onclick="NewTrade">Nouvel échange</button>
-            </div>
-            break;
-
-        case TradeStage.Cancelled:
-            <div class="alert alert-secondary">@s.Notice</div>
-            <div class="d-flex flex-wrap gap-2">
-                <a class="btn btn-primary" href="">Retour à l'accueil</a>
-                <button type="button" class="btn btn-outline-secondary" @onclick="NewTrade">Nouvel échange</button>
-            </div>
-            break;
-    }
+                case TradeStage.Cancelled:
+                    <div class="alert alert-secondary">@s.Notice</div>
+                    <div class="d-flex flex-wrap gap-2">
+                        <a class="btn btn-primary" href="">Retour à l'accueil</a>
+                        <button type="button" class="btn btn-outline-secondary" @onclick="NewTrade">Nouvel échange</button>
+                    </div>
+                    break;
+            }
+        </ChildContent>
+    </Block>
 }
 else
 {
@@ -165,79 +166,81 @@ else
     var incoming = Hub.Incoming(userId);
     @if (incoming.Count > 0)
     {
-        <h2 class="h5">Demandes reçues</h2>
-        <div class="list-group mb-4">
-            @foreach (var request in incoming)
-            {
-                var r = request;
-                <div class="list-group-item d-flex flex-wrap align-items-center gap-2">
-                    <span>
-                        <strong>@r.First.Pseudo</strong> te propose un échange : sa sauvegarde « @r.First.SaveLabel » contre ta sauvegarde « @r.Second.SaveLabel ».
-                        <span class="d-block small text-muted">Jusqu'à @r.ExpiresAt.ToLocalTime().ToString("HH:mm").</span>
-                    </span>
-                    <button type="button" class="btn btn-sm btn-primary ms-auto" @onclick="() => Accept(r)">Accepter</button>
-                    <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => Hub.Cancel(r, userId)">Refuser</button>
-                </div>
-            }
-        </div>
+        <Block Title="Demandes reçues" Flush="true">
+            <div class="list-group">
+                @foreach (var request in incoming)
+                {
+                    var r = request;
+                    <div class="list-group-item d-flex flex-wrap align-items-center gap-2">
+                        <span>
+                            <strong>@r.First.Pseudo</strong> te propose un échange : sa sauvegarde « @r.First.SaveLabel » contre ta sauvegarde « @r.Second.SaveLabel ».
+                            <span class="d-block small text-muted">Jusqu'à @r.ExpiresAt.ToLocalTime().ToString("HH:mm").</span>
+                        </span>
+                        <button type="button" class="btn btn-sm btn-primary ms-auto" @onclick="() => Accept(r)">Accepter</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => Hub.Cancel(r, userId)">Refuser</button>
+                    </div>
+                }
+            </div>
+        </Block>
     }
 
     @* ---------- Nouvel échange : l'ami, puis la paire de sauvegardes ---------- *@
-    <h2 class="h5">Nouvel échange</h2>
-    <p class="small text-muted">
-        L'échange se fait en direct, avec un ami connecté, entre deux sauvegardes stockées de même génération. Il porte sur la
-        version stockée de ta sauvegarde : si tu as joué depuis, mets-la d'abord à jour dans <a href="sauvegardes">Mes sauvegardes</a>.
-        Après l'échange, chacun télécharge sa sauvegarde et la remet dans son jeu.
-    </p>
-    @if (friends is null)
-    {
-        <p class="text-muted">Chargement…</p>
-    }
-    else if (friends.Count == 0)
-    {
-        <p class="text-muted">Il te faut un ami pour échanger : ajoute-en dans <a href="amis">Amis</a>.</p>
-    }
-    else
-    {
-        <select class="form-select mb-3 trade-friend" aria-label="Ami" value="@friendId" @onchange="FriendChosen">
-            <option value="">Choisis un ami…</option>
-            @foreach (var f in friends)
-            {
-                <option value="@f.UserId">@(f.Pseudo ?? FriendService.NoPseudo)</option>
-            }
-        </select>
-        @if (pairs is not null)
+    <Block Title="Nouvel échange">
+        <p class="small text-muted">
+            L'échange se fait en direct, avec un ami connecté, entre deux sauvegardes stockées de même génération. Il porte sur la
+            version stockée de ta sauvegarde : si tu as joué depuis, mets-la d'abord à jour dans <a href="sauvegardes">Mes sauvegardes</a>.
+            Après l'échange, chacun télécharge sa sauvegarde et la remet dans son jeu.
+        </p>
+        @if (friends is null)
         {
-            @if (pairs.Count == 0)
+            <p class="text-muted">Chargement…</p>
+        }
+        else if (friends.Count == 0)
+        {
+            <p class="text-muted">Il te faut un ami pour échanger : ajoute-en dans <a href="amis">Amis</a>.</p>
+        }
+        else
+        {
+            <select class="form-select mb-3 trade-friend" aria-label="Ami" value="@friendId" @onchange="FriendChosen">
+                <option value="">Choisis un ami…</option>
+                @foreach (var f in friends)
+                {
+                    <option value="@f.UserId">@(f.Pseudo ?? FriendService.NoPseudo)</option>
+                }
+            </select>
+            @if (pairs is not null)
             {
-                <p class="text-muted">Vous n'avez aucune sauvegarde stockée de la même génération.</p>
-            }
-            else
-            {
-                <div class="list-group">
-                    @foreach (var pair in pairs)
-                    {
-                        var p = pair;
-                        <div class="list-group-item d-flex flex-wrap align-items-center gap-2">
-                            <span>
-                                Ta sauvegarde : <strong>@p.Mine.Label</strong>
-                                <span class="d-block small text-muted">
-                                    Version stockée du @p.Mine.UpdatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
-                                    @if (p.Mine.MustDownloadBeforeUpdate)
-                                    {
-                                        <span class="text-warning-emphasis"> · modifiée par le site (@p.Mine.ServerChanges), pas encore téléchargée</span>
-                                    }
+                @if (pairs.Count == 0)
+                {
+                    <p class="text-muted">Vous n'avez aucune sauvegarde stockée de la même génération.</p>
+                }
+                else
+                {
+                    <div class="list-group">
+                        @foreach (var pair in pairs)
+                        {
+                            var p = pair;
+                            <div class="list-group-item d-flex flex-wrap align-items-center gap-2">
+                                <span>
+                                    Ta sauvegarde : <strong>@p.Mine.Label</strong>
+                                    <span class="d-block small text-muted">
+                                        Version stockée du @p.Mine.UpdatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
+                                        @if (p.Mine.MustDownloadBeforeUpdate)
+                                        {
+                                            <span class="text-warning-emphasis"> · modifiée par le site (@p.Mine.ServerChanges), pas encore téléchargée</span>
+                                        }
+                                    </span>
                                 </span>
-                            </span>
-                            <span class="mx-2">↔</span>
-                            <span>Sa sauvegarde : <strong>@p.Theirs.Label</strong></span>
-                            <button type="button" class="btn btn-sm btn-primary ms-auto" @onclick="() => Propose(p)" disabled="@busy">Proposer l'échange</button>
-                        </div>
-                    }
-                </div>
+                                <span class="mx-2">↔</span>
+                                <span>Sa sauvegarde : <strong>@p.Theirs.Label</strong></span>
+                                <button type="button" class="btn btn-sm btn-primary ms-auto" @onclick="() => Propose(p)" disabled="@busy">Proposer l'échange</button>
+                            </div>
+                        }
+                    </div>
+                }
             }
         }
-    }
+    </Block>
 }
 
 @code {

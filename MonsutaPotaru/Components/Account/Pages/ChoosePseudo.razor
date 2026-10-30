@@ -15,30 +15,32 @@
 
 <PageTitle>Choisis ton pseudo</PageTitle>
 
-<h1>Choisis ton pseudo</h1>
+<PageHeader Title="Choisis ton pseudo" Icon="bi-person-nav-menu" />
 
 <div class="row">
     <div class="col-lg-6">
-        <StatusMessage Message="@message" />
-        <p>
-            Ton compte n'a pas encore de pseudo. C'est lui que le site et ta 3DS afficheront à la place de ton adresse mail,
-            qui reste pour te connecter. Tu ne pourras plus le changer.
-        </p>
-        <EditForm Model="Input" method="post" OnValidSubmit="OnValidSubmitAsync" FormName="choose-pseudo">
-            <DataAnnotationsValidator />
-            <ValidationSummary class="text-danger" role="alert" />
-            <div class="form-floating mb-3">
-                <InputText @bind-Value="Input.Pseudo" id="Input.Pseudo" class="form-control" autocomplete="nickname" aria-required="true"
-                           maxlength="@AccountService.PseudoMaxLength" placeholder="pseudo" />
-                <label for="Input.Pseudo">Pseudo</label>
-                <div class="form-text">
-                    @AccountService.PseudoMinLength à @AccountService.PseudoMaxLength caractères : lettres, chiffres, espaces, tirets, points
-                    et tirets bas.
+        <Block>
+            <StatusMessage Message="@message" />
+            <p>
+                Ton compte n'a pas encore de pseudo. C'est lui que le site et ta 3DS afficheront à la place de ton adresse mail,
+                qui reste pour te connecter. Tu ne pourras plus le changer.
+            </p>
+            <EditForm Model="Input" method="post" OnValidSubmit="OnValidSubmitAsync" FormName="choose-pseudo">
+                <DataAnnotationsValidator />
+                <ValidationSummary class="text-danger" role="alert" />
+                <div class="form-floating mb-3">
+                    <InputText @bind-Value="Input.Pseudo" id="Input.Pseudo" class="form-control" autocomplete="nickname" aria-required="true"
+                               maxlength="@AccountService.PseudoMaxLength" placeholder="pseudo" />
+                    <label for="Input.Pseudo">Pseudo</label>
+                    <div class="form-text">
+                        @AccountService.PseudoMinLength à @AccountService.PseudoMaxLength caractères : lettres, chiffres, espaces, tirets, points
+                        et tirets bas.
+                    </div>
+                    <ValidationMessage For="() => Input.Pseudo" class="text-danger" />
                 </div>
-                <ValidationMessage For="() => Input.Pseudo" class="text-danger" />
-            </div>
-            <button type="submit" class="w-100 btn btn-lg btn-primary">Valider</button>
-        </EditForm>
+                <button type="submit" class="w-100 btn btn-lg btn-primary">Valider</button>
+            </EditForm>
+        </Block>
     </div>
 </div>
 

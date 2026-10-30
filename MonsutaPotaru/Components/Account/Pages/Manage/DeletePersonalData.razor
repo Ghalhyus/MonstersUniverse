@@ -16,33 +16,34 @@
 
 <StatusMessage Message="@message" />
 
-<h3>Supprimer mon compte</h3>
+<Block Title="Supprimer mon compte">
 
-<div class="alert alert-warning" role="alert">
-    <p>
-        <strong>Ton compte sera supprimé avec tout ce qu'il contient : tes Pokémon, tes sauvegardes stockées, ton
-        porte-monnaie, tes objets, tes living dex. Sans retour possible.</strong>
-    </p>
-    <p class="mb-0">
-        Télécharge d'abord les sauvegardes que tu veux garder (« Mes sauvegardes »).
-    </p>
-</div>
+    <div class="alert alert-warning" role="alert">
+        <p>
+            <strong>Ton compte sera supprimé avec tout ce qu'il contient : tes Pokémon, tes sauvegardes stockées, ton
+            porte-monnaie, tes objets, tes living dex. Sans retour possible.</strong>
+        </p>
+        <p class="mb-0">
+            Télécharge d'abord les sauvegardes que tu veux garder (« Mes sauvegardes »).
+        </p>
+    </div>
 
-<div>
-    <EditForm Model="Input" FormName="delete-user" OnValidSubmit="OnValidSubmitAsync" method="post">
-        <DataAnnotationsValidator />
-        <ValidationSummary class="text-danger" role="alert" />
-        @if (requirePassword)
-        {
-            <div class="form-floating mb-3">
-                <InputText type="password" @bind-Value="Input.Password" id="Input.Password" class="form-control" autocomplete="current-password" aria-required="true" placeholder="mot de passe" />
-                <label for="Input.Password" class="form-label">Mot de passe</label>
-                <ValidationMessage For="() => Input.Password" class="text-danger" />
-            </div>
-        }
-        <button class="w-100 btn btn-lg btn-danger" type="submit">Supprimer définitivement mon compte</button>
-    </EditForm>
-</div>
+    <div>
+        <EditForm Model="Input" FormName="delete-user" OnValidSubmit="OnValidSubmitAsync" method="post">
+            <DataAnnotationsValidator />
+            <ValidationSummary class="text-danger" role="alert" />
+            @if (requirePassword)
+            {
+                <div class="form-floating mb-3">
+                    <InputText type="password" @bind-Value="Input.Password" id="Input.Password" class="form-control" autocomplete="current-password" aria-required="true" placeholder="mot de passe" />
+                    <label for="Input.Password" class="form-label">Mot de passe</label>
+                    <ValidationMessage For="() => Input.Password" class="text-danger" />
+                </div>
+            }
+            <button class="w-100 btn btn-lg btn-danger" type="submit">Supprimer définitivement mon compte</button>
+        </EditForm>
+    </div>
+</Block>
 
 @code {
     private string? message;

@@ -12,51 +12,53 @@
 
 <PageTitle>Inscription</PageTitle>
 
-<h1>Inscription</h1>
+<PageHeader Title="Inscription" Icon="bi-person-nav-menu" />
 
 <div class="row">
     <div class="col-lg-6">
-        <StatusMessage Message="@message" />
-        <EditForm Model="Input" asp-route-returnUrl="@ReturnUrl" method="post" OnValidSubmit="RegisterUser" FormName="register">
-            <DataAnnotationsValidator />
-            <h2>Créer un compte</h2>
-            <p class="text-muted">L'inscription nécessite le code d'invitation fourni par l'administrateur.</p>
-            <hr />
-            <ValidationSummary class="text-danger" role="alert" />
-            <div class="form-floating mb-3">
-                <InputText @bind-Value="Input.Pseudo" id="Input.Pseudo" class="form-control" autocomplete="nickname" aria-required="true"
-                           maxlength="@AccountService.PseudoMaxLength" placeholder="pseudo" />
-                <label for="Input.Pseudo">Pseudo</label>
-                <div class="form-text">
-                    @AccountService.PseudoMinLength à @AccountService.PseudoMaxLength caractères : lettres, chiffres, espaces, tirets, points
-                    et tirets bas. Affiché sur le site et sur ta 3DS ; tu ne pourras plus le changer.
+        <Block>
+            <StatusMessage Message="@message" />
+            <EditForm Model="Input" asp-route-returnUrl="@ReturnUrl" method="post" OnValidSubmit="RegisterUser" FormName="register">
+                <DataAnnotationsValidator />
+                <h2>Créer un compte</h2>
+                <p class="text-muted">L'inscription nécessite le code d'invitation fourni par l'administrateur.</p>
+                <hr />
+                <ValidationSummary class="text-danger" role="alert" />
+                <div class="form-floating mb-3">
+                    <InputText @bind-Value="Input.Pseudo" id="Input.Pseudo" class="form-control" autocomplete="nickname" aria-required="true"
+                               maxlength="@AccountService.PseudoMaxLength" placeholder="pseudo" />
+                    <label for="Input.Pseudo">Pseudo</label>
+                    <div class="form-text">
+                        @AccountService.PseudoMinLength à @AccountService.PseudoMaxLength caractères : lettres, chiffres, espaces, tirets, points
+                        et tirets bas. Affiché sur le site et sur ta 3DS ; tu ne pourras plus le changer.
+                    </div>
+                    <ValidationMessage For="() => Input.Pseudo" class="text-danger" />
                 </div>
-                <ValidationMessage For="() => Input.Pseudo" class="text-danger" />
-            </div>
-            <div class="form-floating mb-3">
-                <InputText @bind-Value="Input.Email" id="Input.Email" class="form-control" autocomplete="username" aria-required="true" placeholder="nom@exemple.fr" />
-                <label for="Input.Email">Adresse mail</label>
-                <div class="form-text">Pour te connecter ; jamais affichée aux autres.</div>
-                <ValidationMessage For="() => Input.Email" class="text-danger" />
-            </div>
-            <div class="form-floating mb-3">
-                <InputText type="password" @bind-Value="Input.Password" id="Input.Password" class="form-control" autocomplete="new-password" aria-required="true" placeholder="mot de passe" />
-                <label for="Input.Password">Mot de passe</label>
-                <div class="form-text">Au moins @AccountService.PasswordMinLength caractères, avec une majuscule, une minuscule, un chiffre et un caractère spécial.</div>
-                <ValidationMessage For="() => Input.Password" class="text-danger" />
-            </div>
-            <div class="form-floating mb-3">
-                <InputText type="password" @bind-Value="Input.ConfirmPassword" id="Input.ConfirmPassword" class="form-control" autocomplete="new-password" aria-required="true" placeholder="mot de passe" />
-                <label for="Input.ConfirmPassword">Confirmer le mot de passe</label>
-                <ValidationMessage For="() => Input.ConfirmPassword" class="text-danger" />
-            </div>
-            <div class="form-floating mb-3">
-                <InputText @bind-Value="Input.InviteCode" id="Input.InviteCode" class="form-control" autocomplete="off" aria-required="true" placeholder="code" />
-                <label for="Input.InviteCode">Code d'invitation</label>
-                <ValidationMessage For="() => Input.InviteCode" class="text-danger" />
-            </div>
-            <button type="submit" class="w-100 btn btn-lg btn-primary">S'inscrire</button>
-        </EditForm>
+                <div class="form-floating mb-3">
+                    <InputText @bind-Value="Input.Email" id="Input.Email" class="form-control" autocomplete="username" aria-required="true" placeholder="nom@exemple.fr" />
+                    <label for="Input.Email">Adresse mail</label>
+                    <div class="form-text">Pour te connecter ; jamais affichée aux autres.</div>
+                    <ValidationMessage For="() => Input.Email" class="text-danger" />
+                </div>
+                <div class="form-floating mb-3">
+                    <InputText type="password" @bind-Value="Input.Password" id="Input.Password" class="form-control" autocomplete="new-password" aria-required="true" placeholder="mot de passe" />
+                    <label for="Input.Password">Mot de passe</label>
+                    <div class="form-text">Au moins @AccountService.PasswordMinLength caractères, avec une majuscule, une minuscule, un chiffre et un caractère spécial.</div>
+                    <ValidationMessage For="() => Input.Password" class="text-danger" />
+                </div>
+                <div class="form-floating mb-3">
+                    <InputText type="password" @bind-Value="Input.ConfirmPassword" id="Input.ConfirmPassword" class="form-control" autocomplete="new-password" aria-required="true" placeholder="mot de passe" />
+                    <label for="Input.ConfirmPassword">Confirmer le mot de passe</label>
+                    <ValidationMessage For="() => Input.ConfirmPassword" class="text-danger" />
+                </div>
+                <div class="form-floating mb-3">
+                    <InputText @bind-Value="Input.InviteCode" id="Input.InviteCode" class="form-control" autocomplete="off" aria-required="true" placeholder="code" />
+                    <label for="Input.InviteCode">Code d'invitation</label>
+                    <ValidationMessage For="() => Input.InviteCode" class="text-danger" />
+                </div>
+                <button type="submit" class="w-100 btn btn-lg btn-primary">S'inscrire</button>
+            </EditForm>
+        </Block>
     </div>
 </div>
 

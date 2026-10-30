@@ -14,22 +14,22 @@
 @* Sauvegardes stockées sur le serveur pour consultation : leurs Pokémon apparaissent dans « Ma collection »
    en lecture seule. Ajout, mise à jour (même partie uniquement) et suppression (qui rend le fichier). *@
 
-<h1 class="mb-2">Mes sauvegardes <span class="badge bg-primary fs-6 align-middle">@saves.Count</span></h1>
-<p class="small text-muted">
-    Les Pokémon d'une sauvegarde stockée apparaissent dans « Ma collection » en lecture seule (💾) : ils ne peuvent pas être
-    transférés, et la sauvegarde est refusée dans « Transfert » tant qu'elle est stockée. Tous les jeux lus par PKHeX sont
-    acceptés ; seuls Noir 2 / Blanc 2 ont été testés.
-</p>
+<PageHeader Title="Mes sauvegardes" Count="@saves.Count.ToString()" Icon="bi-save-nav-menu">
+    <Description>
+        Les Pokémon d'une sauvegarde stockée apparaissent dans « Ma collection » en lecture seule (💾) : ils ne peuvent pas être
+        transférés, et la sauvegarde est refusée dans « Transfert » tant qu'elle est stockée. Tous les jeux lus par PKHeX sont
+        acceptés ; seuls Noir 2 / Blanc 2 ont été testés.
+    </Description>
+    <Actions>
+        <label class="btn btn-primary mb-0 @(busy ? "disabled" : "")">
+            + Ajouter une sauvegarde
+            <InputFile @key="fileInputVersion" class="d-none" OnChange="AddSave" disabled="@busy" />
+        </label>
+    </Actions>
+</PageHeader>
 
 @* Les sauvegardes comptent dans la taille de la collection : on voit ici ce qu'il reste avant d'en ajouter une. *@
 <CollectionGauge Usage="usage" OnPurchase="OnPurchase" />
-
-<div class="d-flex justify-content-end mb-3">
-    <label class="btn btn-primary mb-0 @(busy ? "disabled" : "")">
-        + Ajouter une sauvegarde
-        <InputFile @key="fileInputVersion" class="d-none" OnChange="AddSave" disabled="@busy" />
-    </label>
-</div>
 
 @if (message is not null)
 {

@@ -15,6 +15,9 @@ public static class SiteThemes
     public const string Pokedex = "pokedex";
     public const string Ardoise = "ardoise";
 
+    /// <summary>Thème sans compte, ou d'un compte qui n'en a pas choisi (colonne <c>Theme</c> à null).</summary>
+    public const string Default = Ardoise;
+
     public static readonly IReadOnlyList<SiteTheme> All =
     [
         new(Classic, "Classique", "Le thème d'origine du site : sobre, menu bleu nuit et violet."),
@@ -24,6 +27,6 @@ public static class SiteThemes
             + "la page et ton compte, contenus en blocs blancs, touches d'orange."),
     ];
 
-    /// <summary>Clé d'un thème connu, ou celle du thème par défaut (Classique) pour une valeur absente ou inconnue.</summary>
-    public static string Normalize(string? key) => All.FirstOrDefault(t => t.Key == key)?.Key ?? Classic;
+    /// <summary>Clé d'un thème connu, ou celle du thème par défaut (Ardoise) pour une valeur absente ou inconnue.</summary>
+    public static string Normalize(string? key) => All.FirstOrDefault(t => t.Key == key)?.Key ?? Default;
 }

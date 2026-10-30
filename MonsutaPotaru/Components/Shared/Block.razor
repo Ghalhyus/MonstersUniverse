@@ -1,0 +1,44 @@
+@* Bloc d'une page : une partie avec son titre (h2) et ses boutons d'action. Thèmes Classique et Pokédex : le titre
+   comme un sous-titre, le contenu dessous, sans cadre. Thème Ardoise : un panneau blanc à en-tête
+   (wwwroot/themes/ardoise.css). *@
+
+<section class="block @(Flush ? "block-flush" : "") @Class" id="@Id">
+    @if (Title is not null || Actions is not null)
+    {
+        <div class="block-header">
+            @if (Title is not null)
+            {
+                <h2 class="block-title h5">
+                    @Title
+                    @if (Count is not null)
+                    {
+                        <span class="badge bg-primary ms-1 block-count">@Count</span>
+                    }
+                </h2>
+            }
+            @if (Actions is not null)
+            {
+                <div class="block-actions">@Actions</div>
+            }
+        </div>
+    }
+    <div class="block-body">@ChildContent</div>
+</section>
+
+@code {
+    [Parameter] public string? Title { get; set; }
+
+    /// <summary>Nombre affiché en pastille après le titre.</summary>
+    [Parameter] public string? Count { get; set; }
+
+    /// <summary>Boutons d'action, à droite du titre.</summary>
+    [Parameter] public RenderFragment? Actions { get; set; }
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>Contenu collé aux bords du panneau (liste, tableau) dans le thème Ardoise.</summary>
+    [Parameter] public bool Flush { get; set; }
+
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public string? Id { get; set; }
+}

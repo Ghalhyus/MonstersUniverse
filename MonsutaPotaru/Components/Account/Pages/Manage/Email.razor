@@ -13,33 +13,34 @@
 
 <PageTitle>Adresse mail</PageTitle>
 
-<h3>Adresse mail</h3>
+<Block Title="Adresse mail">
 
-<StatusMessage Message="@message" />
-<div class="row">
-    <div class="col-xl-6">
-        <p>C'est avec elle que tu te connectes. Le site n'y envoie jamais rien et ne la montre à personne.</p>
-        <EditForm Model="Input" FormName="change-email" OnValidSubmit="OnValidSubmitAsync" method="post">
-            <DataAnnotationsValidator />
-            <ValidationSummary class="text-danger" role="alert" />
-            <div class="form-floating mb-3">
-                <input type="text" value="@email" id="email" class="form-control" placeholder="adresse mail" disabled />
-                <label for="email" class="form-label">Adresse actuelle</label>
-            </div>
-            <div class="form-floating mb-3">
-                <InputText @bind-Value="Input.NewEmail" id="Input.NewEmail" class="form-control" autocomplete="email" aria-required="true" placeholder="nom@exemple.fr" />
-                <label for="Input.NewEmail" class="form-label">Nouvelle adresse</label>
-                <ValidationMessage For="() => Input.NewEmail" class="text-danger" />
-            </div>
-            <div class="form-floating mb-3">
-                <InputText type="password" @bind-Value="Input.Password" id="Input.Password" class="form-control" autocomplete="current-password" aria-required="true" placeholder="mot de passe" />
-                <label for="Input.Password" class="form-label">Mot de passe</label>
-                <ValidationMessage For="() => Input.Password" class="text-danger" />
-            </div>
-            <button type="submit" class="w-100 btn btn-lg btn-primary">Changer d'adresse</button>
-        </EditForm>
+    <StatusMessage Message="@message" />
+    <div class="row">
+        <div class="col-xl-6">
+            <p>C'est avec elle que tu te connectes. Le site n'y envoie jamais rien et ne la montre à personne.</p>
+            <EditForm Model="Input" FormName="change-email" OnValidSubmit="OnValidSubmitAsync" method="post">
+                <DataAnnotationsValidator />
+                <ValidationSummary class="text-danger" role="alert" />
+                <div class="form-floating mb-3">
+                    <input type="text" value="@email" id="email" class="form-control" placeholder="adresse mail" disabled />
+                    <label for="email" class="form-label">Adresse actuelle</label>
+                </div>
+                <div class="form-floating mb-3">
+                    <InputText @bind-Value="Input.NewEmail" id="Input.NewEmail" class="form-control" autocomplete="email" aria-required="true" placeholder="nom@exemple.fr" />
+                    <label for="Input.NewEmail" class="form-label">Nouvelle adresse</label>
+                    <ValidationMessage For="() => Input.NewEmail" class="text-danger" />
+                </div>
+                <div class="form-floating mb-3">
+                    <InputText type="password" @bind-Value="Input.Password" id="Input.Password" class="form-control" autocomplete="current-password" aria-required="true" placeholder="mot de passe" />
+                    <label for="Input.Password" class="form-label">Mot de passe</label>
+                    <ValidationMessage For="() => Input.Password" class="text-danger" />
+                </div>
+                <button type="submit" class="w-100 btn btn-lg btn-primary">Changer d'adresse</button>
+            </EditForm>
+        </div>
     </div>
-</div>
+</Block>
 
 @code {
     private string? message;

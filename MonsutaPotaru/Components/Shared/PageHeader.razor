@@ -1,0 +1,58 @@
+@* En-tête d'une page : titre (h1, cible du focus après une navigation), nombre en pastille, description et boutons
+   d'action à droite. Thèmes Classique et Pokédex : le titre et sa description comme avant, les actions sur la même
+   ligne. Thème Ardoise : un bandeau blanc, l'icône de la page dans un carré orange (wwwroot/themes/ardoise.css). *@
+
+<header class="page-header @(Small ? "page-header-small" : "")">
+    @if (Icon is not null)
+    {
+        <span class="page-header-icon" aria-hidden="true"><span class="bi @Icon"></span></span>
+    }
+    <div class="page-header-main">
+        @if (BackHref is not null)
+        {
+            <a class="page-header-back small" href="@BackHref">← @BackLabel</a>
+        }
+        <h1 class="page-header-title @(Small ? "h3" : "")">
+            @Title
+            @if (Count is not null)
+            {
+                <span class="badge bg-primary fs-6 align-middle ms-1 page-header-count">@Count</span>
+            }
+        </h1>
+        @if (Description is not null)
+        {
+            <div class="page-header-description small text-muted">@Description</div>
+        }
+        @ChildContent
+    </div>
+    @if (Actions is not null)
+    {
+        <div class="page-header-actions">@Actions</div>
+    }
+</header>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+
+    /// <summary>Nombre affiché en pastille après le titre (« 60 », « 12 / 30 »).</summary>
+    [Parameter] public string? Count { get; set; }
+
+    /// <summary>Icône du menu (« bi-save-nav-menu », app.css) : affichée par le thème Ardoise seulement.</summary>
+    [Parameter] public string? Icon { get; set; }
+
+    /// <summary>Titre plus petit : page d'un autre joueur, sous son en-tête (<c>PlayerHeader</c>).</summary>
+    [Parameter] public bool Small { get; set; }
+
+    /// <summary>Lien de retour au-dessus du titre (« ← Living dex »).</summary>
+    [Parameter] public string? BackHref { get; set; }
+    [Parameter] public string? BackLabel { get; set; }
+
+    /// <summary>Texte d'explication sous le titre (petit, grisé).</summary>
+    [Parameter] public RenderFragment? Description { get; set; }
+
+    /// <summary>Boutons d'action, à droite du titre.</summary>
+    [Parameter] public RenderFragment? Actions { get; set; }
+
+    /// <summary>Contenu de plus sous le titre et sa description (choix d'un mode...).</summary>
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

@@ -28,7 +28,7 @@
     [CascadingParameter]
     private HttpContext HttpContext { get; set; } = default!;
 
-    private string theme = MonsutaPotaru.Services.SiteThemes.Classic;
+    private string theme = MonsutaPotaru.Services.SiteThemes.Default;
 
     // Menu du thème Ardoise replié en colonne d'icônes : choix gardé dans un cookie (posé par wwwroot/js/app.js), lu ici
     // pour que la page arrive déjà dans le bon état, sans menu qui se replie sous les yeux.

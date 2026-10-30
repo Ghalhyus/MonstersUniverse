@@ -30,19 +30,24 @@ else
 {
     <PlayerHeader Player="player" Current="PublicPages.LivingDex" />
 }
-<h1 class="mb-2 @(Visitor ? "h3" : "")">Living dex</h1>
-@if (!Visitor)
+@if (Visitor)
 {
-<p class="small text-muted">
-    Un exemplaire de chaque Pokémon du Pokédex d'un jeu, dans l'équipe et les boîtes d'une de tes sauvegardes stockées : il
-    se met à jour avec elle (« Mettre à jour » dans « Mes sauvegardes », ou depuis ta 3DS). Un living dex par jeu ; pour
-    l'instant les jeux de 1re à 9e génération (Rouge, Bleu, Jaune, Or, Argent, Cristal, Rubis, Saphir, Émeraude, Rouge Feu,
-    Vert Feuille, Diamant, Perle, Platine, Or HeartGold, Argent SoulSilver, Noire, Blanche, Noire 2, Blanche 2, X, Y,
-    Rubis Oméga, Saphir Alpha, Soleil, Lune, Ultra-Soleil, Ultra-Lune, Let's Go Pikachu, Let's Go Évoli, Épée, Bouclier,
-    Diamant Étincelant, Perle Scintillante, Légendes Arceus, Écarlate, Violet). Le <strong>living dex global</strong>, lui,
-    compte les Pokémon de ton stockage interne (« Transfert »), tous jeux confondus, avec un mode de plus : Ultime, chaque
-    forme de chaque espèce ; le <strong>global chromatique</strong>, pareil avec tes chromatiques.
-</p>
+    <PageHeader Title="Living dex" Small="true" />
+}
+else
+{
+    <PageHeader Title="Living dex" Icon="bi-book-nav-menu">
+        <Description>
+            Un exemplaire de chaque Pokémon du Pokédex d'un jeu, dans l'équipe et les boîtes d'une de tes sauvegardes stockées : il
+            se met à jour avec elle (« Mettre à jour » dans « Mes sauvegardes », ou depuis ta 3DS). Un living dex par jeu ; pour
+            l'instant les jeux de 1re à 9e génération (Rouge, Bleu, Jaune, Or, Argent, Cristal, Rubis, Saphir, Émeraude, Rouge Feu,
+            Vert Feuille, Diamant, Perle, Platine, Or HeartGold, Argent SoulSilver, Noire, Blanche, Noire 2, Blanche 2, X, Y,
+            Rubis Oméga, Saphir Alpha, Soleil, Lune, Ultra-Soleil, Ultra-Lune, Let's Go Pikachu, Let's Go Évoli, Épée, Bouclier,
+            Diamant Étincelant, Perle Scintillante, Légendes Arceus, Écarlate, Violet). Le <strong>living dex global</strong>, lui,
+            compte les Pokémon de ton stockage interne (« Transfert »), tous jeux confondus, avec un mode de plus : Ultime, chaque
+            forme de chaque espèce ; le <strong>global chromatique</strong>, pareil avec tes chromatiques.
+        </Description>
+    </PageHeader>
 }
 
 @if (message is not null)

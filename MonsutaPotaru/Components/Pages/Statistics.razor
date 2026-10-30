@@ -10,73 +10,75 @@
 
 @* Statistiques du joueur (menu de son pseudo), base des futurs succès : échanges et combats. *@
 
-<h1 class="mb-3">Statistiques</h1>
+<PageHeader Title="Statistiques" Icon="bi-grid-nav-menu" />
 
-<h2 class="h5">Échanges</h2>
-@if (stats is null)
-{
-    <p class="text-muted">Chargement…</p>
-}
-else
-{
-    <div class="stat-tiles">
-        <div class="card">
-            <div class="card-body">
-                <div class="small text-muted">Échanges réussis</div>
-                <div class="stat-value">@stats.Total</div>
-            </div>
-        </div>
-        <div class="card">
-            <div class="card-body">
-                <div class="small text-muted">Partenaires différents</div>
-                <div class="stat-value">@stats.Partners</div>
-            </div>
-        </div>
-    </div>
-    @if (stats.Total == 0)
+<Block Title="Échanges">
+    @if (stats is null)
     {
-        <p class="text-muted small mt-3">Aucun échange pour l'instant : propose-en un à un ami dans <a href="echanges">Échanges</a>.</p>
+        <p class="text-muted">Chargement…</p>
     }
-}
+    else
+    {
+        <div class="stat-tiles">
+            <div class="card">
+                <div class="card-body">
+                    <div class="small text-muted">Échanges réussis</div>
+                    <div class="stat-value">@stats.Total</div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-body">
+                    <div class="small text-muted">Partenaires différents</div>
+                    <div class="stat-value">@stats.Partners</div>
+                </div>
+            </div>
+        </div>
+        @if (stats.Total == 0)
+        {
+            <p class="text-muted small mt-3">Aucun échange pour l'instant : propose-en un à un ami dans <a href="echanges">Échanges</a>.</p>
+        }
+    }
+</Block>
 
-<h2 class="h5 mt-4">Combats</h2>
-@if (battles is null)
-{
-    <p class="text-muted">Chargement…</p>
-}
-else
-{
-    <div class="stat-tiles">
-        <div class="card">
-            <div class="card-body">
-                <div class="small text-muted">Victoires</div>
-                <div class="stat-value">@battles.Won</div>
-            </div>
-        </div>
-        <div class="card">
-            <div class="card-body">
-                <div class="small text-muted">Défaites</div>
-                <div class="stat-value">@battles.Lost</div>
-            </div>
-        </div>
-        <div class="card">
-            <div class="card-body">
-                <div class="small text-muted">Matchs nuls</div>
-                <div class="stat-value">@battles.Draws</div>
-            </div>
-        </div>
-        <div class="card">
-            <div class="card-body">
-                <div class="small text-muted">Adversaires différents</div>
-                <div class="stat-value">@battles.Opponents</div>
-            </div>
-        </div>
-    </div>
-    @if (battles.Total == 0)
+<Block Title="Combats">
+    @if (battles is null)
     {
-        <p class="text-muted small mt-3">Aucun combat pour l'instant : défie un ami dans <a href="combats">Combats</a>.</p>
+        <p class="text-muted">Chargement…</p>
     }
-}
+    else
+    {
+        <div class="stat-tiles">
+            <div class="card">
+                <div class="card-body">
+                    <div class="small text-muted">Victoires</div>
+                    <div class="stat-value">@battles.Won</div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-body">
+                    <div class="small text-muted">Défaites</div>
+                    <div class="stat-value">@battles.Lost</div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-body">
+                    <div class="small text-muted">Matchs nuls</div>
+                    <div class="stat-value">@battles.Draws</div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-body">
+                    <div class="small text-muted">Adversaires différents</div>
+                    <div class="stat-value">@battles.Opponents</div>
+                </div>
+            </div>
+        </div>
+        @if (battles.Total == 0)
+        {
+            <p class="text-muted small mt-3">Aucun combat pour l'instant : défie un ami dans <a href="combats">Combats</a>.</p>
+        }
+    }
+</Block>
 
 @code {
     [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = default!;

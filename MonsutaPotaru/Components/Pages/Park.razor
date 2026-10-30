@@ -32,19 +32,20 @@ else
 {
     <PlayerHeader Player="player" Current="PublicPages.Park" />
 }
-<div class="d-flex flex-wrap align-items-center gap-2 mb-2">
-    <h1 class="mb-0 @(Visitor ? "h3" : "")">Parc <span class="badge bg-primary fs-6 align-middle">@members.Count / @ParkService.Capacity</span></h1>
-    @if (!Visitor)
-    {
-        <button type="button" class="btn btn-outline-danger ms-auto" @onclick="() => confirmClear = true"
-                disabled="@(busy || members.Count == 0)">Vider le parc</button>
-        <button type="button" class="btn btn-primary" @onclick="OpenChooser">Choisir les Pokémon</button>
-    }
-</div>
-<p class="small text-muted">
-    @(Visitor ? $"Les Pokémon de {player!.Pseudo} vivent ici" : "Tes Pokémon vivent ici") : ils se promènent, se reposent,
-    rendent visite à leur famille et dorment quand ils sont fatigués (plus tôt le soir). Clique sur l'un d'eux pour voir sa fiche.
-</p>
+<PageHeader Title="Parc" Count="@($"{members.Count} / {ParkService.Capacity}")" Small="Visitor" Icon="@(Visitor ? null : "bi-tree-nav-menu")">
+    <Description>
+        @(Visitor ? $"Les Pokémon de {player!.Pseudo} vivent ici" : "Tes Pokémon vivent ici") : ils se promènent, se reposent,
+        rendent visite à leur famille et dorment quand ils sont fatigués (plus tôt le soir). Clique sur l'un d'eux pour voir sa fiche.
+    </Description>
+    <Actions>
+        @if (!Visitor)
+        {
+            <button type="button" class="btn btn-outline-danger" @onclick="() => confirmClear = true"
+                    disabled="@(busy || members.Count == 0)">Vider le parc</button>
+            <button type="button" class="btn btn-primary" @onclick="OpenChooser">Choisir les Pokémon</button>
+        }
+    </Actions>
+</PageHeader>
 
 @if (message is not null)
 {

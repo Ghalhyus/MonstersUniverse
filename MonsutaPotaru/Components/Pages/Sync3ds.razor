@@ -11,12 +11,19 @@
 @* Consoles 3DS reliées (homebrew PokeBank Sync) : elles envoient leurs sauvegardes Pokémon dans « Mes sauvegardes ».
    Liaison par un code à usage unique ; tant qu'il est affiché, la liste est relue régulièrement pour voir arriver la console. *@
 
-<h1 class="mb-2">Synchronisation 3DS</h1>
-<p class="small text-muted">
-    Le homebrew PokeBank Sync envoie les sauvegardes Pokémon de ta 3DS dans <a href="sauvegardes">« Mes sauvegardes »</a> :
-    une nouvelle partie y est ajoutée, une partie déjà stockée est mise à jour, avec les mêmes règles que « Mettre à jour »
-    (rien n'est forcé : une version plus ancienne ou modifiée sur le serveur est refusée, et la 3DS te dit pourquoi).
-</p>
+<PageHeader Title="Synchronisation 3DS" Icon="bi-controller-nav-menu">
+    <Description>
+        Le homebrew PokeBank Sync envoie les sauvegardes Pokémon de ta 3DS dans <a href="sauvegardes">« Mes sauvegardes »</a> :
+        une nouvelle partie y est ajoutée, une partie déjà stockée est mise à jour, avec les mêmes règles que « Mettre à jour »
+        (rien n'est forcé : une version plus ancienne ou modifiée sur le serveur est refusée, et la 3DS te dit pourquoi).
+    </Description>
+    <Actions>
+        @if (pairing is null)
+        {
+            <button class="btn btn-primary" @onclick="StartPairing" disabled="@busy">Relier une 3DS</button>
+        }
+    </Actions>
+</PageHeader>
 
 @if (message is not null)
 {
@@ -34,10 +41,6 @@
         <div class="small">Valable jusqu'à @shownCode.ExpiresAt.ToLocalTime().ToString("HH:mm"), une seule fois. Cette page se met à jour dès que la 3DS est reliée.</div>
         <button class="btn btn-sm btn-outline-secondary mt-2" @onclick="CancelPairing" disabled="@busy">Annuler</button>
     </div>
-}
-else
-{
-    <button class="btn btn-primary mb-3" @onclick="StartPairing" disabled="@busy">Relier une 3DS</button>
 }
 
 @if (devices.Count == 0)

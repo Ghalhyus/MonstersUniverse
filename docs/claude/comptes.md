@@ -32,6 +32,8 @@ README : « Comptes », « Administration », « Thèmes ».
 
 ## Thèmes
 - Tout le style d'un thème sous `[data-theme="<clé>"]` (posé par `App.razor`) ; le Classique n'a rien.
+- Défaut : `SiteThemes.Default` (Ardoise), jamais `SiteThemes.Classic` en dur. Le défaut est enregistré à null : changer
+  `Default` change le thème de tous les comptes qui ne l'ont pas choisi (et de ceux qui avaient choisi l'ancien défaut).
 - `app.css` fixe des couleurs en dur (`.btn-primary`, `.btn-link`, focus) : les écraser explicitement. Le CSS isolé des
   composants (menu) se charge après : sélecteurs en `html[data-theme=...]`.
 - Le thème Pokédex couvre tout le site (contenu sous `main`) : un nouvel élément coloré en dur dans `app.css` (bleu,
@@ -46,6 +48,12 @@ README : « Comptes », « Administration », « Thèmes ».
   classe `ouvert` d'une rubrique est posée par Blazor (page de la rubrique) puis changée par `app.js` : Blazor ne la
   réécrit que si sa propre valeur change.
 - Icônes des menus : dans `app.css` (globales), plus dans `NavMenu.razor.css` ; blanches, `filter: invert(...)` sur fond clair.
+- Toute page commence par `<PageHeader>` (jamais un `<h1>` écrit à la main) et ses parties titrées sont des `<Block>` :
+  c'est ce qui leur donne le bandeau et les panneaux d'Ardoise. Classique et Pokédex doivent rester comme avant : un
+  style de `PageHeader` / `Block` pour Ardoise va sous `[data-theme="ardoise"]`, la base (`app.css`) reste sans cadre.
+- Une page d'un autre joueur : `PlayerHeader` (bandeau, onglets), puis le `PageHeader` de la page avec `Small`, sans
+  `Icon` (simple titre, pas de second bandeau).
+- Razor colle `@Title` et la pastille qui suit (blancs supprimés) : espacer par une classe (`ms-1`), pas par un blanc.
 - Test du menu replié : cookie `menu=replie` ; le survol d'une rubrique ne se vérifie qu'avec `computer` `hover` + capture.
 
 ## Tests

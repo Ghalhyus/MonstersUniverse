@@ -9,11 +9,12 @@
 @* Multijoueurs : recherche par pseudo (une partie suffit), parmi les profils publics ; rien ne s'affiche avant
    PlayerService.MinSearchLength caractères (pas d'annuaire de tous les joueurs). *@
 
-<h1 class="mb-2">Rechercher un joueur</h1>
-<p class="small text-muted">
-    Tape une partie de son pseudo, puis ouvre son profil pour consulter ses pages publiques (lecture seule). Les profils
-    privés n'apparaissent pas ; le tien se règle dans « Mon compte » → <a href="Account/Manage/Visibility">Visibilité</a>.
-</p>
+<PageHeader Title="Rechercher un joueur" Icon="bi-person-badge-nav-menu">
+    <Description>
+        Tape une partie de son pseudo, puis ouvre son profil pour consulter ses pages publiques (lecture seule). Les profils
+        privés n'apparaissent pas ; le tien se règle dans « Mon compte » → <a href="Account/Manage/Visibility">Visibilité</a>.
+    </Description>
+</PageHeader>
 
 <input type="search" class="form-control mb-3 player-search" placeholder="Pseudo…" aria-label="Pseudo du joueur"
        @bind="query" @bind:event="oninput" @bind:after="Search" />

@@ -41,16 +41,17 @@ else
 }
 <div class="inventory-layout">
 <div class="inventory-main">
-    <div class="d-flex align-items-center gap-2 mb-3">
-        <h1 class="mb-0 @(Visitor ? "h3" : "")">Inventaire</h1>
-        @if (!Visitor)
-        {
-            <button class="btn btn-outline-secondary ms-auto" aria-expanded="@(panel == SidePanel.Journal ? "true" : "false")" aria-controls="journal"
-                    @onclick="ToggleJournal">
-                @(panel == SidePanel.Journal ? "Fermer le journal" : "Journal")
-            </button>
-        }
-    </div>
+    <PageHeader Title="Inventaire" Small="Visitor" Icon="@(Visitor ? null : "bi-bag-nav-menu")">
+        <Actions>
+            @if (!Visitor)
+            {
+                <button class="btn btn-outline-secondary" aria-expanded="@(panel == SidePanel.Journal ? "true" : "false")" aria-controls="journal"
+                        @onclick="ToggleJournal">
+                    @(panel == SidePanel.Journal ? "Fermer le journal" : "Journal")
+                </button>
+            }
+        </Actions>
+    </PageHeader>
 
     @if (message is not null)
     {
@@ -75,184 +76,185 @@ else
 
     @* Stockage des objets : un onglet par catégorie (les objets ordinaires d'abord), une recherche dans la source affichée, en
        liste ou en grille. Une même opération peut déplacer des objets de toutes les catégories. *@
-    <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
-        <h2 class="h5 mb-0">Stockage</h2>
-        @if (!Visitor)
-        {
-            <div class="ms-auto d-flex flex-wrap gap-2">
+    <Block Title="Stockage">
+        <Actions>
+            @if (!Visitor)
+            {
                 <button class="btn btn-outline-primary" @onclick="() => OpenItems(deposit: false)">Retirer d'une sauvegarde</button>
                 <button class="btn btn-outline-primary" @onclick="() => OpenItems(deposit: true)" disabled="@(items.Count == 0)">Déposer dans une sauvegarde</button>
-            </div>
-        }
-    </div>
-
-    @{
-        var view = ViewItems();
-    }
-    <ul class="nav nav-tabs mb-2" role="tablist">
-        @foreach (var category in ItemCategories.All)
-        {
-            var c = category.Category;
-            var stacks = view.Where(i => i.Category == c).ToList();
-            <li class="nav-item" role="presentation">
-                <button type="button" role="tab" class="nav-link @(tab == c ? "active" : "")" aria-selected="@(tab == c ? "true" : "false")"
-                        @onclick="() => ShowTab(c)">
-                    @category.Title
-                    @if (Searching)
-                    {
-                        var found = stacks.Count(Matches);
-                        <span class="badge @(found > 0 ? "text-bg-primary" : "text-bg-light") ms-1" title="Objets trouvés">@found</span>
-                    }
-                    else
-                    {
-                        <span class="badge text-bg-light ms-1" title="Quantité totale">@CollectionCapacity.FormatCount(stacks.Sum(i => i.Count))</span>
-                    }
-                </button>
-            </li>
-        }
-    </ul>
-
-    <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
-        @* Source affichée : l'inventaire interne (par défaut), tout, ou le sac d'une sauvegarde (lecture seule). *@
-        <select class="form-select form-select-sm inventory-source" aria-label="Objets affichés" value="@source" @onchange="ChangeSource">
-            <option value="@AllSource">Tout (interne et sauvegardes)</option>
-            <option value="@InternalSource">Interne</option>
-            @if (saves is not null)
-            {
-                @foreach (var save in saves)
-                {
-                    <option value="@SaveSource(save.SaveId)">@(Visitor ? save.Label : save.LabelAndFile)</option>
-                }
             }
-        </select>
-        <input type="search" class="form-control form-control-sm inventory-search" placeholder="Rechercher par nom…"
-               aria-label="Rechercher par nom" @bind="search" @bind:event="oninput" />
-        @* Tri de l'onglet affiché : chaque onglet garde le sien, retenu par le navigateur. *@
-        <div class="inventory-sort">
-            <select class="form-select form-select-sm" aria-label="Trier cet onglet" value="@SortSlugs[CurrentSort.By]" @onchange="SortChanged">
-                @foreach (var (by, slug) in SortSlugs)
-                {
-                    <option value="@slug">Tri : @SortLabel(by)</option>
-                }
-            </select>
-            <button type="button" class="btn btn-sm btn-outline-secondary text-nowrap" title="Inverser l'ordre" @onclick="ReverseSort">@OrderLabel</button>
-        </div>
-        @if (grid)
-        {
-            @* Colonnes de la grille : automatiques (selon la largeur) tant qu'aucun nombre n'est choisi au curseur. *@
-            <label class="inventory-columns small ms-auto">
-                Colonnes
-                <input type="range" class="form-range" min="@MinGridColumns" max="@MaxGridColumns"
-                       value="@(gridColumns ?? Math.Clamp(autoColumns, MinGridColumns, MaxGridColumns))" @oninput="GridColumnsChanged" />
-                <span class="fw-semibold">@(gridColumns?.ToString() ?? (autoColumns > 0 ? $"Auto ({autoColumns})" : "Auto"))</span>
-            </label>
-            @if (gridColumns is not null)
-            {
-                <button type="button" class="btn btn-sm btn-outline-secondary" title="Colonnes selon la largeur de la fenêtre"
-                        @onclick="() => SetGridColumns(null)">Auto</button>
-            }
-        }
-        <div class="btn-group btn-group-sm @(grid ? "" : "ms-auto")" role="group" aria-label="Affichage">
-            <button type="button" class="btn @(grid ? "btn-outline-secondary" : "btn-secondary")" aria-pressed="@(grid ? "false" : "true")"
-                    @onclick="() => SetView(grid: false)">Liste</button>
-            <button type="button" class="btn @(grid ? "btn-secondary" : "btn-outline-secondary")" aria-pressed="@(grid ? "true" : "false")"
-                    @onclick="() => SetView(grid: true)">Grille</button>
-        </div>
-    </div>
+        </Actions>
+        <ChildContent>
 
-    @if (source != InternalSource && saves is not null)
-    {
-        var ignored = SourceSaves().Where(s => s.Unsupported is not null).ToList();
-        @if (ignored.Count > 0)
-        {
-            <p class="small text-muted mb-2">
-                @(ignored.Count == 1 ? "1 sauvegarde ignorée" : $"{ignored.Count} sauvegardes ignorées") :
-                @string.Join(" ; ", ignored.Select(s => $"{s.Label} ({s.Unsupported!.TrimEnd('.')})")).
-            </p>
-        }
-        @if (source == AllSource)
-        {
-            <p class="small text-muted mb-2">Lecture seule : clique sur un objet pour voir où il se trouve.</p>
-        }
-        else
-        {
-            <p class="small text-muted mb-2">Lecture seule : copie de cette sauvegarde sur le serveur.</p>
-        }
-    }
-
-    <div class="item-grid item-grid-probe" aria-hidden="true" @ref="gridProbe"></div>
-    @{
-        var current = ItemCategories.All.First(c => c.Category == tab);
-        var all = view.Where(i => i.Category == tab).ToList();
-        var shown = Sort(all.Where(Matches));
-        var clickable = source == AllSource;
-    }
-    @if (source != InternalSource && saves is null)
-    {
-        <p class="text-muted small">Chargement des sauvegardes…</p>
-    }
-    else if (all.Count == 0)
-    {
-        <p class="text-muted small">@EmptyText(current)</p>
-    }
-    else if (shown.Count == 0)
-    {
-        <p class="text-muted small">Rien ne correspond à « @search.Trim() » dans cet onglet.</p>
-    }
-    else if (grid)
-    {
-        <div class="item-grid @(gridColumns is null ? "" : "item-grid-fixed")" style="@(gridColumns is { } n ? $"--item-columns: {n}" : null)">
-            @foreach (var item in shown)
-            {
-                var i = item;
-                @if (clickable)
-                {
-                    <button type="button" class="item-tile item-tile-button @(detail?.ItemId == i.ItemId ? "selected" : "")" title="@i.Name"
-                            @onclick="() => ShowDetail(i)">
-                        <ItemSprite Url="@i.SpriteUrl" Size="32" />
-                        <span class="item-name">@i.Name</span>
-                        <span class="item-count">× @CollectionCapacity.FormatCount(i.Count)</span>
-                    </button>
-                }
-                else
-                {
-                    <div class="item-tile" title="@i.Name">
-                        <ItemSprite Url="@i.SpriteUrl" Size="32" />
-                        <span class="item-name">@i.Name</span>
-                        <span class="item-count">× @CollectionCapacity.FormatCount(i.Count)</span>
-                    </div>
-                }
+            @{
+                var view = ViewItems();
             }
-        </div>
-    }
-    else
-    {
-        <table class="table table-sm align-middle">
-            <thead>
-                <tr><th>Objet</th><th class="text-end">Quantité</th></tr>
-            </thead>
-            <tbody>
-                @foreach (var item in shown)
+            <ul class="nav nav-tabs mb-2" role="tablist">
+                @foreach (var category in ItemCategories.All)
                 {
-                    var i = item;
-                    <tr class="@(detail?.ItemId == i.ItemId ? "table-active" : "")">
-                        <td>
-                            <ItemSprite Url="@i.SpriteUrl" Size="24" />
-                            @if (clickable)
+                    var c = category.Category;
+                    var stacks = view.Where(i => i.Category == c).ToList();
+                    <li class="nav-item" role="presentation">
+                        <button type="button" role="tab" class="nav-link @(tab == c ? "active" : "")" aria-selected="@(tab == c ? "true" : "false")"
+                                @onclick="() => ShowTab(c)">
+                            @category.Title
+                            @if (Searching)
                             {
-                                <button type="button" class="btn btn-link p-0 align-baseline text-start" @onclick="() => ShowDetail(i)">@i.Name</button>
+                                var found = stacks.Count(Matches);
+                                <span class="badge @(found > 0 ? "text-bg-primary" : "text-bg-light") ms-1" title="Objets trouvés">@found</span>
                             }
                             else
                             {
-                                @i.Name
+                                <span class="badge text-bg-light ms-1" title="Quantité totale">@CollectionCapacity.FormatCount(stacks.Sum(i => i.Count))</span>
                             }
-                        </td>
-                        <td class="text-end">@CollectionCapacity.FormatCount(i.Count)</td>
-                    </tr>
+                        </button>
+                    </li>
                 }
-            </tbody>
-        </table>
-    }
+            </ul>
+
+            <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                @* Source affichée : l'inventaire interne (par défaut), tout, ou le sac d'une sauvegarde (lecture seule). *@
+                <select class="form-select form-select-sm inventory-source" aria-label="Objets affichés" value="@source" @onchange="ChangeSource">
+                    <option value="@AllSource">Tout (interne et sauvegardes)</option>
+                    <option value="@InternalSource">Interne</option>
+                    @if (saves is not null)
+                    {
+                        @foreach (var save in saves)
+                        {
+                            <option value="@SaveSource(save.SaveId)">@(Visitor ? save.Label : save.LabelAndFile)</option>
+                        }
+                    }
+                </select>
+                <input type="search" class="form-control form-control-sm inventory-search" placeholder="Rechercher par nom…"
+                       aria-label="Rechercher par nom" @bind="search" @bind:event="oninput" />
+                @* Tri de l'onglet affiché : chaque onglet garde le sien, retenu par le navigateur. *@
+                <div class="inventory-sort">
+                    <select class="form-select form-select-sm" aria-label="Trier cet onglet" value="@SortSlugs[CurrentSort.By]" @onchange="SortChanged">
+                        @foreach (var (by, slug) in SortSlugs)
+                        {
+                            <option value="@slug">Tri : @SortLabel(by)</option>
+                        }
+                    </select>
+                    <button type="button" class="btn btn-sm btn-outline-secondary text-nowrap" title="Inverser l'ordre" @onclick="ReverseSort">@OrderLabel</button>
+                </div>
+                @if (grid)
+                {
+                    @* Colonnes de la grille : automatiques (selon la largeur) tant qu'aucun nombre n'est choisi au curseur. *@
+                    <label class="inventory-columns small ms-auto">
+                        Colonnes
+                        <input type="range" class="form-range" min="@MinGridColumns" max="@MaxGridColumns"
+                               value="@(gridColumns ?? Math.Clamp(autoColumns, MinGridColumns, MaxGridColumns))" @oninput="GridColumnsChanged" />
+                        <span class="fw-semibold">@(gridColumns?.ToString() ?? (autoColumns > 0 ? $"Auto ({autoColumns})" : "Auto"))</span>
+                    </label>
+                    @if (gridColumns is not null)
+                    {
+                        <button type="button" class="btn btn-sm btn-outline-secondary" title="Colonnes selon la largeur de la fenêtre"
+                                @onclick="() => SetGridColumns(null)">Auto</button>
+                    }
+                }
+                <div class="btn-group btn-group-sm @(grid ? "" : "ms-auto")" role="group" aria-label="Affichage">
+                    <button type="button" class="btn @(grid ? "btn-outline-secondary" : "btn-secondary")" aria-pressed="@(grid ? "false" : "true")"
+                            @onclick="() => SetView(grid: false)">Liste</button>
+                    <button type="button" class="btn @(grid ? "btn-secondary" : "btn-outline-secondary")" aria-pressed="@(grid ? "true" : "false")"
+                            @onclick="() => SetView(grid: true)">Grille</button>
+                </div>
+            </div>
+
+            @if (source != InternalSource && saves is not null)
+            {
+                var ignored = SourceSaves().Where(s => s.Unsupported is not null).ToList();
+                @if (ignored.Count > 0)
+                {
+                    <p class="small text-muted mb-2">
+                        @(ignored.Count == 1 ? "1 sauvegarde ignorée" : $"{ignored.Count} sauvegardes ignorées") :
+                        @string.Join(" ; ", ignored.Select(s => $"{s.Label} ({s.Unsupported!.TrimEnd('.')})")).
+                    </p>
+                }
+                @if (source == AllSource)
+                {
+                    <p class="small text-muted mb-2">Lecture seule : clique sur un objet pour voir où il se trouve.</p>
+                }
+                else
+                {
+                    <p class="small text-muted mb-2">Lecture seule : copie de cette sauvegarde sur le serveur.</p>
+                }
+            }
+
+            <div class="item-grid item-grid-probe" aria-hidden="true" @ref="gridProbe"></div>
+            @{
+                var current = ItemCategories.All.First(c => c.Category == tab);
+                var all = view.Where(i => i.Category == tab).ToList();
+                var shown = Sort(all.Where(Matches));
+                var clickable = source == AllSource;
+            }
+            @if (source != InternalSource && saves is null)
+            {
+                <p class="text-muted small">Chargement des sauvegardes…</p>
+            }
+            else if (all.Count == 0)
+            {
+                <p class="text-muted small">@EmptyText(current)</p>
+            }
+            else if (shown.Count == 0)
+            {
+                <p class="text-muted small">Rien ne correspond à « @search.Trim() » dans cet onglet.</p>
+            }
+            else if (grid)
+            {
+                <div class="item-grid @(gridColumns is null ? "" : "item-grid-fixed")" style="@(gridColumns is { } n ? $"--item-columns: {n}" : null)">
+                    @foreach (var item in shown)
+                    {
+                        var i = item;
+                        @if (clickable)
+                        {
+                            <button type="button" class="item-tile item-tile-button @(detail?.ItemId == i.ItemId ? "selected" : "")" title="@i.Name"
+                                    @onclick="() => ShowDetail(i)">
+                                <ItemSprite Url="@i.SpriteUrl" Size="32" />
+                                <span class="item-name">@i.Name</span>
+                                <span class="item-count">× @CollectionCapacity.FormatCount(i.Count)</span>
+                            </button>
+                        }
+                        else
+                        {
+                            <div class="item-tile" title="@i.Name">
+                                <ItemSprite Url="@i.SpriteUrl" Size="32" />
+                                <span class="item-name">@i.Name</span>
+                                <span class="item-count">× @CollectionCapacity.FormatCount(i.Count)</span>
+                            </div>
+                        }
+                    }
+                </div>
+            }
+            else
+            {
+                <table class="table table-sm align-middle">
+                    <thead>
+                        <tr><th>Objet</th><th class="text-end">Quantité</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in shown)
+                        {
+                            var i = item;
+                            <tr class="@(detail?.ItemId == i.ItemId ? "table-active" : "")">
+                                <td>
+                                    <ItemSprite Url="@i.SpriteUrl" Size="24" />
+                                    @if (clickable)
+                                    {
+                                        <button type="button" class="btn btn-link p-0 align-baseline text-start" @onclick="() => ShowDetail(i)">@i.Name</button>
+                                    }
+                                    else
+                                    {
+                                        @i.Name
+                                    }
+                                </td>
+                                <td class="text-end">@CollectionCapacity.FormatCount(i.Count)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </ChildContent>
+    </Block>
 </div>
 
 @if (panel == SidePanel.Journal && !Visitor)

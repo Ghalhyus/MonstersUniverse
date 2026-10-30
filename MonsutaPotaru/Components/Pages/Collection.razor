@@ -36,7 +36,7 @@ else
 {
     <PlayerHeader Player="player" Current="PublicPages.Collection" />
 }
-<h1 class="mb-3 @(Visitor ? "h3" : "")">@(Visitor ? "Collection" : "Ma collection") <span class="badge bg-primary fs-6 align-middle">@total</span></h1>
+<PageHeader Title="@(Visitor ? "Collection" : "Ma collection")" Count="@total.ToString()" Small="Visitor" Icon="@(Visitor ? null : "bi-grid-nav-menu")" />
 
 @if (message is not null)
 {

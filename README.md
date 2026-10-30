@@ -233,8 +233,14 @@ et « Statistiques ».
 « Mon compte » → **Thèmes** (`Account/Pages/Manage/Themes.razor`) : une carte par thème, avec une miniature dessinée en
 CSS ; un clic l'applique (la page est rechargée). Le choix est gardé dans le compte (colonne `Theme`, migration
 `UserTheme` ; null = défaut), donc sur tous les appareils. Liste et défaut : `Services/SiteThemes.cs`. Le serveur pose la
-clé du thème du compte sur la page dès le premier rendu (`<html data-theme="pokedex">`, `App.razor`) ; sans compte :
-**Classique**, le thème d'origine, qui n'a aucun style à lui.
+clé du thème du compte sur la page dès le premier rendu (`<html data-theme="pokedex">`, `App.razor`).
+
+**Thème par défaut : Ardoise** (`SiteThemes.Default`), pour les visiteurs sans compte et les comptes qui n'ont rien
+choisi. Le défaut n'est jamais enregistré (colonne à null) : un compte qui n'a rien choisi suit un changement de défaut.
+Conséquence au passage de Classique à Ardoise : les comptes restés sur Classique (enregistré à null, puisque c'était le
+défaut) sont passés en Ardoise ; Classique, choisi de nouveau, est maintenant enregistré.
+
+- **Classique** : le thème d'origine, qui n'a aucun style à lui.
 
 - **Pokédex** (`wwwroot/themes/pokedex.css`, tout sous `[data-theme="pokedex"]`) : le Pokédex rouge, **sobre** (un
   premier essai inspiré du sac de Rubis Oméga / Saphir Alpha a été jugé trop chargé). Menu latéral comme le boîtier
@@ -268,6 +274,14 @@ clé du thème du compte sur la page dès le premier rendu (`<html data-theme="p
   place du bleu ciel ; dialogues et fiches de Pokémon surélevés, liseré orange. Le parc garde son décor. Compteurs du
   menu (porte-monnaie, demandes d'ami, d'échange et de combat) : `Components/Layout/SiteMenuBase.cs`, communs aux deux
   menus.
+
+  **En-têtes de page et blocs** (tous les thèmes) : chaque page commence par `Shared/PageHeader.razor` (titre h1, nombre
+  en pastille, description, boutons d'action à droite, icône du menu ; lien de retour), ses parties titrées sont des
+  `Shared/Block.razor` (titre h2, actions à droite ; `Flush` : liste collée aux bords). Classique et Pokédex : sans cadre,
+  comme les titres d'avant (styles de base dans `app.css`). Ardoise : l'en-tête est un bandeau blanc avec l'icône de la
+  page dans un carré orange (sur les pages d'un autre joueur, son en-tête `PlayerHeader` porte le bandeau et les onglets,
+  le titre de la page dessous reste simple) ; les blocs sont des panneaux blancs à en-tête. Une nouvelle page : un
+  `PageHeader` en tête, des `Block` pour ses parties.
 - `app.css` fixe certaines couleurs en dur (`.btn-primary`, `.btn-link`, anneau bleu du focus) : un thème doit les
   écraser explicitement, pas seulement changer les variables de Bootstrap.
 
@@ -794,6 +808,8 @@ est incompatible (espèce, attaques ou objets inexistants dans le jeu, conversio
 | `MonsutaPotaru/Components/Account/Pages/Manage/Themes.razor` | « Mon compte » → « Thèmes » : choix du thème, miniatures en CSS |
 | `MonsutaPotaru/wwwroot/themes/pokedex.css` | Thème Pokédex, sous `[data-theme="pokedex"]` : menu, barre du haut, contenu de toutes les pages |
 | `MonsutaPotaru/wwwroot/themes/ardoise.css` | Thème Ardoise : son cadre (classes `ardoise-…`, menu replié, téléphone) et le contenu des pages sous `[data-theme="ardoise"]` |
+| `MonsutaPotaru/Components/Shared/PageHeader.razor` | En-tête de chaque page : titre, nombre, description, actions, icône (bandeau dans le thème Ardoise) |
+| `MonsutaPotaru/Components/Shared/Block.razor` | Partie titrée d'une page, avec ses actions (panneau blanc dans le thème Ardoise) |
 | `MonsutaPotaru/Components/Layout/ArdoiseLayout.razor` | Cadre du thème Ardoise (choisi par `MainLayout`) : menu repliable, barre du haut (fil d'Ariane, porte-monnaie, menu du compte) |
 | `MonsutaPotaru/Components/Layout/SiteMenuBase.cs` | Commun aux menus (`NavMenu`, `ArdoiseLayout`) : adresse de la page, solde, demandes reçues en direct, rubriques ouvertes |
 | `MonsutaPotaru/Components/Layout/Breadcrumbs.cs` | Fil d'Ariane du thème Ardoise, déduit de l'adresse de la page (`BreadcrumbsTests`) |

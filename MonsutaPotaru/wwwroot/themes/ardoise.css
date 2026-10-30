@@ -590,3 +590,81 @@ a.ardoise-link.active {
 /* « Mon compte » : choix du thème */
 [data-theme="ardoise"] main .theme-choice { border-width: 1px; }
 [data-theme="ardoise"] main .theme-choice.selected { box-shadow: 0 0 0 .2rem var(--ard-accent-ring); }
+
+/* ---------- En-tête de page et blocs (Shared/PageHeader.razor, Block.razor) ---------- */
+
+/* En-tête : un bandeau blanc, l'icône de la page dans un carré orange, les actions à droite */
+[data-theme="ardoise"] main .page-header {
+    gap: .75rem 1.25rem;
+    margin-bottom: 1.25rem;
+    padding: 1rem 1.25rem;
+    background: #fff;
+    border: 1px solid var(--ard-line);
+    border-radius: .5rem;
+    box-shadow: 0 1px 2px rgba(16, 24, 40, .05);
+}
+[data-theme="ardoise"] main .page-header-icon {
+    flex: none;
+    display: grid;
+    place-items: center;
+    align-self: flex-start;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: .5rem;
+    background: var(--ard-accent);
+}
+[data-theme="ardoise"] main .page-header-icon .bi { width: 1.35rem; height: 1.35rem; opacity: 1; }
+[data-theme="ardoise"] main .page-header-title { font-size: 1.5rem; font-weight: 600; margin-bottom: 0; }
+[data-theme="ardoise"] main .page-header-small .page-header-title { font-size: 1.25rem; }
+[data-theme="ardoise"] main .badge.page-header-count {
+    background-color: var(--ard-accent-soft) !important;
+    color: var(--ard-accent-ink);
+    font-weight: 600;
+}
+[data-theme="ardoise"] main .page-header-description { margin-top: .35rem; max-width: 70rem; color: var(--ard-muted) !important; }
+[data-theme="ardoise"] main .page-header-back { display: inline-block; margin-bottom: .15rem; }
+/* Page d'un autre joueur, sous son en-tête : un simple titre, pas un second bandeau */
+[data-theme="ardoise"] main .page-header-small { padding: 0; background: none; border: 0; box-shadow: none; }
+/* En-tête d'un living dex (jaquette, nom, progression) : même bandeau que les autres pages */
+[data-theme="ardoise"] main .livingdex-header {
+    padding: 1rem 1.25rem;
+    background: #fff;
+    border: 1px solid var(--ard-line);
+    border-radius: .5rem;
+    box-shadow: 0 1px 2px rgba(16, 24, 40, .05);
+}
+
+/* Blocs : panneaux blancs, en-tête séparé d'un trait */
+[data-theme="ardoise"] main .block {
+    margin-bottom: 1.25rem;
+    background: #fff;
+    border: 1px solid var(--ard-line);
+    border-radius: .5rem;
+    box-shadow: 0 1px 2px rgba(16, 24, 40, .05);
+}
+[data-theme="ardoise"] main .block-header {
+    min-height: 3rem;
+    margin: 0;
+    padding: .5rem 1rem;
+    border-bottom: 1px solid var(--ard-line);
+}
+[data-theme="ardoise"] main .block-title { font-size: 1rem; font-weight: 600; }
+[data-theme="ardoise"] main .block-count { background-color: var(--ard-head) !important; color: var(--ard-muted) !important; border: 1px solid var(--ard-line); }
+[data-theme="ardoise"] main .block-body { padding: 1rem; }
+/* Contenu collé aux bords : listes et tableaux sans leur propre cadre */
+[data-theme="ardoise"] main .block-flush > .block-body { padding: 0; }
+[data-theme="ardoise"] main .block-flush > .block-body > .list-group { --bs-list-group-border-radius: 0; }
+[data-theme="ardoise"] main .block-flush > .block-body > .list-group > .list-group-item { border-left: 0; border-right: 0; }
+[data-theme="ardoise"] main .block-flush > .block-body > .list-group > .list-group-item:first-child { border-top: 0; }
+[data-theme="ardoise"] main .block-flush > .block-body > .list-group > .list-group-item:last-child { border-bottom: 0; border-radius: 0 0 .5rem .5rem; }
+[data-theme="ardoise"] main .block-flush > .block-body > .table,
+[data-theme="ardoise"] main .block-flush > .block-body > .table-responsive > .table { margin: 0; border: 0; border-radius: 0 0 .5rem .5rem; }
+[data-theme="ardoise"] main .block-flush > .block-body > p { margin: 0; padding: 1rem; }
+/* Un bloc dans un bloc (cartes d'un panneau) : pas d'ombre en plus */
+[data-theme="ardoise"] main .block .block { box-shadow: none; }
+
+@media (max-width: 640.98px) {
+    [data-theme="ardoise"] main .page-header { padding: .75rem; }
+    [data-theme="ardoise"] main .page-header-icon { display: none; }
+    [data-theme="ardoise"] main .block-body { padding: .75rem; }
+}

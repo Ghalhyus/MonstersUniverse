@@ -233,19 +233,24 @@ public sealed class AccountServiceTests : IDisposable
         Assert.Equal([SiteRoles.StandardId], await RolesOf(sacha.Id));
     }
     [Fact]
-    public async Task Theme_IsClassicByDefault_AndFollowsTheAccount()
+    public async Task Theme_IsArdoiseByDefault_AndFollowsTheAccount()
     {
         var sacha = (await _accounts.RegisterAsync("Sacha", "sacha@kanto.fr", Password, Invite)).User!;
-        Assert.Equal(SiteThemes.Classic, await _accounts.ThemeAsync(sacha.Id));
-        Assert.Equal(SiteThemes.Classic, await _accounts.ThemeAsync(null)); // pas connecté
+        Assert.Equal(SiteThemes.Ardoise, await _accounts.ThemeAsync(sacha.Id));
+        Assert.Equal(SiteThemes.Ardoise, await _accounts.ThemeAsync(null)); // pas connecté
 
         Assert.True((await _accounts.SetThemeAsync(sacha.Id, SiteThemes.Pokedex)).Ok);
         Assert.Equal(SiteThemes.Pokedex, await _accounts.ThemeAsync(sacha.Id));
         Assert.False((await _accounts.SetThemeAsync(sacha.Id, "inconnu")).Ok);
         Assert.Equal(SiteThemes.Pokedex, await _accounts.ThemeAsync(sacha.Id));
 
+        // Classique n'est plus le défaut : il est enregistré, et reste choisi si le défaut change encore.
         Assert.True((await _accounts.SetThemeAsync(sacha.Id, SiteThemes.Classic)).Ok);
+        Assert.Equal(SiteThemes.Classic, await _accounts.ThemeAsync(sacha.Id));
         await using var db = _db.NewContext();
+        Assert.Equal(SiteThemes.Classic, await db.Users.Where(u => u.Id == sacha.Id).Select(u => u.Theme).SingleAsync());
+
+        Assert.True((await _accounts.SetThemeAsync(sacha.Id, SiteThemes.Ardoise)).Ok);
         Assert.Null(await db.Users.Where(u => u.Id == sacha.Id).Select(u => u.Theme).SingleAsync()); // le défaut n'est pas enregistré
     }
 }
