@@ -21,14 +21,25 @@ Projet à venir (refuge, agrandissements, IA par espèce) : `docs/projet-parc.md
   modifié), envoyées par `deploy\fond-parc.cmd`, rapatriées par `recuperer-images.cmd`. Sans elles : herbe unie (`GRASS`).
 - Pack : `C:\Sources\Asset_Cute_Fantasy` (+ Desert, Dungeons, ShroomLands, Volcano), tuiles 16 px. Les jeux de couleurs
   vont par numéro : `Grass_Tiles_2`, `Grass_2_Middle` et `Water_Tile_2` ont la même herbe.
-- Cartes de l'utilisateur : `C:\Sources\Parcs` (`Parc_1.tmx` = la carte du site ; `generer_parc.py`, hors du dépôt, l'a
-  générée : bordures d'eau et de chemin automatiques, forêt en quinconce). Tiled 1.12 installé (`C:\Program Files\Tiled`,
-  `tmxrasterizer.exe` rend une carte en PNG pour vérifier).
-- Calques lus, **dessinés une seule fois** au démarrage dans deux `RenderTexture` : « Sol » + « Décors » (profondeur 0),
-  « Devant » + brouillard hors « Départ » (3 ; feuillages : cachent aussi la tête d'un Pokémon devant un arbre, limite
-  connue). Entre les deux : ombres (1,9), Pokémon (2 + ligne). Nuit (4, cachée le jour), nom et « z » (6).
+- Cartes de l'utilisateur : `C:\Sources\Parcs` (`Parc_1.tmx` = la carte du site, sortie telle quelle de
+  `outils/generer-parc.py` : la corriger dans le script, pas dans Tiled ; bordures d'eau et de chemin automatiques, forêt
+  en quinconce, graine fixe). Python du système sans Pillow : un `venv` dans un dossier temporaire. Lancer
+  `python outils/generer-parc.py C:/Sources/Asset_Cute_Fantasy/Cute_Fantasy C:/Sources/Parcs <dossier des aperçus>`,
+  puis `python outils/carte-parc.py C:/Sources/Parcs/Parc_1.tmx` ; comparer l'ancien et le nouveau JSON calque par calque
+  (seules les cases voulues doivent changer). Objets de plusieurs lignes (bancs, gros rochers) : toutes leurs lignes
+  bloquées (le 2026-10-31, le dossier des bancs ne l'était pas : on marchait dessus).
+- Tiled 1.12 installé (`C:\Program Files\Tiled`, `tmxrasterizer.exe` rend une carte en PNG pour vérifier).
+- Calques lus, **dessinés une seule fois** au démarrage : « Sol » + « Décors » dans une `RenderTexture` (profondeur 0),
+  brouillard hors « Départ » dans une autre (3). Ombres (1,9). Nuit (4, cachée le jour), nom et « z » (6).
   « Collisions » : toute tuile = case bloquée, jamais dessiné. « Zones » : rectangle « Départ » (les Pokémon y restent).
-  Agrandissements à venir : redessiner les deux images.
+  Agrandissements à venir : redessiner le brouillard.
+- **Feuillages triés** (`foliage`) : une tuile de « Devant » appartient au tronc = première case sous elle (même colonne)
+  qui bloque ou n'a plus de feuillage. Profondeur `depthOf(ligne du tronc × 16 + 8,5)`, comme les Pokémon
+  (`depthOf(pieds)`) : pieds au-dessus du milieu du tronc = derrière. Morceaux = feuillages d'une même ligne de troncs à
+  moins de 4 cases d'écart (~170, 0,6 Mpx), rangés par étagères dans une seule `DynamicTexture` « feuillages » (une
+  `Image` par morceau). Dessin d'un morceau : toutes les tuiles du calque `visible = false` sauf les siennes,
+  `setSkipCull(true)` (dessiné ailleurs qu'à sa place). Dans la forêt, deux arbres en quinconce se chevauchent : le haut
+  d'un feuillage peut prendre le tronc d'un voisin (cases bloquées, aucun Pokémon : sans effet).
 - `ParkMapTests` : calques en CSV, jeux de tuiles incorporés avec un simple nom de fichier, « Départ » dans la carte,
   toutes ses cases libres reliées (même règle de diagonale que `parc.js`).
 
@@ -54,6 +65,22 @@ Projet à venir (refuge, agrandissements, IA par espèce) : `docs/projet-parc.md
 - Textures : planches de SpriteCollab ajoutées à Phaser (`textures.addImage`, une image par case) ; textes à
   `resolution: k` (nets à la caméra).
 
+## Déplacer un Pokémon (`parc.js`, propriétaire)
+- `create(container, component, { canMove })` : `Park.razor` passe `canMove = !Visitor`. Rien côté serveur (positions
+  jamais enregistrées).
+- `pointerdown` sur un Pokémon (`at`) : `drag.target`. Souris : au-delà de `DRAG_THRESHOLD`, `pickUp` au lieu de faire
+  glisser la vue. Doigt (`pointer.wasTouch`) : `tick` soulève après `LONG_PRESS` sans avoir bougé ; avant, un glissement
+  fait défiler la vue. Clic sans bouger : fiche, comme avant.
+- `held` : `{ p, from, dx, dy, pointer }` ; état `"held"` (animation `Charge` par `ANIMATION_OF`, `OPTIONAL` : planche
+  absente = Idle ; `update` ne fait rien), dessiné `LIFT` px plus haut, profondeur `HELD_DEPTH` (3,5 : devant le
+  brouillard, sous la nuit). `carry` à chaque image (Vector2 gardé : pas de déchets) suit le pointeur même quand la vue
+  défile (`edgeScroll`, `EDGE_SCROLL`). `marker` (Graphics redessiné seulement quand la case change de permise à
+  interdite) : `ground.isFree`. `putDown` : case libre, sinon `from` ; puis `rest(2 à 4 s)`. Pincement : `putDown(true)`.
+- Essais : `MouseEvent` (`mousedown`, `mousemove` sur le canvas, `mouseup` sur `window`) ; doigt : `resize_window`
+  « mobile », recharger la page, `new Touch(...)` + `TouchEvent` sur le canvas. Panneau masqué : la caméra n'est à jour
+  qu'après un dessin (capture d'écran) : sans, `getWorldPoint` vise à côté et le Pokémon n'est pas pris ; l'appui long
+  attend aussi une image (`tick`).
+
 ## Animation et comportement (`parc.js`)
 - Unités : pixels de la carte (16 par tuile). Réglages en tête du fichier (`ENERGY`, `WALK_SPEED`...) et dans `decide` /
   `update` ; distances divisées par 1,5 lors du passage à la carte (anciennes unités : 1,5 par pixel).
@@ -66,12 +93,16 @@ Projet à venir (refuge, agrandissements, IA par espèce) : `docs/projet-parc.md
   d'écran), profondeur changée seulement au changement de ligne, nom redessiné seulement quand il change, heure lue une
   fois par seconde, A* sur des tableaux gardés (`Ground`) = 2-5 Ko et 0,18 ms. Ne pas remettre de `Graphics` vidé et
   redessiné à chaque image, ni de calque de tuiles affiché.
-- Sprites absents (images pas récupérées) : le Pokémon n'apparaît pas, sans erreur.
+- Sprites absents (images pas récupérées) : le Pokémon n'apparaît pas, sans erreur. Planche `Charge` absente (images
+  d'avant le 2026-10-31) : Idle quand on le soulève.
 
 ## Tester
 - **Après chaque modification de `parc.js`, recharger le parc et lire la console** : `node --check` ne voit que la
   syntaxe. Une constante passée par erreur dans un commentaire (`NIGHT is not defined`, 2026-10-30) arrêtait `build` :
   carte collée à gauche, aucun Pokémon, chez l'utilisateur.
+- `place(id, x, y)` (essais) : pose un Pokémon immobile ; pour vérifier un tri, en poser un derrière et un devant un arbre
+  puis agrandir une partie du canvas dans un `<canvas>` en `imageSmoothingEnabled = false` (`view()` donne la caméra :
+  pixel du canvas = (carte − `view().x`) × `zoom`), juste après un `requestAnimationFrame`.
 - Panneau du navigateur de test souvent **masqué** : Phaser ne dessine que pendant les captures (`camera.worldView` pas à
   jour : `view()` la recalcule). Pour juger le comportement : `import("/js/parc.js?v=…")` dans la page, `create` sur un
   `div` (en `position: fixed`) avec un faux composant `{ invokeMethodAsync }`, `setPokemon`, puis `simulate(secondes,

@@ -232,7 +232,8 @@ else
         engineStarted = true;
         selfRef = DotNetObjectReference.Create(this);
         module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/parc.js");
-        engine = await module.InvokeAsync<IJSObjectReference>("create", stage, selfRef);
+        // Seul le propriétaire peut déplacer ses Pokémon (dans son navigateur seulement : rien n'est enregistré)
+        engine = await module.InvokeAsync<IJSObjectReference>("create", stage, selfRef, new { canMove = !Visitor });
         await engine.InvokeVoidAsync("setPokemon", members);
     }
 

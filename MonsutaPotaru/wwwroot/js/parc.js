@@ -26,6 +26,9 @@ const ICONS = {
     shrink: svg("M5.5 0a.5.5 0 0 1 .5.5v4A1.5 1.5 0 0 1 4.5 6h-4a.5.5 0 0 1 0-1h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 1 .5-.5m5 0a.5.5 0 0 1 .5.5v4a.5.5 0 0 0 .5.5h4a.5.5 0 0 1 0 1h-4A1.5 1.5 0 0 1 10 4.5v-4a.5.5 0 0 1 .5-.5M0 10.5a.5.5 0 0 1 .5-.5h4A1.5 1.5 0 0 1 6 11.5v4a.5.5 0 0 1-1 0v-4a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 1-.5-.5m10 1a1.5 1.5 0 0 1 1.5-1.5h4a.5.5 0 0 1 0 1h-4a.5.5 0 0 0-.5.5v4a.5.5 0 0 1-1 0z"),
 };
 const FOG = { color: 0x0b1222, alpha: 0.55 }; // hors de la zone « Départ »
+// Profondeur d'affichage d'un Pokémon ou d'un feuillage, selon la ligne de ses pieds (de son tronc) : les plus bas devant.
+// Entre 2 et 3 : au-dessus de la carte (0) et des ombres (1,9), sous le brouillard (3) et la nuit (4).
+const depthOf = y => 2 + y / 10000;
 const NIGHT = { color: 0x101848, alpha: 0.38 };
 // Taille d'un pixel de sprite par rapport à un pixel de la carte (deux tiers : ×2 quand la carte est à ×3), arrondie à un
 // nombre entier de pixels d'écran (dessin net), jamais moins de 2 pixels d'écran tant que la carte en a autant.
@@ -33,8 +36,14 @@ const SPRITE_SIZE = 2 / 3;
 const WALK_SPEED = 27; // vitesse de marche (pixels de la carte par seconde), selon le caractère
 const WALK_ANIMATION_SPEED = 30; // vitesse à laquelle l'animation de marche joue à son rythme normal (pieds sans glisser),
                                  // pour des sprites à la taille des pixels de la carte (plus petits : foulée plus courte)
-const DRAG_THRESHOLD = 6; // pixels (CSS) avant qu'un clic devienne un glissement de la vue
-const ANIMATIONS = ["Idle", "Walk", "Sleep"];
+const DRAG_THRESHOLD = 6; // pixels (CSS) avant qu'un clic devienne un glissement de la vue (ou soulève un Pokémon)
+const LONG_PRESS = 300; // ms d'appui sans bouger, au doigt, pour soulever un Pokémon (sinon le doigt fait glisser la vue)
+const LIFT = 8; // hauteur (pixels de la carte) d'un Pokémon soulevé au-dessus de son ombre
+const HELD_DEPTH = 3.5; // un Pokémon soulevé passe devant tout (feuillages, brouillard), sous la nuit (4)
+const EDGE_SCROLL = { margin: 48, speed: 420 }; // en le portant près du bord (pixels CSS) : la vue défile (pixels CSS / s)
+const ANIMATIONS = ["Idle", "Walk", "Sleep", "Charge"];
+const OPTIONAL = new Set(["Charge"]); // planche absente (images d'avant, sprite incomplet) : Idle à la place
+const ANIMATION_OF = { idle: "Idle", walk: "Walk", sleep: "Sleep", held: "Charge" }; // selon l'état du Pokémon
 // Énergie (par seconde) : 3 à 5 minutes d'activité le jour avant une sieste d'environ une minute ; la nuit, ils
 // s'endorment plus tôt et récupèrent lentement (longues nuits).
 const ENERGY = { walk: 0.004, idle: 0.0012, sleepDay: 0.012, sleepNight: 0.004 };
@@ -64,7 +73,8 @@ function loadSheets(folder) {
                 const source = def.querySelector("Name").textContent;
                 const image = new Image();
                 image.src = `${folder}${source}-Anim.png`;
-                await image.decode();
+                try { await image.decode(); }
+                catch (e) { if (OPTIONAL.has(name)) continue; throw e; }
                 const fw = +def.querySelector("FrameWidth").textContent, fh = +def.querySelector("FrameHeight").textContent;
                 result[name] = {
                     image, fw, fh,
@@ -77,6 +87,7 @@ function loadSheets(folder) {
             result.Idle ??= result.Walk; // au cas où une planche manquerait
             result.Walk ??= result.Idle;
             result.Sleep ??= result.Idle;
+            result.Charge ??= result.Idle; // soulevé
             return result;
         })());
     }
@@ -273,7 +284,7 @@ class Pokemon {
         this.vy = 0;
     }
 
-    get anim() { return this.anims[this.state === "walk" ? "Walk" : this.state === "sleep" ? "Sleep" : "Idle"]; }
+    get anim() { return this.anims[ANIMATION_OF[this.state]]; }
 
     setState(state) {
         if (state === this.state) return;
@@ -333,7 +344,12 @@ class Pokemon {
     }
 }
 
-export async function create(container, component) {
+/**
+ * Parc dans <container> ; <component> (Park.razor) est prévenu d'un clic sur un Pokémon. Options : canMove (le
+ * propriétaire peut soulever ses Pokémon et les poser ailleurs ; rien n'est enregistré).
+ */
+export async function create(container, component, options) {
+    const canMove = options?.canMove === true;
     let data = null;
     try { data = await (await fetch(MAP_URL)).json(); }
     catch { /* carte illisible : un pré sans obstacle */ }
@@ -347,7 +363,8 @@ export async function create(container, component) {
     let k = 1; // pixels d'écran par pixel de la carte (zoom de la caméra)
     let spriteK = 2; // pixels d'écran par pixel de sprite
     let spriteScale = SPRITE_SIZE; // pixels de la carte par pixel de sprite
-    let scene = null, camera = null, night = null, label = null, labelText = null;
+    let scene = null, camera = null, night = null, label = null, labelText = null, marker = null;
+    let held = null; // Pokémon soulevé : { p, from (sa place), dx, dy (écart au pointeur), pointer }
 
     // ---------- Taille : toute la largeur du conteneur ; en hauteur, un nombre entier de fois la zone « Départ » en
     // pixels d'écran (chaque pixel de la carte et des sprites couvre autant de pixels d'écran : dessin net), le plus grand
@@ -480,9 +497,10 @@ export async function create(container, component) {
         game.canvas.classList.add("park-canvas");
         game.canvas.addEventListener("wheel", onWheel, { passive: false });
         s.add.rectangle(0, 0, ground.width, ground.height, GRASS).setOrigin(0).setDepth(-1); // sous la carte (planches absentes)
-        // La carte ne bouge pas : ses calques sont dessinés une seule fois, dans une image sous les Pokémon (sol, décors) et
-        // une devant (feuillages, brouillard). Des calques de tuiles redessinés à chaque image créaient des dizaines de Ko
-        // de déchets par image : petites saccades au passage du ramasse-miettes.
+        // La carte ne bouge pas : ses calques sont dessinés une seule fois, dans une image sous les Pokémon (sol, décors), des
+        // morceaux de feuillages triés avec eux (foliage) et une image devant tout (brouillard). Des calques de tuiles
+        // redessinés à chaque image créaient des dizaines de Ko de déchets par image : petites saccades au passage du
+        // ramasse-miettes.
         const below = s.add.renderTexture(0, 0, ground.width, ground.height).setOrigin(0).setDepth(0);
         const above = s.add.renderTexture(0, 0, ground.width, ground.height).setOrigin(0).setDepth(3);
         if (data) {
@@ -492,10 +510,11 @@ export async function create(container, component) {
                 .filter(t => s.textures.exists("tuiles:" + t.image))
                 .map(t => map.addTilesetImage(t.name, "tuiles:" + t.image))
                 .filter(t => t);
-            for (const [name, target] of [["Sol", below], ["Décors", below], ["Devant", above]]) {
+            for (const name of ["Sol", "Décors", "Devant"]) {
                 if (!tilesets.length || map.getLayerIndex(name) === null) continue;
                 const layer = map.createLayer(name, tilesets, 0, 0);
-                target.draw(layer);
+                if (name === "Devant") foliage(s, layer);
+                else below.draw(layer);
                 layer.destroy();
             }
         }
@@ -512,6 +531,7 @@ export async function create(container, component) {
         label = s.add.graphics().setDepth(6).setVisible(false);
         labelText = s.add.text(0, 0, "", { fontFamily: "sans-serif", fontStyle: "bold", fontSize: "8px", color: "#ffffff", resolution: k })
             .setDepth(6.1).setVisible(false);
+        marker = s.add.graphics().setDepth(HELD_DEPTH - 0.1).setVisible(false); // case visée par un Pokémon soulevé
 
         camera.roundPixels = true;
         applyZoom(k); // zoom et limites de la vue
@@ -520,13 +540,128 @@ export async function create(container, component) {
         listen(s);
     }
 
+    /**
+     * Feuillages (calque « Devant »), triés avec les Pokémon : chaque tuile appartient à l'arbre dont le tronc est la
+     * première case sous elle qui bloque ou n'a plus de feuillage. Un Pokémon aux pieds plus hauts que le milieu de ce
+     * tronc passe derrière l'arbre, plus bas devant. Les feuillages d'une même ligne de troncs, proches les uns des autres,
+     * forment un morceau ; tous sont dessinés une seule fois, dans une même texture (une image par morceau).
+     */
+    function foliage(s, layer) {
+        const { columns, lines } = ground;
+        const leaves = layer.layer.data; // tuiles, [ligne][colonne]
+        const blocked = data.layers.find(l => l.name === "Collisions" && l.type === "tilelayer")?.data ?? [];
+        const has = (x, y) => leaves[y][x].index !== -1;
+        const rows = new Map(); // ligne du tronc → cases de feuillage
+        for (let y = 0; y < lines; y++) {
+            for (let x = 0; x < columns; x++) {
+                if (!has(x, y)) continue;
+                let trunk = y;
+                while (trunk < lines && has(x, trunk) && !blocked[trunk * columns + x]) trunk++;
+                if (!rows.has(trunk)) rows.set(trunk, []);
+                rows.get(trunk).push({ x, y });
+            }
+        }
+        const pieces = [];
+        for (const [trunk, cells] of rows) {
+            let piece = null;
+            for (const c of cells.sort((a, b) => a.x - b.x)) {
+                if (!piece || c.x - piece.x1 > 3) {
+                    piece = { trunk, cells: [], x0: c.x, x1: c.x, y0: c.y, y1: c.y };
+                    pieces.push(piece);
+                }
+                piece.cells.push(c);
+                piece.x1 = c.x;
+                piece.y0 = Math.min(piece.y0, c.y);
+                piece.y1 = Math.max(piece.y1, c.y);
+            }
+        }
+        if (!pieces.length) return;
+        // Rangement dans la texture : par étagères, les plus hauts d'abord, un peu d'écart (pas de bavure d'un morceau à
+        // l'autre)
+        const GAP = 2;
+        for (const p of pieces) [p.w, p.h] = [(p.x1 - p.x0 + 1) * TILE, (p.y1 - p.y0 + 1) * TILE];
+        const width = Math.max(1024, ...pieces.map(p => p.w));
+        let px = 0, py = 0, shelf = 0;
+        for (const p of [...pieces].sort((a, b) => b.h - a.h)) {
+            if (px + p.w > width) [px, py, shelf] = [0, py + shelf + GAP, 0];
+            [p.ax, p.ay] = [px, py];
+            px += p.w + GAP;
+            shelf = Math.max(shelf, p.h);
+        }
+        const texture = s.textures.addDynamicTexture("feuillages", width, py + shelf);
+        layer.setSkipCull(true); // dessiné ailleurs qu'à sa place : ne pas écarter les tuiles hors de la vue
+        layer.forEachTile(t => { t.visible = false; });
+        pieces.forEach((p, i) => {
+            for (const c of p.cells) leaves[c.y][c.x].visible = true;
+            texture.draw(layer, p.ax - p.x0 * TILE, p.ay - p.y0 * TILE);
+            for (const c of p.cells) leaves[c.y][c.x].visible = false;
+            texture.add("f" + i, 0, p.ax, p.ay, p.w, p.h);
+            s.add.image(p.x0 * TILE, p.y0 * TILE, "feuillages", "f" + i).setOrigin(0)
+                .setDepth(depthOf(p.trunk * TILE + TILE / 2 + 0.5)); // + 0,5 : jamais à égalité avec un Pokémon
+        });
+    }
+
     // ---------- Souris : glisser pour explorer, curiosité, nom au survol, clic ----------
     /** Pokémon sous le pointeur (le plus en avant d'abord). */
     const at = point => [...pokemon].sort((a, b) => b.y - a.y).find(p => {
         const a = p.anim, w = a.fw * spriteScale / 2, h = a.fh * spriteScale;
         return Math.abs(point.x - p.x) < w * 0.7 && point.y < p.y + 4 && point.y > p.y - h * 0.75;
     });
-    const cursor = () => { game.canvas.style.cursor = drag?.moved ? "grabbing" : hovered ? "pointer" : "grab"; };
+    const cursor = () => { game.canvas.style.cursor = held || drag?.moved ? "grabbing" : hovered ? "pointer" : "grab"; };
+
+    // ---------- Pokémon soulevé (propriétaire) : suit le pointeur, posé seulement sur une case où il peut marcher ----------
+    const spot = new Phaser.Math.Vector2(); // gardé : la position suit le pointeur à chaque image, sans déchets
+
+    function pickUp(p, pointer) {
+        camera.getWorldPoint(pointer.x, pointer.y, spot);
+        held = { p, from: { x: p.x, y: p.y }, dx: p.x - spot.x, dy: p.y - spot.y, pointer };
+        Object.assign(p, { vx: 0, vy: 0, target: null, path: [], intent: null, resume: null, dir: FRONT });
+        p.setState("held"); // un dormeur se réveille
+        drag = null;
+        hovered = null;
+        cursor();
+    }
+
+    /** Sous le pointeur, même quand la vue défile ou change de zoom. */
+    function carry() {
+        camera.getWorldPoint(held.pointer.x, held.pointer.y, spot);
+        held.p.x = clamp(spot.x + held.dx, 0, ground.width - 1);
+        held.p.y = clamp(spot.y + held.dy, 0, ground.height - 1);
+    }
+
+    /** Posé là où il est s'il peut y marcher, sinon (ou <back>) remis à sa place ; il reste un moment immobile. */
+    function putDown(back = false) {
+        const { p, from } = held;
+        held = null;
+        if (back || !ground.isFree(p.x, p.y)) Object.assign(p, from);
+        p.dir = FRONT;
+        p.rest(random(2, 4));
+        cursor();
+    }
+
+    /** Près du bord de la vue, la vue défile vers lui (de plus en plus vite en s'en approchant). */
+    function edgeScroll(dt) {
+        const ratio = window.devicePixelRatio || 1, margin = EDGE_SCROLL.margin * ratio;
+        const push = (v, size) => v < margin ? -(1 - v / margin) : v > size - margin ? (v - size + margin) / margin : 0;
+        const vx = clamp(push(held.pointer.x, camera.width), -1, 1), vy = clamp(push(held.pointer.y, camera.height), -1, 1);
+        if (!vx && !vy) return;
+        const speed = EDGE_SCROLL.speed * ratio / k * dt; // pixels de la carte
+        camera.setScroll(camera.scrollX + vx * speed, camera.scrollY + vy * speed);
+    }
+
+    /** Cadre de la case visée : clair si on peut l'y poser, rouge sinon (redessiné seulement quand ça change). */
+    function drawMarker() {
+        marker.setVisible(!!held);
+        if (!held) return;
+        const p = held.p, ok = ground.isFree(p.x, p.y);
+        if (marker.ok !== ok) {
+            marker.ok = ok;
+            const color = ok ? 0xffffff : 0xff4d4d;
+            marker.clear().fillStyle(color, 0.18).fillRect(0, 0, TILE, TILE)
+                .lineStyle(1, color, 0.9).strokeRect(0.5, 0.5, TILE - 1, TILE - 1);
+        }
+        marker.setPosition(Math.floor(p.x / TILE) * TILE, Math.floor(p.y / TILE) * TILE);
+    }
 
     function listen(s) {
         const worldOf = pointer => camera.getWorldPoint(pointer.x, pointer.y);
@@ -536,8 +671,18 @@ export async function create(container, component) {
         const spread = () => { const [a, b] = fingers(); return Math.hypot(a.x - b.x, a.y - b.y); };
         let pinch = null;
         s.input.on("pointerdown", pointer => {
-            if (pinching()) { drag = null; pinch = { spread: spread() }; return; }
-            drag = { x: pointer.x, y: pointer.y, scrollX: camera.scrollX, scrollY: camera.scrollY, moved: false };
+            if (pinching()) { // deux doigts : pincement (un Pokémon porté retourne à sa place)
+                if (held) putDown(true);
+                drag = null;
+                pinch = { spread: spread() };
+                return;
+            }
+            if (held) return;
+            // Sur un Pokémon (propriétaire) : à la souris, il est soulevé dès qu'on bouge ; au doigt, après un appui long
+            // (tick), un glissement avant fait défiler la vue
+            const target = canMove ? at(worldOf(pointer)) ?? null : null;
+            drag = { x: pointer.x, y: pointer.y, scrollX: camera.scrollX, scrollY: camera.scrollY, moved: false,
+                target, touch: pointer.wasTouch, time: performance.now(), pointer };
         });
         s.input.on("pointermove", pointer => {
             if (pinch) {
@@ -551,12 +696,16 @@ export async function create(container, component) {
             }
             if (drag && pointer.isDown) {
                 const dx = pointer.x - drag.x, dy = pointer.y - drag.y;
-                if (!drag.moved && Math.hypot(dx, dy) > DRAG_THRESHOLD * (window.devicePixelRatio || 1)) drag.moved = true;
-                if (drag.moved) camera.setScroll(drag.scrollX - dx / k, drag.scrollY - dy / k);
+                if (!drag.moved && Math.hypot(dx, dy) > DRAG_THRESHOLD * (window.devicePixelRatio || 1)) {
+                    if (drag.target && !drag.touch) pickUp(drag.target, pointer);
+                    else drag.moved = true;
+                }
+                if (drag?.moved) camera.setScroll(drag.scrollX - dx / k, drag.scrollY - dy / k);
             }
+            if (held) carry();
             const point = worldOf(pointer);
             mouse = { x: point.x, y: point.y };
-            hovered = drag?.moved ? null : at(mouse);
+            hovered = held || drag?.moved ? null : at(mouse);
             cursor();
         });
         const release = pointer => {
@@ -564,6 +713,12 @@ export async function create(container, component) {
                 if (!pinching()) pinch = null;
                 drag = null;
                 mouse = hovered = null;
+                return;
+            }
+            if (held) {
+                carry();
+                putDown();
+                if (pointer.wasTouch) mouse = hovered = null;
                 return;
             }
             const click = drag && !drag.moved;
@@ -647,6 +802,7 @@ export async function create(container, component) {
 
     function update(p, dt, night) {
         const { activity, curious } = p.personality;
+        if (p.state === "held") return; // porté : suit le pointeur
         if (p.state === "sleep") {
             p.energy = Math.min(1, p.energy + dt * (night > 0.5 ? ENERGY.sleepNight : ENERGY.sleepDay));
             p.zzz += dt;
@@ -779,13 +935,16 @@ export async function create(container, component) {
             // Ombre au sol, puis l'image : SpriteCollab centre le Pokémon dans chaque image, les pieds un peu sous le centre.
             p.shadow.setTexture(shadowOf(anim)).setScale(1 / k).setPosition(snap(p.x), snap(p.y));
             const row = Math.min(p.state === "sleep" ? 0 : p.dir, anim.rows - 1);
+            const lift = p.state === "held" ? LIFT : 0;
             p.sprite.setTexture(anim.key, row * anim.columns + p.frame % anim.columns)
                 .setScale(s)
-                .setPosition(snap(p.x), snap(p.y - 6 * s));
-            const depth = 2 + Math.round(p.y) / 10000; // les plus bas passent devant (tri seulement s'ils changent de ligne)
+                .setPosition(snap(p.x), snap(p.y - 6 * s - lift));
+            // Les plus bas passent devant (tri seulement s'ils changent de ligne) ; soulevé : devant tout
+            const depth = lift ? HELD_DEPTH : depthOf(Math.round(p.y));
             if (p.sprite.depth !== depth) p.sprite.setDepth(depth);
             drawZzz(p, anim.fh * s);
         }
+        drawMarker();
         drawName(hovered);
     }
 
@@ -834,6 +993,9 @@ export async function create(container, component) {
         const dt = Math.min(0.1, delta / 1000); // onglet en arrière-plan : pas de bond au retour
         levelAge += dt;
         if (levelAge > 1) { level = nightLevel(); levelAge = 0; } // l'heure, une fois par seconde
+        if (drag?.target && drag.touch && !drag.moved && drag.pointer.isDown && performance.now() - drag.time >= LONG_PRESS)
+            pickUp(drag.target, drag.pointer); // appui long sur un Pokémon
+        if (held) { edgeScroll(dt); carry(); }
         step(dt, level);
         draw(level);
     }
@@ -844,7 +1006,7 @@ export async function create(container, component) {
     window.addEventListener("resize", resize);
     resize();
 
-    const removeFromScene = p => { p.sprite.destroy(); p.shadow.destroy(); for (const text of p.texts) text.destroy(); };
+    const removeFromScene = p => { if (held?.p === p) held = null; p.sprite.destroy(); p.shadow.destroy(); for (const text of p.texts) text.destroy(); };
 
     return {
         /** Pokémon du parc : ceux qui restent gardent leur place, les nouveaux arrivent à un endroit libre. */
@@ -881,6 +1043,15 @@ export async function create(container, component) {
             draw(level);
             return pokemon.map(p => ({ id: p.id, species: p.species, state: p.state, intent: p.intent, x: Math.round(p.x),
                 y: Math.round(p.y), energy: Math.round(p.energy * 100) / 100, free: ground.isFree(p.x, p.y) }));
+        },
+        /** Pour les essais : pose un Pokémon à un endroit (pixels de la carte), immobile un long moment. */
+        place(id, x, y) {
+            const p = pokemon.find(o => o.id === id);
+            if (!p) return false;
+            Object.assign(p, { x, y, vx: 0, vy: 0, target: null, path: [], intent: null, timer: 600 });
+            p.setState("idle");
+            draw(nightLevel());
+            return true;
         },
         /** Pour les essais : la caméra (zone affichée, zoom) et la zone « Départ », en pixels de la carte. */
         view() {

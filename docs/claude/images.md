@@ -26,9 +26,12 @@ README : « Images des Pokémon », « Mise en ligne » (Images), « Lancer en l
 - Pas d'API GitHub (limitée sans jeton) : seulement des fichiers bruts, sources essayées dans l'ordre (404 → la suivante),
   sans lister les dossiers des dépôts.
 - Sprites animés Donjon Mystère (SpriteCollab, CC BY-NC 4.0) : `wwwroot/images/donjon/`, dossiers de SpriteCollab
-  (`<espèce sur 4 chiffres>/<forme>/<chromatique 0001>/<femelle 0002>`), `python outils/images.py donjon` (3 min 30,
-  ~13 000 fichiers, 85 Mo). Seules Idle, Walk et Sleep (`DONJON_ANIMATIONS`), avec les animations qu'elles copient
-  (`<CopyOf>`) ; `AnimData.xml` réduit à ces animations ; `credits.txt` : auteurs.
+  (`<espèce sur 4 chiffres>/<forme>/<chromatique 0001>/<femelle 0002>`), `python outils/images.py donjon` (~16 000
+  fichiers, 164 Mo). Seules Idle, Walk, Sleep et Charge (`DONJON_ANIMATIONS`), avec les animations qu'elles copient
+  (`<CopyOf>`) ; `AnimData.xml` réduit à ces animations, avec `animations="Idle,Walk,Sleep,Charge"` sur sa racine : une
+  liste qui ne correspond plus à `DONJON_ANIMATIONS` (animation ajoutée) fait reprendre le fichier de SpriteCollab (sinon
+  l'animation ajoutée n'y serait jamais). Charge ajoutée le 2026-10-31 (3 234 planches, +37 Mo) ; le serveur les prend au
+  prochain déploiement (la CD lance `images.py`) ou par `deploy\images-serveur.cmd`. `credits.txt` : auteurs.
 
 ## Choix de l'image (`PokemonSprites`)
 - Parmi les fichiers présents (liste lue au démarrage, `PokemonSprites.Load`) : nom de forme de PKHeX (selon le jeu du

@@ -8,8 +8,8 @@ Carte du « Parc » : prend une carte faite dans Tiled avec le pack Cute Fantasy
   serveur.
 
 Ce que la carte doit avoir (README, « Parc ») : vue de dessus (orthogonale), tuiles de 16 px, taille fixe (pas
-« infinie »), jeux de tuiles incorporés à la carte, calques de tuiles « Sol », « Décors », « Devant » (dessiné devant les
-Pokémon) et « Collisions » (une tuile quelconque = case où l'on ne passe pas), et un calque d'objets « Zones » avec un
+« infinie »), jeux de tuiles incorporés à la carte, calques de tuiles « Sol », « Décors », « Devant » (feuillages,
+au-dessus de leur tronc) et « Collisions » (une tuile quelconque = case où l'on ne passe pas), et un calque d'objets « Zones » avec un
 rectangle « Départ » : la partie de la carte où vivent les Pokémon (le reste est assombri, à débloquer plus tard).
 
 Lancement (Python 3 seul) :

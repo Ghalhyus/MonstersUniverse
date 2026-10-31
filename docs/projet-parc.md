@@ -31,7 +31,9 @@ Faire du parc un **refuge de Pokémon** :
    saccades corrigées (README, « Parc »). Essai de charge : 150 Pokémon sur toute la carte restent fluides (~0,5 ms de
    calcul par image) ; l'utilisateur a essayé 150, 120 puis 100 avant de revenir à 30 (capacité des parcs agrandis encore
    à choisir). *Reste :* plusieurs parcs
-   en base, feuillages triés selon la hauteur (aujourd'hui toujours devant les Pokémon).
+   en base. *Fait le 31 octobre 2026 :* feuillages triés avec les Pokémon (derrière ou devant l'arbre selon la ligne du
+   tronc), dossier des bancs bloqué, générateur de la carte dans le dépôt (`outils/generer-parc.py`) ; le propriétaire
+   déplace ses Pokémon en les soulevant (animation Charge), posés seulement là où ils peuvent marcher.
 2. **Agrandissements payants** : débit atomique des pokédollars, une zone cachée qui se dévoile.
 3. **IA par espèce** : profils tirés des types et des groupes d'œufs, à partir d'un fichier de comportements fourni par
    l'utilisateur.
@@ -39,7 +41,7 @@ Faire du parc un **refuge de Pokémon** :
 
 ## Questions à trancher au lancement
 
-1. ~~Qui dessine la première carte~~ : générée par un script (`C:\Sources\Parcs\generer_parc.py`), retouchable dans Tiled.
+1. ~~Qui dessine la première carte~~ : générée par un script (`outils/generer-parc.py`), retouchable dans Tiled.
 2. La capacité en Pokémon d'un parc agrandi (départ : 24 × 20 tuiles, 30 Pokémon).
 3. La forme des agrandissements (recommandé : dévoiler la carte déjà dessinée autour de « Départ ») et leurs prix.
 

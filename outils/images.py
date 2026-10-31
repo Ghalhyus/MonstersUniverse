@@ -8,7 +8,7 @@ Rassemble les images servies par le site, dans MonsutaPotaru/wwwroot/images/ :
 - objets/<numéro d'objet>.png (numéros de PKHeX, ceux du site), objets/ct-<type>.png pour les CT et DT (une par type de
   capacité), objets/inconnu.png pour les objets sans image ;
 - donjon/ : sprites animés façon Donjon Mystère de SpriteCollab (PMD Collab, https://sprites.pmdcollab.org), animations
-  Idle, Walk et Sleep seulement, dans les dossiers de SpriteCollab : donjon/<espèce sur 4 chiffres>[/<forme>[/<chromatique>
+  Idle, Walk, Sleep et Charge seulement, dans les dossiers de SpriteCollab : donjon/<espèce sur 4 chiffres>[/<forme>[/<chromatique>
   [/<femelle>]]]/ (donjon/0025/ Pikachu, donjon/0025/0000/0001/ chromatique, donjon/0025/0000/0000/0002/ femelle...).
   Chaque dossier a ses planches <Animation>-Anim.png et un AnimData.xml réduit à ces animations (taille des images,
   durées) ; donjon/credits.txt liste les auteurs de chaque dossier (licence CC BY-NC 4.0 : à citer), donjon/formes.json
@@ -67,7 +67,7 @@ POKEAPI_DATA = "https://raw.githubusercontent.com/PokeAPI/pokeapi/master/data/v2
 POKESPRITE = "https://raw.githubusercontent.com/msikma/pokesprite/master"
 SPRITECOLLAB = "https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master"
 BULBAGARDEN = "https://archives.bulbagarden.net/w/api.php"  # Bulbagarden Archives (jaquettes)
-DONJON_ANIMATIONS = ["Idle", "Walk", "Sleep"]  # animations gardées de SpriteCollab (il y en a une quarantaine)
+DONJON_ANIMATIONS = ["Idle", "Walk", "Sleep", "Charge"]  # animations gardées de SpriteCollab (il y en a une quarantaine)
 TYPES = ["normal", "fighting", "flying", "poison", "ground", "rock", "bug", "ghost", "steel", "fire", "water", "grass",
          "electric", "psychic", "ice", "dragon", "dark", "fairy"]
 
@@ -187,11 +187,17 @@ def donjon_jobs():
     def sheets(folder):
         """Planches nécessaires d'un dossier, d'après son AnimData.xml (réduit et écrit s'il n'est pas déjà là)."""
         local = OUT / "donjon" / folder / "AnimData.xml"
+        # Le fichier réduit note les animations demandées : si DONJON_ANIMATIONS a changé depuis, il est repris de
+        # SpriteCollab (une animation ajoutée n'y serait pas)
+        root = ElementTree.fromstring(local.read_bytes()) if local.exists() else None
+        if root is not None and root.get("animations") != ",".join(DONJON_ANIMATIONS):
+            root = None
+        reduce = root is None
         try:
-            data = local.read_bytes() if local.exists() else get(f"{SPRITECOLLAB}/sprite/{folder}/AnimData.xml")
+            if reduce:
+                root = ElementTree.fromstring(get(f"{SPRITECOLLAB}/sprite/{folder}/AnimData.xml"))
         except urllib.error.URLError as e:
             return folder, None, f"{folder}/AnimData.xml : {e}"
-        root = ElementTree.fromstring(data)
         anims = {a.findtext("Name"): a for a in root.iter("Anim")}
         kept, todo = set(), [a for a in DONJON_ANIMATIONS if a in anims]
         while todo:  # suit les <CopyOf> jusqu'aux animations qui ont une planche
@@ -201,7 +207,8 @@ def donjon_jobs():
             kept.add(name)
             if (copy := anims[name].findtext("CopyOf")) and copy in anims:
                 todo.append(copy)
-        if not local.exists():
+        if reduce:
+            root.set("animations", ",".join(DONJON_ANIMATIONS))
             container = root.find("Anims")
             for anim in list(container):
                 if anim.findtext("Name") not in kept:
@@ -227,7 +234,7 @@ def donjon_jobs():
 
     # Auteurs de chaque dossier : la licence CC BY-NC 4.0 demande de les citer.
     lines = ["Sprites animés : SpriteCollab (PMD Collab, https://sprites.pmdcollab.org), licence CC BY-NC 4.0.",
-             "Auteurs de chaque dossier de sprites (animations Idle, Walk et Sleep) :", ""]
+             "Auteurs de chaque dossier de sprites (animations Idle, Walk, Sleep et Charge) :", ""]
     lines += [f"{folder}\t{title}\t{', '.join(authors)}" for folder, title, authors in folders]
     (OUT / "donjon").mkdir(parents=True, exist_ok=True)
     (OUT / "donjon" / "credits.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
