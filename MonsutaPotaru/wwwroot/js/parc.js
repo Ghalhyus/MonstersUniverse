@@ -70,25 +70,9 @@ function loadSheets(folder) {
             if (!response.ok) throw new Error(`Sprites absents : ${folder}`);
             const xml = new DOMParser().parseFromString(await response.text(), "text/xml");
             const defs = new Map([...xml.querySelectorAll("Anim")].map(a => [a.querySelector("Name").textContent, a]));
+            const loaded = await Promise.all(ANIMATIONS.map(name => loadAnimation(folder, defs, name))); // planches en parallèle
             const result = {};
-            for (const name of ANIMATIONS) {
-                let def = defs.get(name);
-                while (def?.querySelector("CopyOf")) def = defs.get(def.querySelector("CopyOf").textContent); // animation copiée d'une autre
-                if (!def) continue;
-                const source = def.querySelector("Name").textContent;
-                const image = new Image();
-                image.src = `${folder}${source}-Anim.png`;
-                try { await image.decode(); }
-                catch (e) { if (OPTIONAL.has(name)) continue; throw e; }
-                const fw = +def.querySelector("FrameWidth").textContent, fh = +def.querySelector("FrameHeight").textContent;
-                result[name] = {
-                    image, fw, fh,
-                    key: image.src, // texture de Phaser
-                    columns: Math.max(1, Math.round(image.width / fw)),
-                    rows: Math.max(1, Math.round(image.height / fh)),
-                    durations: [...def.querySelectorAll("Duration")].map(d => +d.textContent * 1000 / 60), // images à 60 par seconde
-                };
-            }
+            ANIMATIONS.forEach((name, i) => { if (loaded[i]) result[name] = loaded[i]; });
             result.Idle ??= result.Walk; // au cas où une planche manquerait
             if (!result.Idle) throw new Error(`Ni Idle ni Walk : ${folder}`); // ce Pokémon n'apparaît pas (setPokemon)
             result.Walk ??= result.Idle;
@@ -98,6 +82,30 @@ function loadSheets(folder) {
         })());
     }
     return sheets.get(folder);
+}
+
+/** Une animation d'un dossier de sprites (définitions de AnimData.xml), ou null si elle manque. */
+async function loadAnimation(folder, defs, name) {
+    let def = defs.get(name);
+    while (def?.querySelector("CopyOf")) def = defs.get(def.querySelector("CopyOf").textContent); // animation copiée d'une autre
+    if (!def) return null;
+    const source = def.querySelector("Name").textContent;
+    const image = new Image();
+    image.src = `${folder}${source}-Anim.png`;
+    try {
+        await image.decode();
+    } catch (e) {
+        if (OPTIONAL.has(name)) return null;
+        throw e;
+    }
+    const fw = +def.querySelector("FrameWidth").textContent, fh = +def.querySelector("FrameHeight").textContent;
+    return {
+        image, fw, fh,
+        key: image.src, // texture de Phaser
+        columns: Math.max(1, Math.round(image.width / fw)),
+        rows: Math.max(1, Math.round(image.height / fh)),
+        durations: [...def.querySelectorAll("Duration")].map(d => +d.textContent * 1000 / 60), // images à 60 par seconde
+    };
 }
 
 /** Heure de la nuit : 0 le jour, 1 la nuit (22 h – 6 h), progressif le soir (19 h – 22 h) et à l'aube (6 h – 8 h). */
@@ -200,6 +208,14 @@ class Ground {
         const start = this.nearestFree(from.x, from.y);
         const startTile = Math.floor(start.y / TILE) * this.columns + Math.floor(start.x / TILE);
         const goalTile = Math.floor(to.y / TILE) * this.columns + Math.floor(to.x / TILE);
+        if (!this.explore(startTile, goalTile)) return null;
+        const tiles = [];
+        for (let t = goalTile; t !== startTile; t = this.previous[t]) tiles.unshift(t);
+        return this.smooth([start, ...tiles.slice(0, -1).map(t => this.center(t)), to]);
+    }
+
+    /** Recherche A* de <startTile> à <goalTile> : vrai si elle aboutit (chemin dans previous, depuis l'arrivée). */
+    explore(startTile, goalTile) {
         const gx = goalTile % this.columns, gy = Math.floor(goalTile / this.columns);
         const columns = this.columns, cost = this.cost, previous = this.previous, seen = this.seen, closed = this.closed;
         const heap = this.heap, score = this.heapScore;
@@ -229,35 +245,46 @@ class Ground {
             return cost[i] + Math.max(dx, dy) + (Math.SQRT2 - 1) * Math.min(dx, dy);
         };
         const search = ++this.search;
+        let current = startTile;
+        const visit = (next, step) => {
+            const c = cost[current] + step;
+            if (closed[next] === search || (seen[next] === search && c >= cost[next])) return;
+            seen[next] = search;
+            cost[next] = c;
+            previous[next] = current;
+            push(next, estimate(next));
+        };
         cost[startTile] = 0;
         seen[startTile] = search;
         push(startTile, estimate(startTile));
-        let found = false;
         while (size) {
-            const current = pop();
+            current = pop();
             if (closed[current] === search) continue; // déjà exploré par un chemin plus court
-            if (current === goalTile) { found = true; break; }
+            if (current === goalTile) return true;
             closed[current] = search;
-            const cx = current % columns, cy = Math.floor(current / columns);
-            for (let dy = -1; dy <= 1; dy++) {
-                for (let dx = -1; dx <= 1; dx++) {
-                    if ((!dx && !dy) || !this.tileFree(cx + dx, cy + dy)) continue;
-                    if (dx && dy && (!this.tileFree(cx + dx, cy) || !this.tileFree(cx, cy + dy))) continue; // pas de coin coupé
-                    const next = (cy + dy) * columns + cx + dx;
-                    const c = cost[current] + (dx && dy ? Math.SQRT2 : 1);
-                    if (closed[next] === search || (seen[next] === search && c >= cost[next])) continue;
-                    seen[next] = search;
-                    cost[next] = c;
-                    previous[next] = current;
-                    push(next, estimate(next));
-                }
+            this.forEachNeighbour(current, visit);
+        }
+        return false;
+    }
+
+    /** Appelle visit(case, coût du pas) pour chaque case voisine où l'on peut aller. */
+    forEachNeighbour(tile, visit) {
+        const columns = this.columns, cx = tile % columns, cy = Math.floor(tile / columns);
+        for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+                if (this.canStep(cx, cy, dx, dy)) visit((cy + dy) * columns + cx + dx, dx && dy ? Math.SQRT2 : 1);
             }
         }
-        if (!found) return null;
-        const tiles = [];
-        for (let t = goalTile; t !== startTile; t = previous[t]) tiles.unshift(t);
-        // Lissage : du point actuel, aller tout droit tant qu'on voit le point de passage suivant.
-        const points = [start, ...tiles.slice(0, -1).map(t => this.center(t)), to];
+    }
+
+    /** Pas de (cx, cy) vers la case voisine (cx + dx, cy + dy) : libre, et sans couper de coin en diagonale. */
+    canStep(cx, cy, dx, dy) {
+        if ((!dx && !dy) || !this.tileFree(cx + dx, cy + dy)) return false;
+        return !dx || !dy || (this.tileFree(cx + dx, cy) && this.tileFree(cx, cy + dy));
+    }
+
+    /** Lissage : du point actuel, aller tout droit tant qu'on voit le point de passage suivant. */
+    smooth(points) {
         const result = [];
         for (let i = 0; i < points.length - 1;) {
             let j = i + 1;
@@ -312,7 +339,7 @@ class Pokemon {
 
     /** Distance qu'il reste à parcourir, en suivant le chemin. */
     remaining() {
-        let total = 0, from = this;
+        let total = 0, from = { x: this.x, y: this.y };
         for (const point of this.path) { total += distance(from, point); from = point; }
         return total;
     }
@@ -452,7 +479,7 @@ export async function create(container, component, options) {
     const zoomOutButton = button("Dézoomer", ICONS.minus, () => zoomTo(k - 1));
     const zoomInButton = button("Zoomer", ICONS.plus, () => zoomTo(k + 1));
     const fullscreenButton = button("Plein écran", ICONS.expand, () => {
-        if (isFullscreen()) document.exitFullscreen();
+        if (isFullscreen()) document.exitFullscreen().catch(() => { });
         else container.requestFullscreen().catch(() => { });
     });
     fullscreenButton.hidden = !document.fullscreenEnabled; // iPhone : pas de plein écran pour une page
@@ -520,7 +547,7 @@ export async function create(container, component, options) {
             const tilesets = data.tilesets
                 .filter(t => s.textures.exists("tuiles:" + t.image))
                 .map(t => map.addTilesetImage(t.name, "tuiles:" + t.image))
-                .filter(t => t);
+                .filter(Boolean);
             for (const name of ["Sol", "Décors", "Devant"]) {
                 if (!tilesets.length || map.getLayerIndex(name) === null) continue;
                 const layer = map.createLayer(name, tilesets, 0, 0);
@@ -561,8 +588,26 @@ export async function create(container, component, options) {
      * forment un morceau ; tous sont dessinés une seule fois, dans une même texture (une image par morceau).
      */
     function foliage(s, layer) {
-        const { columns, lines } = ground;
         const leaves = layer.layer.data; // tuiles, [ligne][colonne]
+        const pieces = foliagePieces(trunkRows(leaves));
+        if (!pieces.length) return;
+        const { width, height } = packPieces(pieces);
+        const texture = s.textures.addDynamicTexture("feuillages", width, height);
+        layer.setSkipCull(true); // dessiné ailleurs qu'à sa place : ne pas écarter les tuiles hors de la vue
+        layer.forEachTile(t => { t.visible = false; });
+        pieces.forEach((p, i) => {
+            for (const c of p.cells) leaves[c.y][c.x].visible = true;
+            texture.draw(layer, p.ax - p.x0 * TILE, p.ay - p.y0 * TILE);
+            for (const c of p.cells) leaves[c.y][c.x].visible = false;
+            texture.add("f" + i, 0, p.ax, p.ay, p.w, p.h);
+            s.add.image(p.x0 * TILE, p.y0 * TILE, "feuillages", "f" + i).setOrigin(0)
+                .setDepth(depthOf(p.trunk * TILE + TILE / 2 + 0.5)); // + 0,5 : jamais à égalité avec un Pokémon
+        });
+    }
+
+    /** Cases de feuillage, par ligne du tronc de leur arbre. */
+    function trunkRows(leaves) {
+        const { columns, lines } = ground;
         const blocked = data.layers.find(l => l.name === "Collisions" && l.type === "tilelayer")?.data ?? [];
         const has = (x, y) => leaves[y][x].index !== -1;
         const rows = new Map(); // ligne du tronc → cases de feuillage
@@ -575,6 +620,11 @@ export async function create(container, component, options) {
                 rows.get(trunk).push({ x, y });
             }
         }
+        return rows;
+    }
+
+    /** Morceaux de feuillage : les cases d'une même ligne de troncs, proches les unes des autres. */
+    function foliagePieces(rows) {
         const pieces = [];
         for (const [trunk, cells] of rows) {
             let piece = null;
@@ -589,9 +639,14 @@ export async function create(container, component, options) {
                 piece.y1 = Math.max(piece.y1, c.y);
             }
         }
-        if (!pieces.length) return;
-        // Rangement dans la texture : par étagères, les plus hauts d'abord, un peu d'écart (pas de bavure d'un morceau à
-        // l'autre)
+        return pieces;
+    }
+
+    /**
+     * Rangement des morceaux dans la texture (place de chacun : ax, ay) : par étagères, les plus hauts d'abord, un peu
+     * d'écart (pas de bavure d'un morceau à l'autre). Rend la taille de la texture.
+     */
+    function packPieces(pieces) {
         const GAP = 2;
         for (const p of pieces) [p.w, p.h] = [(p.x1 - p.x0 + 1) * TILE, (p.y1 - p.y0 + 1) * TILE];
         const width = Math.max(1024, ...pieces.map(p => p.w));
@@ -602,17 +657,7 @@ export async function create(container, component, options) {
             px += p.w + GAP;
             shelf = Math.max(shelf, p.h);
         }
-        const texture = s.textures.addDynamicTexture("feuillages", width, py + shelf);
-        layer.setSkipCull(true); // dessiné ailleurs qu'à sa place : ne pas écarter les tuiles hors de la vue
-        layer.forEachTile(t => { t.visible = false; });
-        pieces.forEach((p, i) => {
-            for (const c of p.cells) leaves[c.y][c.x].visible = true;
-            texture.draw(layer, p.ax - p.x0 * TILE, p.ay - p.y0 * TILE);
-            for (const c of p.cells) leaves[c.y][c.x].visible = false;
-            texture.add("f" + i, 0, p.ax, p.ay, p.w, p.h);
-            s.add.image(p.x0 * TILE, p.y0 * TILE, "feuillages", "f" + i).setOrigin(0)
-                .setDepth(depthOf(p.trunk * TILE + TILE / 2 + 0.5)); // + 0,5 : jamais à égalité avec un Pokémon
-        });
+        return { width, height: py + shelf };
     }
 
     // ---------- Souris : glisser pour explorer, curiosité, nom au survol, clic ----------
@@ -621,7 +666,12 @@ export async function create(container, component, options) {
         const a = p.anim, w = a.fw * spriteScale / 2, h = a.fh * spriteScale;
         return Math.abs(point.x - p.x) < w * 0.7 && point.y < p.y + 4 && point.y > p.y - h * 0.75;
     });
-    const cursor = () => { game.canvas.style.cursor = held || drag?.moved ? "grabbing" : hovered ? "pointer" : "grab"; };
+    const cursor = () => {
+        let style = "grab";
+        if (held || drag?.moved) style = "grabbing";
+        else if (hovered) style = "pointer";
+        game.canvas.style.cursor = style;
+    };
 
     // ---------- Pokémon soulevé (propriétaire) : suit le pointeur, posé seulement sur une case où il peut marcher ----------
     const spot = new Phaser.Math.Vector2(); // gardé : la position suit le pointeur à chaque image, sans déchets
@@ -656,7 +706,11 @@ export async function create(container, component, options) {
     /** Près du bord de la vue, la vue défile vers lui (de plus en plus vite en s'en approchant). */
     function edgeScroll(dt) {
         const ratio = window.devicePixelRatio || 1, margin = EDGE_SCROLL.margin * ratio;
-        const push = (v, size) => v < margin ? -(1 - v / margin) : v > size - margin ? (v - size + margin) / margin : 0;
+        const push = (v, size) => {
+            if (v < margin) return -(1 - v / margin);
+            if (v > size - margin) return (v - size + margin) / margin;
+            return 0;
+        };
         const vx = clamp(push(held.pointer.x, camera.width), -1, 1), vy = clamp(push(held.pointer.y, camera.height), -1, 1);
         if (!vx && !vy) return;
         const speed = EDGE_SCROLL.speed * ratio / k * dt; // pixels de la carte
@@ -698,24 +752,29 @@ export async function create(container, component, options) {
             drag = { x: pointer.x, y: pointer.y, scrollX: camera.scrollX, scrollY: camera.scrollY, moved: false,
                 target, touch: pointer.wasTouch, time: performance.now(), pointer };
         });
+        const pinchMove = () => {
+            if (!pinching()) return;
+            const [a, b] = fingers(), now = spread();
+            if (now > pinch.spread * 1.35 || now < pinch.spread / 1.35) {
+                zoomTo(k + (now > pinch.spread ? 1 : -1), (a.x + b.x) / 2, (a.y + b.y) / 2);
+                pinch.spread = now;
+            }
+        };
+        // Bouton appuyé : au-delà du seuil, le Pokémon visé est soulevé ou la vue défile
+        const dragMove = pointer => {
+            const dx = pointer.x - drag.x, dy = pointer.y - drag.y;
+            if (!drag.moved && Math.hypot(dx, dy) > DRAG_THRESHOLD * (window.devicePixelRatio || 1)) {
+                if (drag.target && !drag.touch) pickUp(drag.target, pointer);
+                else drag.moved = true;
+            }
+            if (drag?.moved) camera.setScroll(drag.scrollX - dx / k, drag.scrollY - dy / k);
+        };
         s.input.on("pointermove", pointer => {
             if (pinch) {
-                if (!pinching()) return;
-                const [a, b] = fingers(), now = spread();
-                if (now > pinch.spread * 1.35 || now < pinch.spread / 1.35) {
-                    zoomTo(k + (now > pinch.spread ? 1 : -1), (a.x + b.x) / 2, (a.y + b.y) / 2);
-                    pinch.spread = now;
-                }
+                pinchMove();
                 return;
             }
-            if (drag && pointer.isDown) {
-                const dx = pointer.x - drag.x, dy = pointer.y - drag.y;
-                if (!drag.moved && Math.hypot(dx, dy) > DRAG_THRESHOLD * (window.devicePixelRatio || 1)) {
-                    if (drag.target && !drag.touch) pickUp(drag.target, pointer);
-                    else drag.moved = true;
-                }
-                if (drag?.moved) camera.setScroll(drag.scrollX - dx / k, drag.scrollY - dy / k);
-            }
+            if (drag && pointer.isDown) dragMove(pointer);
             if (held) carry();
             const point = worldOf(pointer);
             mouse = { x: point.x, y: point.y };
@@ -1091,7 +1150,7 @@ export async function create(container, component, options) {
             observer.disconnect();
             window.removeEventListener("resize", resize);
             document.removeEventListener("fullscreenchange", onFullscreen);
-            if (isFullscreen()) document.exitFullscreen();
+            if (isFullscreen()) document.exitFullscreen().catch(() => { });
             controls.remove();
             game.destroy(true);
         },

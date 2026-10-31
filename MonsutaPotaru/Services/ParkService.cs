@@ -87,7 +87,8 @@ public sealed class ParkService(IDbContextFactory<ApplicationDbContext> dbFactor
         await db.SaveChangesAsync();
         await tx.CommitAsync();
 
-        logger.LogInformation("Utilisateur {User} : parc agrandi ({Expansions} agrandissements).", ownerId, expansions);
+        if (logger.IsEnabled(LogLevel.Information))
+            logger.LogInformation("Utilisateur {User} : parc agrandi ({Expansions} agrandissements).", ownerId, expansions);
         return new(true, $"Parc agrandi : il accueille maintenant {CapacityOf(expansions)} Pokémon. " +
                          $"Solde : {InventoryService.FormatMoney(balance)}.", expansions, balance);
     }

@@ -21,6 +21,8 @@ utile à la tâche. Ce fichier ne garde que ce que le README ne dit pas.
 | Inventaire : sacs, numéros d'objets, CT, nouvelle catégorie | `docs/claude/inventaire.md` |
 | Pièges de PKHeX (octets, sauvegardes vides) | `docs/claude/pkhex.md` |
 | Ma collection : colonnes remplies au démarrage, doublons, PID des Pokémon de test | `docs/claude/collection.md` |
+| Tester dans le navigateur : instance de test, compte, envoi d'un `.sav`, deux comptes, anti-copie | `docs/claude/navigateur.md` |
+| CI/CD : workflows, SonarCloud, déploiement | `docs/claude/ci-cd.md` |
 
 Une fiche fausse ou incomplète : la corriger dans la même tâche. Un nouveau sujet : nouvelle fiche, et une ligne ici.
 
@@ -35,7 +37,8 @@ Une fiche fausse ou incomplète : la corriger dans la même tâche. Un nouveau s
 - Tout en français : code commenté en français, interface qui tutoie (« Retire de l'argent… »), messages prêts à afficher.
 - Son écran : 3440×1440 à 150 % de mise à l'échelle Windows. Il raisonne en **pixels physiques**
   (`innerWidth * devicePixelRatio`), pas en pixels CSS.
-- Vérifier dans un vrai navigateur (instance de test, plus bas) avant d'annoncer qu'une fonctionnalité marche.
+- Vérifier dans un vrai navigateur (instance de test : `docs/claude/navigateur.md`) avant d'annoncer qu'une
+  fonctionnalité marche.
 - Tenir le README à jour (règles métier, sauvegardes d'exemple, tableau « Organisation du code ») à chaque fonctionnalité.
 - **Toute ressource venant d'un autre projet** (bibliothèque, paquet, images, données, table reprise d'un site) : citée
   dans la section « Crédits » du README, avec son usage et sa licence, dès qu'elle entre dans le projet.
@@ -75,6 +78,8 @@ dotnet test MonsutaPotaru.Tests/MonsutaPotaru.Tests.csproj --artifacts-path <dos
 - Pendant le développement, seulement les tests concernés (`--filter`), la suite complète à la fin ; filtrer la sortie
   (bilan et échecs).
 - Sans images ou sans Node, les tests qui en dépendent échouent avec un message clair : les compter à part.
+- La CI les passe sous **Linux** : noms de fichiers sensibles à la casse, séparateur `/`, culture `fr-FR` par ICU.
+- Un nouveau fichier nécessaire au déploiement s'ajoute à l'archive des deux côtés (`publier.ps1` et le workflow).
 - `RequiresAspNetWebAssets` dans le `.csproj` : en .NET 10, les scripts de Blazor (`_framework/blazor.web.js`) viennent
   d'un paquet que le SDK n'ajoute que s'il voit des `.razor` à la restauration ; le `Dockerfile` restaure avec le seul
   `.csproj` (sans ce réglage : pages affichées mais jamais interactives). Pour un changement de version de .NET ou de la
@@ -87,39 +92,3 @@ dotnet test MonsutaPotaru.Tests/MonsutaPotaru.Tests.csproj --artifacts-path <dos
   avant. La base se met à jour au démarrage (`Database.Migrate()`). Une migration qui modifie des données (SQL seul :
   `GameNames`, `JournalFileNames`, `GameGroupNames`) se teste dans `MigrationsTests` (base migrée jusqu'à la précédente,
   lignes ajoutées, migration complète et retour) ; les autres tests créent la base avec `EnsureCreated`.
-
-## Tester dans le navigateur
-
-- Instance de test sur un autre port, avec sa propre base, ses copies et ses clés (dans un dossier temporaire), en lançant
-  la DLL compilée plus haut :
-  `dotnet <build>/bin/MonsutaPotaru/debug/MonsutaPotaru.dll --contentRoot <dépôt>/MonsutaPotaru --environment Development --urls http://localhost:5299
-  --ConnectionStrings:DefaultConnection="DataSource=<tmp>/test.db;Cache=Shared" --Bank:BackupPath=<tmp>/backups --Bank:KeysPath=<tmp>/keys`.
-  Le `.claude/launch.json` correspondant est temporaire (dossier ignoré par Git) : le supprimer après les tests.
-- **Compte de test** : inscription par un script dans la page, qui génère lui-même un mot de passe jetable (l'inscription
-  connecte : le mot de passe n'a jamais à être écrit ni relu). Code d'invitation `pokeamis` sur une base neuve ;
-  administrateur : `--Bank:AdminPseudo=<pseudo>`. Envoyer un formulaire par `fetch` (`FormData` du formulaire) ; après une
-  connexion réussie, recharger la page (jeton antiforgery lié à l'ancien compte : 400).
-- **Envoi d'un `.sav`** : servir le dossier avec un petit serveur HTTP local qui autorise CORS, appelé par
-  `http://localhost:<port>` (la CSP de développement refuse `127.0.0.1`), puis dans la page `fetch` du fichier →
-  `DataTransfer` → `input.files`, et déclencher `change`.
-- Vérifier par `javascript_tool` (textes, états des boutons) ; une capture d'écran seulement quand la mise en page compte
-  (elles coûtent cher). Exception : panneau masqué, les listes virtualisées (« Ma collection ») ne se remplissent qu'avec
-  une capture.
-- Deux comptes à la fois : un sur `localhost:5299`, l'autre sur `127.0.0.1:5299` (cookies propres au nom d'hôte).
-- **Règle anti-copie** : une sauvegarde modifiée sur le serveur n'accepte une mise à jour qu'après téléchargement, et avec
-  plus de temps de jeu. En test : passer `DownloadedSinceModification` à 1 dans la base de test, et ajouter du temps de
-  jeu au fichier (`MONSUTA_POTARU_ADD_PLAYTIME`, voir le README).
-- Sauvegardes d'exemple (ignorées par Git) : `MONSUTA_POTARU_SAMPLE_OUT` (Noir 2), `MONSUTA_POTARU_SAMPLE_PT_OUT`
-  (Platine). Après une régénération de `exemple-platine.sav`, lui ajouter des heures de jeu pour qu'elle dépasse la
-  version déjà stockée chez l'utilisateur.
-
-## CI/CD
-
-`.github/workflows/ci.yml` et `cd.yml` (README, « CI/CD »), séparés :
-- CI : tests sur Ubuntu à chaque push, avec l'analyse SonarCloud (organisation `ghalhyus`, clé `ghalhyus_monsuta-potaru`,
-  secret `SONAR_TOKEN` ; pour information, jamais bloquante : `continue-on-error`).
-- CD : bouton « Run workflow » de « CD » ; ne relance pas les tests, lit le résultat de la CI du commit (case « Forcer »
-  pour passer outre) ; vérifie que `blazor.web.js` répond.
-- Le CLI `gh` n'est pas installé : l'utilisateur copie le message d'un échec.
-- Les tests y tournent sous **Linux** : noms de fichiers sensibles à la casse, séparateur `/`, culture `fr-FR` par ICU.
-- Un nouveau fichier nécessaire au déploiement s'ajoute à l'archive des deux côtés (`publier.ps1` et le workflow).

@@ -55,6 +55,9 @@ jobs:
 
       # Début de l'analyse : la compilation des tests qui suit est observée par le scanner. En cas d'échec (jeton absent,
       # SonarCloud injoignable), l'étape est marquée en avertissement et les tests tournent sans analyse.
+      # Règles écartées pour outils/ (scripts lancés à la main sur le poste, jamais par le site) : le générateur
+      # pseudo-aléatoire (python:S2245 ; graine fixe voulue : mêmes cartes à chaque lancement) et les chemins ou commandes
+      # venus de la ligne de commande (pythonsecurity:* ; c'est l'utilisateur qui les donne).
       - name: SonarCloud (début de l'analyse)
         id: sonar
         continue-on-error: true
@@ -70,7 +73,12 @@ jobs:
             /d:sonar.token="$SONAR_TOKEN" \
             /d:sonar.cs.opencover.reportsPaths="**/TestResults/**/coverage.opencover.xml" \
             /d:sonar.exclusions="**/Data/Migrations/**,**/wwwroot/lib/**,**/wwwroot/images/**" \
-            /d:sonar.coverage.exclusions="outils/**,deploy/**,**/wwwroot/**"
+            /d:sonar.coverage.exclusions="outils/**,deploy/**,**/wwwroot/**" \
+            /d:sonar.issue.ignore.multicriteria="aleatoire,lignecommande" \
+            /d:sonar.issue.ignore.multicriteria.aleatoire.ruleKey="python:S2245" \
+            /d:sonar.issue.ignore.multicriteria.aleatoire.resourceKey="outils/**" \
+            /d:sonar.issue.ignore.multicriteria.lignecommande.ruleKey="pythonsecurity:*" \
+            /d:sonar.issue.ignore.multicriteria.lignecommande.resourceKey="outils/**"
 
       # Simulateur de combat (showdown/, Node.js déjà présent sur les machines de GitHub) : exigé par les tests de combat.
       - name: Simulateur de combat

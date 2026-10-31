@@ -127,21 +127,28 @@ chemin -= voisins8(eau)
 eau -= foret
 
 
+def couvertes(cellules):
+    """Cellules couvertes par un carré 2 × 2 entièrement dans la forme."""
+    return {(x, y) for x, y in cellules
+            if any(all((x + dx + i, y + dy + j) in cellules for i in (0, 1) for j in (0, 1))
+                   for dx in (0, -1) for dy in (0, -1))}
+
+
+def combler_diagonales(gardees):
+    """Une diagonale isolée (deux carrés qui ne se touchent que par un coin) : on comble."""
+    avant = list(gardees)  # copie : les cases comblées s'ajoutent pendant le parcours
+    for x, y in avant:
+        for dx, dy in ((1, 1), (1, -1)):
+            if (x + dx, y + dy) in gardees and (x + dx, y) not in gardees and (x, y + dy) not in gardees:
+                gardees.add((x + dx, y))
+
+
 def nettoyer(cellules):
     """Garde les cellules couvertes par un carré 2 × 2 entièrement dans la forme (bordures sans trous)."""
     cellules = set(cellules)
     while True:
-        gardees = set()
-        for x, y in cellules:
-            for dx in (0, -1):
-                for dy in (0, -1):
-                    if all((x + dx + i, y + dy + j) in cellules for i in (0, 1) for j in (0, 1)):
-                        gardees.add((x, y))
-        # Une diagonale isolée (deux carrés qui ne se touchent que par un coin) : on comble
-        for x, y in list(gardees):
-            for dx, dy in ((1, 1), (1, -1)):
-                if (x + dx, y + dy) in gardees and (x + dx, y) not in gardees and (x, y + dy) not in gardees:
-                    gardees.add((x + dx, y))
+        gardees = couvertes(cellules)
+        combler_diagonales(gardees)
         if gardees == cellules:
             return cellules
         cellules = gardees
@@ -178,19 +185,12 @@ def bordure(forme, x, y, coins, interieur):
     ise, iso, ine, ino = interieur
     n, s = (x, y - 1) in forme, (x, y + 1) in forme
     o, e = (x - 1, y) in forme, (x + 1, y) in forme
-    if not n and not o: return hg
-    if not n and not e: return hd
-    if not s and not o: return bg
-    if not s and not e: return bd
-    if not n: return h
-    if not s: return b
-    if not o: return g
-    if not e: return d
-    if (x + 1, y + 1) not in forme: return ise
-    if (x - 1, y + 1) not in forme: return iso
-    if (x + 1, y - 1) not in forme: return ine
-    if (x - 1, y - 1) not in forme: return ino
-    return None
+    # Premier cas qui s'applique : coins, côtés, puis coins rentrants
+    cas = ((not (n or o), hg), (not (n or e), hd), (not (s or o), bg), (not (s or e), bd),
+           (not n, h), (not s, b), (not o, g), (not e, d),
+           ((x + 1, y + 1) not in forme, ise), ((x - 1, y + 1) not in forme, iso),
+           ((x + 1, y - 1) not in forme, ine), ((x - 1, y - 1) not in forme, ino))
+    return next((tuile for vrai, tuile in cas if vrai), None)
 
 
 def bordures(forme, nom, coins, interieur, centre):
@@ -233,25 +233,27 @@ def bloc(nom, gauche, haut_, largeur, hauteur, x, y, rang_devant=0, bloque_ligne
             for j in range(hauteur) for i in range(largeur) if dedans(x + i, y + j)]
 
 
+def place_libre(largeur, hauteur, x, y, rang_devant, marge):
+    """Le bloc tient-il en (x, y) : dans la carte, sur des cases encore vides de son calque ; ses lignes du dessous (hors
+    « Devant ») sur un sol libre hors de la lisière, à <marge> cases au moins des autres décors."""
+    for j in range(hauteur):
+        for i in range(largeur):
+            cx, cy = x + i, y + j
+            calque = occupe_devant if j < rang_devant else occupe_decors
+            if not dedans(cx, cy) or (cx, cy) in calque:
+                return False
+            if j >= rang_devant and (not libre_sol(cx, cy) or (cx, cy) in lisiere):
+                return False
+    zone = {(x + i + dx, y + j + dy) for j in range(rang_devant, hauteur) for i in range(largeur)
+            for dx in range(-marge, marge + 1) for dy in range(-marge, marge + 1)}
+    return not any(c in occupe_decors for c in zone)
+
+
 def poser(nom, gauche, haut_, largeur, hauteur, x, y, rang_devant=0, bloque_lignes=(), bloque_cols=None,
           verifier=True, marge=0, enregistrer=True):
     """Pose un bloc de tuiles d'une planche. Les lignes < rang_devant vont dans « Devant »."""
-    cellules = [(x + i, y + j) for j in range(hauteur) for i in range(largeur)]
-    if verifier:
-        for cx, cy in cellules:
-            if not dedans(cx, cy):
-                return False
-            calque = occupe_devant if cy - y < rang_devant else occupe_decors
-            if (cx, cy) in calque:
-                return False
-        for j in range(rang_devant, hauteur):
-            for i in range(largeur):
-                if not libre_sol(x + i, y + j) or (x + i, y + j) in lisiere:
-                    return False
-        zone = {(x + i + dx, y + j + dy) for j in range(rang_devant, hauteur) for i in range(largeur)
-                for dx in range(-marge, marge + 1) for dy in range(-marge, marge + 1)}
-        if any(c in occupe_decors for c in zone):
-            return False
+    if verifier and not place_libre(largeur, hauteur, x, y, rang_devant, marge):
+        return False
     tuiles = bloc(nom, gauche, haut_, largeur, hauteur, x, y, rang_devant, bloque_lignes, bloque_cols)
     for calque, cx, cy, tuile, bloquee in tuiles:
         (devant if calque == "devant" else decors)[cy][cx] = tuile
@@ -371,9 +373,14 @@ for x, y in rng.sample(eau_libre, min(len(eau_libre), 18)):
     objets.append({"tuiles": [("decors", x, y, decors[y][x], False)], "eau": True})  # loin du bord de l'eau
 
 # --- Carte de chaque taille : la zone du parc, et de la forêt dense tout autour ---------------
+def tirage(x, y, n):
+    """Tirage propre à la case (x, y), le même dans toutes les tailles ; n : son usage (1 arbre, 2 buisson)."""
+    return random.Random(x * 7919 + y * 104729 + n)
+
+
 def arbre_de_foret(x, y):
-    """Essence de l'arbre de la forêt en (x, y) : tirée d'après la case, la même dans toutes les tailles."""
-    return random.Random(x * 7919 + y * 104729 + 1).choice(ARBRES)
+    """Essence de l'arbre de la forêt en (x, y)."""
+    return tirage(x, y, 1).choice(ARBRES)
 
 
 # Lisière irrégulière : la forêt entre de 0 à 2 cases dans la zone (moins que l'écart entre deux zones, 5 cases au moins :
@@ -397,47 +404,53 @@ def morceaux_de(cellules):
     return liste
 
 
+def voisins_relies(x, y, libres):
+    """Cases voisines de (x, y) où l'on passe, avec la règle de parc.js : en diagonale seulement si les deux côtés sont
+    libres."""
+    return [(x + dx, y + dy) for dx in (-1, 0, 1) for dy in (-1, 0, 1)
+            if dx == 0 or dy == 0 or ((x + dx, y) in libres and (x, y + dy) in libres)]
+
+
 def relies(libres):
-    """Cases libres reliées à la plus grande partie, avec la règle de parc.js : en diagonale seulement si les deux côtés
-    sont libres."""
+    """Cases libres reliées à la plus grande partie."""
     restantes, meilleur = set(libres), set()
     while restantes:
         pile, partie = [restantes.pop()], set()
         while pile:
             x, y = pile.pop()
             partie.add((x, y))
-            for dx in (-1, 0, 1):
-                for dy in (-1, 0, 1):
-                    v = (x + dx, y + dy)
-                    if v in restantes and (dx == 0 or dy == 0 or ((x + dx, y) in libres and (x, y + dy) in libres)):
-                        restantes.remove(v)
-                        pile.append(v)
+            for v in voisins_relies(x, y, libres):
+                if v in restantes:
+                    restantes.remove(v)
+                    pile.append(v)
         meilleur = max(meilleur, partie, key=len)
     return meilleur
 
 
-def taille(zone, libres_avant):
-    """Carte d'une taille : sol, décors, feuillages, cases bloquées et cases libres. libres_avant : cases libres de la taille
-    d'avant, qui doivent le rester (un agrandissement ne reprend rien)."""
+def dans(zone, x, y):
     zx, zy, zl, zh = zone
-    dans_zone = lambda x, y: zx <= x < zx + zl and zy <= y < zy + zh
+    return zx <= x < zx + zl and zy <= y < zy + zh
+
+
+def foret_de(zone):
+    """Forêt d'une taille : celle du parc entier, et tout ce qui est hors de la zone (lisière irrégulière). La lisière
+    contourne les objets et les plans d'eau qui tiennent dans la zone (un grand chêne n'est pas coupé)."""
+    zx, zy, zl, zh = zone
     haut_, bas_, gauche_, droite_ = LISIERE
     foret_ = foret | {(x, y) for y in range(H) for x in range(L)
                       if not (zx + gauche_[y] <= x < zx + zl - droite_[y] and zy + haut_[x] <= y < zy + zh - bas_[x])}
-    # La lisière contourne les objets et les plans d'eau qui tiennent dans la zone (un grand chêne n'est pas coupé)
     for objet_ in objets:
         cellules = {(x, y) for _, x, y, _, _ in objet_["tuiles"]}
-        if all(dans_zone(x, y) for x, y in cellules) and not cellules & foret:
+        if all(dans(zone, x, y) for x, y in cellules) and not cellules & foret:
             foret_ -= cellules
     for morceau in morceaux_de(eau):
-        if all(dans_zone(x, y) for x, y in morceau):
-            foret_ -= {c for c in voisins8(morceau) if dans_zone(*c)} - foret
-    boisee = lambda x, y: not dedans(x, y) or (x, y) in foret_
-    eau_ = nettoyer(eau - foret_)
-    foret_ |= eau - eau_  # l'eau coupée par la lisière : de la forêt (dans la taille suivante, de l'eau : bloquée aussi)
-    chemin_ = plus_grand_morceau(nettoyer(chemin - foret_))
+        if all(dans(zone, x, y) for x, y in morceau):
+            foret_ -= {c for c in voisins8(morceau) if dans(zone, *c)} - foret
+    return foret_
 
-    # Sol : celui du parc entier ; une bordure de plus seulement là où la forêt coupe l'eau ou un chemin
+
+def sol_de(chemin_, eau_):
+    """Sol d'une taille : celui du parc entier ; une bordure de plus seulement là où la forêt coupe l'eau ou un chemin."""
     sol_ = [ligne[:] for ligne in herbe]
     for forme, coupee, (nom, coins, interieur), milieu in ((chemin, chemin_, CHEMIN, t("herbe", 97)),
                                                            (eau, eau_, EAU, t("eau_unie", 0))):
@@ -445,30 +458,35 @@ def taille(zone, libres_avant):
             i = bordure(coupee, x, y, coins, interieur)
             if i is not None:
                 sol_[y][x] = t(nom, i)
+            elif bordure(forme, x, y, coins, interieur) is None:
+                sol_[y][x] = sol[y][x]
             else:
-                sol_[y][x] = sol[y][x] if bordure(forme, x, y, coins, interieur) is None else milieu
+                sol_[y][x] = milieu
+    return sol_
 
-    decors_ = [[0] * L for _ in range(H)]
-    devant_ = [[0] * L for _ in range(H)]
-    # Forêt d'origine dans la zone (bordure de la carte, bosquets) : comme sur la carte du parc entier, son bord sans arbre
-    # reste de l'herbe où l'on marche. Le reste de la forêt (hors de la zone) est entièrement bloqué.
-    origine = {(x, y) for x, y in foret_ & foret if dans_zone(x, y)}
-    bloque_ = [[((x, y) in foret_ and (x, y) not in origine) or (x, y) in eau_ for x in range(L)] for y in range(H)]
-    grilles = {"decors": decors_, "devant": devant_}
 
-    def ecrire(tuiles):
-        for calque, x, y, tuile, bloquee in tuiles:
-            grilles[calque][y][x] = tuile
-            bloque_[y][x] = bloque_[y][x] or bloquee
+def ecrire(grilles, bloque_, tuiles):
+    """Pose des tuiles (calque, x, y, tuile, bloquée) dans les grilles d'une taille."""
+    for calque, x, y, tuile, bloquee in tuiles:
+        grilles[calque][y][x] = tuile
+        bloque_[y][x] = bloque_[y][x] or bloquee
 
-    # Forêt en quinconce : un arbre dont les deux cases du tronc sont dans la forêt (son feuillage peut déborder sur le
-    # parc, en bas) ; ailleurs dans la forêt, des buissons sombres (sous les feuillages seulement dans la forêt d'origine).
+
+def planter_arbres(foret_, grilles, bloque_):
+    """Forêt en quinconce : un arbre dont les deux cases du tronc sont dans la forêt (son feuillage peut déborder sur le
+    parc, en bas)."""
+    boisee = lambda x, y: not dedans(x, y) or (x, y) in foret_
     for y in range(-2, H, 2):
         for x in range(-1 + (y // 2) % 2, L, 2):
             if boisee(x, min(y + 2, H - 1)) and boisee(x + 1, min(y + 2, H - 1)):
-                ecrire(bloc(arbre_de_foret(x, y), 2, 0, 2, 3, x, y, rang_devant=2, bloque_lignes=(2,)))
+                ecrire(grilles, bloque_, bloc(arbre_de_foret(x, y), 2, 0, 2, 3, x, y, rang_devant=2, bloque_lignes=(2,)))
+
+
+def planter_sous_bois(foret_, origine, grilles, bloque_):
+    """Ailleurs dans la forêt, des buissons sombres (sous les feuillages seulement dans la forêt d'origine)."""
+    decors_, devant_ = grilles["decors"], grilles["devant"]
     for x, y in foret_:
-        r = random.Random(x * 7919 + y * 104729 + 2)
+        r = tirage(x, y, 2)
         if (x, y) in origine:
             if not decors_[y][x] and not devant_[y][x]:
                 continue  # bord du massif sans arbre : de l'herbe où l'on peut marcher
@@ -476,8 +494,10 @@ def taille(zone, libres_avant):
         if not decors_[y][x] and (not devant_[y][x] or r.random() < 0.85):
             decors_[y][x] = t("decors", r.choice((86, 87, 88)))
 
-    # Objets du parc entier, s'ils sont tout entiers dans la zone, sans chevaucher un feuillage de la forêt ni bloquer une
-    # case libre de la taille d'avant
+
+def poser_objets(foret_, eau_, libres_avant, grilles, bloque_):
+    """Objets du parc entier, s'ils sont tout entiers dans la zone, sans chevaucher un feuillage de la forêt ni bloquer une
+    case libre de la taille d'avant (ceux de l'eau : loin de son bord)."""
     for objet_ in objets:
         tuiles = objet_["tuiles"]
         if any((x, y) in foret_ or grilles[calque][y][x] or (bloquee and (x, y) in libres_avant)
@@ -486,15 +506,42 @@ def taille(zone, libres_avant):
         if objet_.get("eau") and not all((x + dx, y + dy) in eau_ for _, x, y, _, _ in tuiles
                                          for dx in (-1, 0, 1) for dy in (-1, 0, 1)):
             continue
-        ecrire(tuiles)
+        ecrire(grilles, bloque_, tuiles)
 
-    # Poches d'herbe enfermées (entre la lisière, l'eau et les objets) : des buissons, personne n'y va
+
+def boucher_poches(zone, decors_, bloque_):
+    """Poches d'herbe enfermées (entre la lisière, l'eau et les objets) : des buissons, personne n'y va. Rend les cases
+    libres gardées."""
+    zx, zy, zl, zh = zone
     libres = {(x, y) for y in range(zy, zy + zh) for x in range(zx, zx + zl) if not bloque_[y][x]}
     gardees = relies(libres)
     for x, y in libres - gardees:
         bloque_[y][x] = True
         if not decors_[y][x]:
-            decors_[y][x] = t("decors", random.Random(x * 7919 + y * 104729 + 2).choice((86, 87, 88)))
+            decors_[y][x] = t("decors", tirage(x, y, 2).choice((86, 87, 88)))
+    return gardees
+
+
+def taille(zone, libres_avant):
+    """Carte d'une taille : sol, décors, feuillages, cases bloquées et cases libres. libres_avant : cases libres de la taille
+    d'avant, qui doivent le rester (un agrandissement ne reprend rien)."""
+    foret_ = foret_de(zone)
+    eau_ = nettoyer(eau - foret_)
+    foret_ |= eau - eau_  # l'eau coupée par la lisière : de la forêt (dans la taille suivante, de l'eau : bloquée aussi)
+    chemin_ = plus_grand_morceau(nettoyer(chemin - foret_))
+    sol_ = sol_de(chemin_, eau_)
+
+    decors_ = [[0] * L for _ in range(H)]
+    devant_ = [[0] * L for _ in range(H)]
+    # Forêt d'origine dans la zone (bordure de la carte, bosquets) : comme sur la carte du parc entier, son bord sans arbre
+    # reste de l'herbe où l'on marche. Le reste de la forêt (hors de la zone) est entièrement bloqué.
+    origine = {(x, y) for x, y in foret_ & foret if dans(zone, x, y)}
+    bloque_ = [[((x, y) in foret_ and (x, y) not in origine) or (x, y) in eau_ for x in range(L)] for y in range(H)]
+    grilles = {"decors": decors_, "devant": devant_}
+    planter_arbres(foret_, grilles, bloque_)
+    planter_sous_bois(foret_, origine, grilles, bloque_)
+    poser_objets(foret_, eau_, libres_avant, grilles, bloque_)
+    gardees = boucher_poches(zone, decors_, bloque_)
     perdues = libres_avant - gardees
     if perdues:
         sys.exit(f"Zone {zone} : cases libres de la taille d'avant bloquées : {sorted(perdues)[:10]}")
@@ -526,42 +573,49 @@ def ecrire_carte(fichier, zone, sol_, decors_, devant_, bloque_):
         f'height="{H}" tilewidth="16" tileheight="16" infinite="0" nextlayerid="6" nextobjectid="3">',
     ]
     for nom, chemin_, w, h in JEUX:
-        morceaux.append(f' <tileset firstgid="{PREMIER[nom]}" name="{nom}" tilewidth="16" tileheight="16" '
-                        f'tilecount="{(w // 16) * (h // 16)}" columns="{w // 16}">')
-        morceaux.append(f'  <image source="{relatif}/{chemin_}" width="{w}" height="{h}"/>')
-        morceaux.append(' </tileset>')
-    morceaux.append(f' <tileset firstgid="{GID_COLLISION}" name="collisions" tilewidth="16" tileheight="16" '
-                    f'tilecount="1" columns="1">')
-    morceaux.append('  <image source="collisions.png" width="16" height="16"/>')
-    morceaux.append(' </tileset>')
+        morceaux.extend([f' <tileset firstgid="{PREMIER[nom]}" name="{nom}" tilewidth="16" tileheight="16" '
+                         f'tilecount="{(w // 16) * (h // 16)}" columns="{w // 16}">',
+                         f'  <image source="{relatif}/{chemin_}" width="{w}" height="{h}"/>',
+                         ' </tileset>'])
+    morceaux.extend([f' <tileset firstgid="{GID_COLLISION}" name="collisions" tilewidth="16" tileheight="16" '
+                     f'tilecount="1" columns="1">',
+                     '  <image source="collisions.png" width="16" height="16"/>',
+                     ' </tileset>'])
     for i, (nom, grille, extra) in enumerate([("Sol", sol_, ""), ("Décors", decors_, ""), ("Devant", devant_, ""),
                                              ("Collisions", collisions, ' visible="0" opacity="0.45"')], 1):
-        morceaux.append(f' <layer id="{i}" name="{nom}" width="{L}" height="{H}"{extra}>')
-        morceaux.append(f'  <data encoding="csv">\n{csv(grille)}\n</data>')
-        morceaux.append(' </layer>')
+        morceaux.extend([f' <layer id="{i}" name="{nom}" width="{L}" height="{H}"{extra}>',
+                         f'  <data encoding="csv">\n{csv(grille)}\n</data>',
+                         ' </layer>'])
     # « Départ » : la vue de départ (hauteur affichée, centre) ; « Parc » : là où vivent les Pokémon
-    morceaux.append(' <objectgroup id="5" name="Zones">')
-    morceaux.append(rectangle(1, "Départ", DEPART))
-    morceaux.append(rectangle(2, "Parc", zone))
-    morceaux.append(' </objectgroup>')
-    morceaux.append('</map>')
+    morceaux.extend([' <objectgroup id="5" name="Zones">',
+                     rectangle(1, "Départ", DEPART),
+                     rectangle(2, "Parc", zone),
+                     ' </objectgroup>',
+                     '</map>'])
     with open(os.path.join(SORTIE, fichier), "w", encoding="utf-8") as f:
         f.write("\n".join(morceaux) + "\n")
+
+
+def tuile_de(g):
+    """Image de la tuile de numéro g (numéro de la carte : premier numéro de son jeu + rang dans sa planche)."""
+    nom = max((n for n in PREMIER if PREMIER[n] <= g), key=lambda n: PREMIER[n])
+    i, cols = g - PREMIER[nom], colonnes(nom)
+    return planches[nom].crop(((i % cols) * 16, (i // cols) * 16, (i % cols) * 16 + 16, (i // cols) * 16 + 16))
+
+
+def dessiner(image, grille):
+    for y in range(H):
+        for x in range(L):
+            g = grille[y][x]
+            if g and g < GID_COLLISION:
+                image.alpha_composite(tuile_de(g), (x * 16, y * 16))
 
 
 def apercu(suffixe, grilles_, bloque_):
     """Aperçus (pour vérifier, pas pour Tiled) : la carte, et la même avec les cases bloquées en rouge."""
     image = Image.new("RGBA", (L * 16, H * 16), (0, 0, 0, 255))
     for grille in grilles_:
-        for y in range(H):
-            for x in range(L):
-                g = grille[y][x]
-                if not g or g >= GID_COLLISION:
-                    continue
-                nom = max((n for n in PREMIER if PREMIER[n] <= g), key=lambda n: PREMIER[n])
-                i, cols = g - PREMIER[nom], colonnes(nom)
-                tuile = planches[nom].crop(((i % cols) * 16, (i // cols) * 16, (i % cols) * 16 + 16, (i // cols) * 16 + 16))
-                image.alpha_composite(tuile, (x * 16, y * 16))
+        dessiner(image, grille)
     image.save(os.path.join(APERCUS, f"apercu{suffixe}.png"))
     for y in range(H):
         for x in range(L):
