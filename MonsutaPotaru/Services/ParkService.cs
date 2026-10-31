@@ -18,14 +18,79 @@ public sealed record ParkCandidate(int Id, ushort Species, string SpeciesName, s
 
 public sealed record ParkResult(bool Ok, string Message);
 
+/// <param name="Expansions">Agrandissements achetés, après l'achat (0 à <see cref="ParkService.MaxExpansions"/>).</param>
+public sealed record ParkExpansionResult(bool Ok, string Message, int Expansions = 0, long Balance = 0);
+
 /// <summary>
-/// « Parc » : jusqu'à <see cref="Capacity"/> Pokémon de la collection (stockage interne ou sauvegardes stockées), de toutes
+/// « Parc » : jusqu'à <see cref="CapacityOf"/> Pokémon de la collection (stockage interne ou sauvegardes stockées), de toutes
 /// les générations, qui s'y promènent avec les sprites Donjon Mystère de leur forme (animation dans le navigateur :
-/// wwwroot/js/parc.js). Les espèces dont SpriteCollab n'a pas encore les sprites ne peuvent pas y aller.
+/// wwwroot/js/parc.js). Les espèces dont SpriteCollab n'a pas encore les sprites ne peuvent pas y aller. Le parc s'agrandit
+/// en payant avec le porte-monnaie (<see cref="ExpandAsync"/>) : chaque taille a sa carte (wwwroot/parc/parc-1-{taille}.json).
 /// </summary>
 public sealed class ParkService(IDbContextFactory<ApplicationDbContext> dbFactory, ILogger<ParkService> logger)
 {
-    public const int Capacity = 30;
+    /// <summary>Pokémon accueillis sans agrandissement.</summary>
+    public const int BaseCapacity = 25;
+    /// <summary>Pokémon de plus à chaque agrandissement.</summary>
+    public const int ExpansionCapacity = 25;
+    /// <summary>Agrandissements possibles pour l'instant (100 Pokémon) : une carte par taille, de 1 à MaxExpansions + 1.</summary>
+    public const int MaxExpansions = 3;
+    public const long ExpansionPrice = 50_000;
+
+    public static int CapacityOf(int expansions) => BaseCapacity + ExpansionCapacity * expansions;
+
+    /// <summary>Agrandissements achetés par ce joueur (0 sans agrandissement).</summary>
+    public async Task<int> GetExpansionsAsync(string ownerId)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+        return await db.Users.Where(u => u.Id == ownerId).Select(u => u.ParkExpansions).FirstOrDefaultAsync();
+    }
+
+    /// <summary>
+    /// Agrandit le parc de <see cref="ExpansionCapacity"/> Pokémon pour <see cref="ExpansionPrice"/> : taille, débit et ligne
+    /// du journal de l'inventaire en une seule opération. La taille et le solde sont vérifiés par les mises à jour
+    /// elles-mêmes : deux achats simultanés ne dépassent ni la plus grande taille ni le solde.
+    /// </summary>
+    public async Task<ParkExpansionResult> ExpandAsync(string ownerId)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+        await using var tx = await db.Database.BeginTransactionAsync();
+
+        var expanded = await db.Users.Where(u => u.Id == ownerId && u.ParkExpansions < MaxExpansions)
+            .ExecuteUpdateAsync(u => u.SetProperty(x => x.ParkExpansions, x => x.ParkExpansions + 1));
+        if (expanded == 0)
+            return new(false, $"Ton parc a déjà sa plus grande taille ({CapacityOf(MaxExpansions)} Pokémon).", MaxExpansions);
+
+        // Débit conditionnel et atomique ; sans assez d'argent, la transaction (taille comprise) est annulée
+        var debited = await db.Wallets.Where(w => w.OwnerId == ownerId && w.Money >= ExpansionPrice)
+            .ExecuteUpdateAsync(w => w.SetProperty(x => x.Money, x => x.Money - ExpansionPrice));
+        if (debited == 0)
+        {
+            await tx.RollbackAsync();
+            var available = await db.Wallets.Where(w => w.OwnerId == ownerId).Select(w => w.Money).FirstOrDefaultAsync();
+            return new(false, $"L'agrandissement coûte {InventoryService.FormatMoney(ExpansionPrice)}, ton porte-monnaie contient " +
+                              $"{InventoryService.FormatMoney(available)} : il manque {InventoryService.FormatMoney(ExpansionPrice - available)}. " +
+                              "Retire de l'argent d'une sauvegarde depuis « Inventaire ».", Balance: available);
+        }
+
+        var expansions = await db.Users.Where(u => u.Id == ownerId).Select(u => u.ParkExpansions).FirstAsync();
+        var balance = await db.Wallets.Where(w => w.OwnerId == ownerId).Select(w => w.Money).FirstAsync();
+        db.WalletOperations.Add(new WalletOperation
+        {
+            OwnerId = ownerId,
+            At = DateTime.UtcNow,
+            Kind = WalletOperationKind.ExpandPark,
+            Amount = -ExpansionPrice,
+            BalanceAfter = balance,
+            Details = $"Parc : {CapacityOf(expansions - 1)} → {CapacityOf(expansions)} Pokémon",
+        });
+        await db.SaveChangesAsync();
+        await tx.CommitAsync();
+
+        logger.LogInformation("Utilisateur {User} : parc agrandi ({Expansions} agrandissements).", ownerId, expansions);
+        return new(true, $"Parc agrandi : il accueille maintenant {CapacityOf(expansions)} Pokémon. " +
+                         $"Solde : {InventoryService.FormatMoney(balance)}.", expansions, balance);
+    }
 
     /// <summary>Pokémon du parc, dans l'ordre de leur arrivée.</summary>
     public async Task<List<ParkPokemon>> ListAsync(string ownerId)
@@ -78,15 +143,21 @@ public sealed class ParkService(IDbContextFactory<ApplicationDbContext> dbFactor
 
     /// <summary>
     /// Remplace les Pokémon du parc par <paramref name="ids"/> (choix de la fenêtre « Ajouter des Pokémon ») : ceux qui y
-    /// restent gardent leur place, les nouveaux arrivent après.
+    /// restent gardent leur place, les nouveaux arrivent après. Un parc qui a plus de Pokémon que sa capacité (30 avant les
+    /// agrandissements, 25 depuis) les garde : on peut en retirer, pas en ajouter tant qu'il dépasse.
     /// </summary>
     public async Task<ParkResult> SetAsync(string ownerId, IReadOnlyCollection<int> ids)
     {
         var wanted = ids.ToHashSet();
-        if (wanted.Count > Capacity)
-            return new(false, $"Le parc accueille {Capacity} Pokémon au plus : retires-en {wanted.Count - Capacity}.");
-
         await using var db = await dbFactory.CreateDbContextAsync();
+        var capacity = CapacityOf(await db.Users.Where(u => u.Id == ownerId).Select(u => u.ParkExpansions).FirstOrDefaultAsync());
+        if (wanted.Count > capacity)
+        {
+            var current = await db.ParkMembers.Where(m => m.OwnerId == ownerId).Select(m => m.BankPokemonId).ToListAsync();
+            if (!wanted.IsSubsetOf(current))
+                return new(false, $"Le parc accueille {capacity} Pokémon au plus : retires-en {wanted.Count - capacity}.");
+        }
+
         var eligible = await Eligible(db, ownerId).Where(p => wanted.Contains(p.Id)).Select(p => new { p.Id, p.Species, p.SpeciesName }).ToListAsync();
         if (eligible.Count != wanted.Count)
             return new(false, "Seuls tes Pokémon (pas les œufs) peuvent aller au parc.");

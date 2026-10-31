@@ -538,35 +538,49 @@ Dissuasif, pas infaillible : rien n'oblige le joueur à remplacer réellement sa
 ### Parc
 
 Le menu « Parc » (`/parc`) est une carte en pixel art (forêt tout autour, chemins, étangs, prairie fleurie) qui prend
-toute la largeur de la page, où vivent jusqu'à **30 Pokémon** de la
-collection, stockage interne ou sauvegardes stockées, de **toutes les générations** (hors œufs ; `ParkService.Capacity`).
+toute la largeur de la page, où vivent jusqu'à **25 Pokémon** de la
+collection, stockage interne ou sauvegardes stockées, de **toutes les générations** (hors œufs ; `ParkService.BaseCapacity`).
+**Agrandir le parc** (bouton sous le titre, propriétaire seulement) : **50 000 ₽** du porte-monnaie pour **25 Pokémon de
+plus**, trois fois au plus pour l'instant (**100 Pokémon**, `ParkService.ExpandAsync`). Une fenêtre confirme le prix et le
+solde (bouton grisé s'il manque de l'argent, avec un lien vers « Inventaire ») ; la taille et le débit sont vérifiés dans
+les mises à jour elles-mêmes (deux achats simultanés ne dépassent ni la plus grande taille ni le solde), l'achat entre au
+journal de l'inventaire (« Agrandissement du parc », « Parc : 25 → 50 Pokémon »), et le parc se recharge avec sa nouvelle
+carte. Un parc qui avait déjà plus de Pokémon que sa capacité (30 avant les agrandissements) les garde : on peut en
+retirer, pas en ajouter tant qu'il dépasse.
 « Choisir les Pokémon » ouvre la collection avec la recherche, les pastilles de filtres de « Ma collection » (génération,
 type, forme...) et le compteur. Les espèces dont SpriteCollab n'a pas encore les sprites (64, surtout de 9e génération)
 y sont grisées (🔒) et refusées ; elles viendront quand il les aura (relancer `outils/images.py donjon`, puis
 `images-serveur`). **Carte** : faite dans [Tiled](https://www.mapeditor.org) avec les tuiles du pack Cute Fantasy (voir
 « Crédits »), 80 × 60 tuiles de 16 pixels, affichée par **Phaser** (moteur de jeu 2D, `wwwroot/lib/phaser`). Ses
 calques : « Sol », « Décors », « Devant » (feuillages : un Pokémon plus haut que le tronc passe derrière l'arbre, plus bas devant), « Collisions » (cases où l'on ne
-passe pas : eau, arbres, rochers, buissons, bancs) et « Zones », dont le rectangle **« Départ »** (24 × 20 tuiles) : les
-Pokémon y vivent, le reste de la carte est **assombri** (à débloquer plus tard). On **fait glisser la carte** (souris ou
-doigt) pour explorer les alentours ; la vue s'arrête aux bords. La hauteur du parc est le plus grand nombre entier de
+passe pas : eau, arbres, rochers, buissons, bancs) et « Zones » : le rectangle **« Départ »** (24 × 20 tuiles, la vue de
+départ) et le rectangle **« Parc »**, où vivent les Pokémon. **Une carte par taille** (`wwwroot/parc/parc-1-1.json` à
+`parc-1-4.json` : 24 × 20, 40 × 30, 56 × 40 tuiles centrées sur l'étang, puis toute la carte, entourée de sa forêt) :
+chaque agrandissement fait reculer la forêt et dévoile un anneau de plus, sans rien reprendre de la taille d'avant. Autour de la zone, tout est de
+la **forêt dense** (lisière irrégulière, buissons) qui s'assombrit en s'éloignant : on ne voit pas ce qu'il reste à
+débloquer. On **fait glisser la carte** (souris ou doigt) pour parcourir le parc ; la vue s'arrête à 6 cases de forêt
+au-delà de la zone. La hauteur du parc est le plus grand nombre entier de
 fois la zone « Départ » en pixels d'écran qui tient dans la hauteur visible (3, soit 960 pixels, sur un écran de 1440 à
 150 %) ; sur un téléphone, pas plus que la zone entière en largeur. Les sprites sont dessinés aux deux tiers des pixels de
 la carte, arrondis à un nombre entier de pixels d'écran (×2 quand la carte est à ×3, jamais moins de ×2) : dessin net,
 sans pixels de tailles inégales. **Zoom et plein écran** : boutons **−**, **+** et **plein écran** en haut à gauche de la
 carte (visiteurs compris). Le zoom va par crans entiers, du zoom de départ (le plus grand) jusqu'à ×1 ; les sprites
 suivent en arrondi (à ×2 et ×1 ils sont un peu plus gros par rapport à la carte). Dézoomé au-delà des bords, la carte
-est centrée. En plein écran, la hauteur de l'écran donne le zoom de départ (×4 sur un écran de 1440), la **molette**
+est centrée (la forêt continue jusqu'au bord de la carte). En plein écran, la hauteur de l'écran donne le zoom de départ (×4 sur un écran de 1440), la **molette**
 zoome autour du pointeur (hors plein écran, elle fait défiler la page) ; Échap ou le même bouton en sort. Sur téléphone,
 **pincement** à deux doigts (pas de plein écran sur iPhone : bouton caché). Le zoom n'est pas retenu d'une visite à
 l'autre. **Nouvelle carte** : la dessiner dans Tiled (vue orthogonale, tuiles de 16 px, taille
 fixe, jeux de tuiles incorporés, mêmes calques ; un feuillage dans « Devant » au-dessus de son tronc, posé dans
 « Décors » et bloqué dans « Collisions »), puis `python outils/carte-parc.py <carte .tmx>` : la carte va dans
-`wwwroot/parc/parc-1.json` (dans Git : rien que des numéros de tuiles), les planches du pack qu'elle utilise dans
-`wwwroot/images/parc/tuiles/` (hors Git : le pack ne se redistribue pas), et `deploy\fond-parc.cmd` les envoie sur le
-serveur. Sans les planches, le parc est sur de l'herbe unie, sans erreur. `ParkMapTests` vérifie la carte (calques,
-zone « Départ » dans la carte, chaque case libre accessible). La carte actuelle, `Parc_1.tmx`, est faite par
+`wwwroot/parc/<nom du fichier>.json` (`Parc_1-2.tmx` → `parc-1-2.json` ; dans Git : rien que des numéros de tuiles), les
+planches du pack qu'elle utilise dans `wwwroot/images/parc/tuiles/` (hors Git : le pack ne se redistribue pas), et
+`deploy\fond-parc.cmd` les envoie sur le serveur. Sans les planches, le parc est sur de l'herbe unie, sans erreur.
+`ParkMapTests` vérifie les quatre cartes (calques, « Départ » dans « Parc », dans la carte, au moins une quinzaine de cases
+libres par Pokémon, chaque case libre accessible, et chaque taille garde les cases libres de la précédente). Les cartes
+actuelles, `Parc_1-1.tmx` à `Parc_1-4.tmx`, sont faites par
 `python outils/generer-parc.py <dossier Cute_Fantasy du pack> <dossier de sortie>` (Python avec Pillow ; mêmes tirages
-à chaque fois : relancé sans changement, il redonne la même carte), puis passée par `outils/carte-parc.py`.
+à chaque fois : relancé sans changement, il redonne les mêmes cartes ; le parc entier est tiré une fois, chaque taille en
+garde sa zone), puis passées une à une par `outils/carte-parc.py`.
 Pour gérer son parc : l'interrupteur **« Seulement ceux du parc »** de la fenêtre ne montre que les
 Pokémon choisis (avec la recherche et les pastilles) ; la liste est figée quand on l'allume, un Pokémon décoché reste affiché
 pour pouvoir le recocher. **« Tout retirer »** décoche tout (rien ne change avant « Valider »), et **« Vider le parc »**, à
@@ -589,7 +603,7 @@ PKHeX rapprochés de ceux de SpriteCollab, `images/donjon/formes.json`). Pour qu
   tôt et dorment longtemps ;
 - la **curiosité** : un Pokémon éveillé se tourne vers le pointeur de la souris, et vient souvent voir de près ;
 - des **chemins** qui contournent les obstacles (recherche de chemin sur les cases de la carte, lissée en lignes droites) :
-  jamais sur une case bloquée, ni hors de la zone « Départ » ;
+  jamais sur une case bloquée, ni hors de la zone « Parc » ;
 - le nom au survol, des « z » au-dessus des dormeurs, les plus bas dessinés devant (devant les arbres aussi : chaque
   feuillage est trié selon la ligne de son tronc). Les positions ne sont pas gardées.
 
@@ -597,7 +611,7 @@ PKHeX rapprochés de ceux de SpriteCollab, `images/donjon/formes.json`). Pour qu
 **soulève** ; au doigt, il faut un **appui long** (0,3 s) avant de bouger (un glissement direct fait défiler la vue). Il
 suit le pointeur, un peu au-dessus de son ombre, devant tout, avec son animation **Charge** (Idle quand SpriteCollab ne
 l'a pas) ; la case visée est encadrée en clair si on peut l'y poser, en **rouge** sinon (eau, arbre, rocher, banc, hors
-de la zone « Départ »). Lâché sur une case interdite, il **revient à sa place** ; posé, il reste quelques secondes
+de la zone « Parc »). Lâché sur une case interdite, il **revient à sa place** ; posé, il reste quelques secondes
 immobile puis reprend sa vie (un dormeur soulevé se réveille). Près du bord de la vue, la vue défile. Deux doigts pendant
 le transport : pincement, le Pokémon revient à sa place. Rien n'est enregistré : comme les positions, le déplacement ne
 vaut que dans ce navigateur.
@@ -859,12 +873,12 @@ est incompatible (espèce, attaques ou objets inexistants dans le jeu, conversio
 | `MonsutaPotaru/Services/PokemonFingerprint.cs` | Empreinte d'un Pokémon et recherche de ses doublons dans le compte (vieille copie d'une sauvegarde) |
 | `MonsutaPotaru/Services/PokemonInfo.cs` | Noms français (dont « Rouge / Bleu », « Or / Argent », « Diamant / Perle », « Or HeartGold / Argent SoulSilver » pour les groupes de jeux : une sauvegarde de ces jeux ne dit pas lequel des deux ; migrations `GameNames` et `GameGroupNames` pour les noms déjà enregistrés), sprites, légalité |
 | `MonsutaPotaru/Components/Pages/Bank.razor` | Page « Transfert et stockage interne » (`/transfert`) : boîtes, glisser-déposer, sélection multiple |
-| `MonsutaPotaru/Components/Pages/Park.razor` | Page « Parc » : carte où vivent jusqu'à 30 Pokémon, fenêtre de choix (« Seulement ceux du parc », « Tout retirer »), « Vider le parc », fiche au clic |
+| `MonsutaPotaru/Components/Pages/Park.razor` | Page « Parc » : carte où vivent de 25 à 100 Pokémon, « Agrandir le parc » (confirmation, prix et solde), fenêtre de choix (« Seulement ceux du parc », « Tout retirer »), « Vider le parc », fiche au clic |
 | `MonsutaPotaru/SecurityHeaders.cs` | En-têtes de sécurité de toutes les réponses : nosniff, Referrer-Policy, CSP stricte (plus aucun script écrit dans la page) |
 | `MonsutaPotaru/wwwroot/js/app.js` | Scripts du site (chargés dans le `<head>`) : images de remplacement (`data-remplacement`), téléchargement, largeur d'écran, glisser-déposer, menu sur téléphone, cadre du thème Ardoise (repli du menu, rubriques, menu du compte) |
 | `MonsutaPotaru/wwwroot/js/parc.js` | Parc avec Phaser : carte Tiled, brouillard hors de la zone « Départ », vue qu'on fait glisser ; animation et comportement des Pokémon (énergie, intentions, famille, nuit, curiosité, chemins autour des obstacles) ; `simulate` et `view` pour les essais |
 | `MonsutaPotaru/wwwroot/lib/phaser/` | Phaser 3.90.0 (`phaser.esm.min.js`, module ES) et sa licence MIT |
-| `MonsutaPotaru/wwwroot/parc/parc-1.json` | Carte du parc (export de Tiled par `outils/carte-parc.py` : numéros de tuiles, calques, zone « Départ ») |
+| `MonsutaPotaru/wwwroot/parc/parc-1-1.json` … `parc-1-4.json` | Cartes du parc, une par taille (export de Tiled par `outils/carte-parc.py` : numéros de tuiles, calques, zones « Départ » et « Parc ») |
 | `MonsutaPotaru/Services/ParkService.cs` | Pokémon du parc : liste, choix (30 au plus, avec des sprites Donjon Mystère), retrait, vidage, famille d'évolution |
 | `MonsutaPotaru/Data/ParkMember.cs` | Table des Pokémon au parc (supprimée avec le Pokémon) |
 | `MonsutaPotaru/Components/Pages/LivingDexes.razor` | Page « Living dex » : cartes des living dex du compte (progression dans le mode choisi), création (jeu, générations repliables, puis sauvegarde) |

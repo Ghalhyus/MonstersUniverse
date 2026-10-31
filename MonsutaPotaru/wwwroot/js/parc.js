@@ -7,12 +7,14 @@
 // plus tôt la nuit), une intention (explorer un endroit, rejoindre un Pokémon de sa famille, observer autour de lui, aller
 // dormir près d'un congénère), un caractère tiré de sa nature (plus ou moins actif, dormeur, sociable) et de la curiosité
 // pour le pointeur de la souris. Il contourne les obstacles (calque « Collisions » de la carte) et reste dans la zone
-// « Départ » ; le reste de la carte est assombri (à débloquer plus tard) et se découvre en faisant glisser la vue.
+// « Parc » (la taille achetée : forêt dense autour, assombrie) ; on la parcourt en faisant glisser la vue.
 import * as Phaser from "../lib/phaser/phaser.esm.min.js";
 
 // Carte : coordonnées du parc en pixels de la carte (16 par tuile). La hauteur affichée est celle de la zone « Départ »
-// (320 pixels), à un nombre entier de pixels d'écran par pixel de carte (dessin net).
-const MAP_URL = "parc/parc-1.json";
+// (320 pixels), à un nombre entier de pixels d'écran par pixel de carte (dessin net). Une carte par taille du parc (1 à 4,
+// agrandissements achetés + 1, ParkService), toutes de la même taille : seule la zone « Parc » et la forêt autour changent.
+const MAP_URL = size => `parc/parc-1-${size}.json`;
+const VIEW_MARGIN = 6; // cases de forêt qu'on peut voir au-delà de la zone « Parc » en faisant glisser la vue
 const TILES_URL = "images/parc/tuiles/"; // planches du pack, hors de Git (deploy/fond-parc.cmd)
 const TILE = 16;
 const GRASS = 0x33984b; // couleur de l'herbe, sans les planches (absentes, ou pas encore chargées)
@@ -25,7 +27,8 @@ const ICONS = {
     expand: svg("M1.5 1a.5.5 0 0 0-.5.5v4a.5.5 0 0 1-1 0v-4A1.5 1.5 0 0 1 1.5 0h4a.5.5 0 0 1 0 1zM10 .5a.5.5 0 0 1 .5-.5h4A1.5 1.5 0 0 1 16 1.5v4a.5.5 0 0 1-1 0v-4a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 1-.5-.5M.5 10a.5.5 0 0 1 .5.5v4a.5.5 0 0 0 .5.5h4a.5.5 0 0 1 0 1h-4A1.5 1.5 0 0 1 0 14.5v-4a.5.5 0 0 1 .5-.5m15 0a.5.5 0 0 1 .5.5v4a1.5 1.5 0 0 1-1.5 1.5h-4a.5.5 0 0 1 0-1h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 1 .5-.5"),
     shrink: svg("M5.5 0a.5.5 0 0 1 .5.5v4A1.5 1.5 0 0 1 4.5 6h-4a.5.5 0 0 1 0-1h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 1 .5-.5m5 0a.5.5 0 0 1 .5.5v4a.5.5 0 0 0 .5.5h4a.5.5 0 0 1 0 1h-4A1.5 1.5 0 0 1 10 4.5v-4a.5.5 0 0 1 .5-.5M0 10.5a.5.5 0 0 1 .5-.5h4A1.5 1.5 0 0 1 6 11.5v4a.5.5 0 0 1-1 0v-4a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 1-.5-.5m10 1a1.5 1.5 0 0 1 1.5-1.5h4a.5.5 0 0 1 0 1h-4a.5.5 0 0 0-.5.5v4a.5.5 0 0 1-1 0z"),
 };
-const FOG = { color: 0x0b1222, alpha: 0.55 }; // hors de la zone « Départ »
+// Hors de la zone « Parc » : de plus en plus sombre, une marche par case à partir de la deuxième (la lisière reste claire)
+const FOG = { color: 0x0b1222, alpha: 0.18, steps: 4 };
 // Profondeur d'affichage d'un Pokémon ou d'un feuillage, selon la ligne de ses pieds (de son tronc) : les plus bas devant.
 // Entre 2 et 3 : au-dessus de la carte (0) et des ombres (1,9), sous le brouillard (3) et la nuit (4).
 const depthOf = y => 2 + y / 10000;
@@ -63,7 +66,9 @@ const sheets = new Map();
 function loadSheets(folder) {
     if (!sheets.has(folder)) {
         sheets.set(folder, (async () => {
-            const xml = new DOMParser().parseFromString(await (await fetch(folder + "AnimData.xml")).text(), "text/xml");
+            const response = await fetch(folder + "AnimData.xml");
+            if (!response.ok) throw new Error(`Sprites absents : ${folder}`);
+            const xml = new DOMParser().parseFromString(await response.text(), "text/xml");
             const defs = new Map([...xml.querySelectorAll("Anim")].map(a => [a.querySelector("Name").textContent, a]));
             const result = {};
             for (const name of ANIMATIONS) {
@@ -85,6 +90,7 @@ function loadSheets(folder) {
                 };
             }
             result.Idle ??= result.Walk; // au cas où une planche manquerait
+            if (!result.Idle) throw new Error(`Ni Idle ni Walk : ${folder}`); // ce Pokémon n'apparaît pas (setPokemon)
             result.Walk ??= result.Idle;
             result.Sleep ??= result.Idle;
             result.Charge ??= result.Idle; // soulevé
@@ -115,7 +121,7 @@ function personalityOf(nature) {
 }
 
 /**
- * Terrain de la carte : cases où l'on peut marcher (dans la zone « Départ », sans tuile du calque « Collisions »), et
+ * Terrain de la carte : cases où l'on peut marcher (dans la zone « Parc », sans tuile du calque « Collisions »), et
  * chemins entre deux points (A* sur les cases, en diagonale seulement si les deux côtés sont libres, puis lissé en
  * lignes droites). Sans carte : un pré de 24 × 20 cases, sans obstacle.
  */
@@ -124,12 +130,11 @@ class Ground {
         this.data = data;
         this.columns = data?.width ?? 24;
         this.lines = data?.height ?? 20;
-        const zone = data?.layers.find(l => l.name === "Zones")?.objects?.find(o => o.name === "Départ");
-        this.start = zone
-            ? { x: Math.round(zone.x / TILE), y: Math.round(zone.y / TILE), w: Math.round(zone.width / TILE), h: Math.round(zone.height / TILE) }
-            : { x: 0, y: 0, w: this.columns, h: this.lines };
-        // Partie de la carte où vivent les Pokémon (le reste est assombri) : la zone « Départ », plus tard agrandie
-        this.area = this.start;
+        const zones = data?.layers.find(l => l.name === "Zones")?.objects ?? [];
+        const tiles = zone => zone && { x: Math.round(zone.x / TILE), y: Math.round(zone.y / TILE), w: Math.round(zone.width / TILE), h: Math.round(zone.height / TILE) };
+        // Vue de départ (sa hauteur remplit l'écran) ; partie de la carte où vivent les Pokémon (le reste est assombri)
+        this.start = tiles(zones.find(o => o.name === "Départ")) ?? { x: 0, y: 0, w: this.columns, h: this.lines };
+        this.area = tiles(zones.find(o => o.name === "Parc")) ?? this.start;
         const collisions = data?.layers.find(l => l.name === "Collisions" && l.type === "tilelayer")?.data ?? [];
         this.walkable = new Uint8Array(this.columns * this.lines);
         this.free = []; // cases libres, pour tirer un endroit au hasard
@@ -346,12 +351,14 @@ class Pokemon {
 
 /**
  * Parc dans <container> ; <component> (Park.razor) est prévenu d'un clic sur un Pokémon. Options : canMove (le
- * propriétaire peut soulever ses Pokémon et les poser ailleurs ; rien n'est enregistré).
+ * propriétaire peut soulever ses Pokémon et les poser ailleurs ; rien n'est enregistré), size (taille du parc, de 1 à 4 :
+ * sa carte).
  */
 export async function create(container, component, options) {
     const canMove = options?.canMove === true;
+    const size = Math.max(1, Math.floor(Number(options?.size) || 1));
     let data = null;
-    try { data = await (await fetch(MAP_URL)).json(); }
+    try { data = await (await fetch(MAP_URL(size))).json(); }
     catch { /* carte illisible : un pré sans obstacle */ }
     const ground = new Ground(data);
     const viewW = ground.start.w * TILE, viewH = ground.start.h * TILE; // la zone « Départ » remplit la hauteur
@@ -391,10 +398,14 @@ export async function create(container, component, options) {
         spriteScale = spriteK / k;
         if (!scene) return;
         camera.setZoom(k);
-        // Limites de la vue : la carte, ou plus large qu'elle et centrée quand on a dézoomé au-delà de ses bords
+        // Limites de la vue : la zone « Parc » et un peu de forêt autour (dans la carte), ou plus large et centrée quand la
+        // vue l'est (la forêt continue jusqu'au bord de la carte)
         const vw = camera.width / k, vh = camera.height / k;
-        const bw = Math.max(ground.width, vw), bh = Math.max(ground.height, vh);
-        camera.setBounds((ground.width - bw) / 2, (ground.height - bh) / 2, bw, bh);
+        const bx = Math.max(0, (ground.area.x - VIEW_MARGIN) * TILE), by = Math.max(0, (ground.area.y - VIEW_MARGIN) * TILE);
+        const bw = Math.min(ground.width, (ground.area.x + ground.area.w + VIEW_MARGIN) * TILE) - bx;
+        const bh = Math.min(ground.height, (ground.area.y + ground.area.h + VIEW_MARGIN) * TILE) - by;
+        const cw = Math.max(bw, vw), ch = Math.max(bh, vh);
+        camera.setBounds(bx + (bw - cw) / 2, by + (bh - ch) / 2, cw, ch);
         for (const p of pokemon) for (const text of p.texts) text.setResolution(k);
         labelText.setResolution(k);
         zoomOutButton.disabled = k <= 1;
@@ -490,7 +501,7 @@ export async function create(container, component, options) {
         },
     });
 
-    // ---------- Décor : carte, brouillard hors de la zone « Départ », nuit ----------
+    // ---------- Décor : carte, brouillard hors de la zone « Parc », nuit ----------
     function build(s) {
         scene = s;
         camera = s.cameras.main;
@@ -519,12 +530,15 @@ export async function create(container, component, options) {
             }
         }
         const fog = s.add.graphics().fillStyle(FOG.color, FOG.alpha);
-        const { x, y, w, h } = ground.area;
-        const [zx, zy, zw, zh] = [x * TILE, y * TILE, w * TILE, h * TILE];
-        fog.fillRect(0, 0, ground.width, zy);
-        fog.fillRect(0, zy + zh, ground.width, ground.height - zy - zh);
-        fog.fillRect(0, zy, zx, zh);
-        fog.fillRect(zx + zw, zy, ground.width - zx - zw, zh);
+        const fill = (x, y, w, h) => { if (w > 0 && h > 0) fog.fillRect(x, y, w, h); }; // rien hors de la carte (taille 4 : toute la carte)
+        for (let step = 1; step <= FOG.steps; step++) { // marches superposées : plus sombre à chaque case
+            const { x, y, w, h } = ground.area;
+            const [zx, zy, zw, zh] = [(x - step) * TILE, (y - step) * TILE, (w + 2 * step) * TILE, (h + 2 * step) * TILE];
+            fill(0, 0, ground.width, zy);
+            fill(0, zy + zh, ground.width, ground.height - zy - zh);
+            fill(0, zy, zx, zh);
+            fill(zx + zw, zy, ground.width - zx - zw, zh);
+        }
         above.draw(fog);
         fog.destroy();
         night = s.add.rectangle(0, 0, ground.width, ground.height, NIGHT.color).setOrigin(0).setDepth(4).setVisible(false);
@@ -905,10 +919,11 @@ export async function create(container, component, options) {
 
     /**
      * Ombre au sol d'une planche, dessinée une fois (adoucie) en pixels d'écran : pas d'ellipse recalculée à chaque image.
-     * Refaite si la taille des sprites change (fenêtre redimensionnée).
+     * Refaite si la taille des sprites change (fenêtre redimensionnée), ou dans un nouveau parc (planches gardées par le
+     * module, textures propres à chaque jeu de Phaser : sans, la texture « manquante » de Phaser, un carré noir).
      */
     function shadowOf(anim) {
-        if (anim.shadowK !== spriteK) {
+        if (anim.shadowK !== spriteK || !scene.textures.exists(anim.shadow)) {
             const w = Math.max(2, Math.round(Math.min(anim.fw, 32) * spriteK * 0.56)), h = 6 * spriteK;
             anim.shadow = `ombre:${w}x${h}`;
             anim.shadowK = spriteK;
@@ -1006,19 +1021,30 @@ export async function create(container, component, options) {
     window.addEventListener("resize", resize);
     resize();
 
-    const removeFromScene = p => { if (held?.p === p) held = null; p.sprite.destroy(); p.shadow.destroy(); for (const text of p.texts) text.destroy(); };
+    const removeFromScene = p => {
+        if (held?.p === p) held = null;
+        if (drag?.target === p) drag.target = null;
+        if (hovered === p) hovered = null;
+        p.sprite.destroy(); p.shadow.destroy(); for (const text of p.texts) text.destroy();
+    };
+    let lists = 0; // numéro de la dernière liste reçue (setPokemon)
 
     return {
         /** Pokémon du parc : ceux qui restent gardent leur place, les nouveaux arrivent à un endroit libre. */
         async setPokemon(list) {
+            const call = ++lists;
             const kept = pokemon.filter(p => list.some(i => i.id === p.id));
             for (const p of pokemon) if (!kept.includes(p)) removeFromScene(p);
+            // Retirés de la liste dessinée avant d'attendre les planches des nouveaux : dessiner un Pokémon détruit lève une
+            // erreur qui arrête la boucle de Phaser (parc figé, vu sous Firefox en retirant et ajoutant d'un coup).
+            pokemon = kept;
             const arriving = list.filter(i => !kept.some(p => p.id === i.id));
             const loaded = await Promise.all(arriving.map(async info => {
                 try { return { info, anims: await loadSheets(info.spriteFolder) }; }
                 catch { return null; } // sprites absents (images pas récupérées) : ce Pokémon n'apparaît pas
             }));
-            const placed = [...kept];
+            if (call !== lists) return; // une liste plus récente est arrivée pendant le chargement : c'est elle qui compte
+            const placed = [...pokemon];
             for (const item of loaded.filter(l => l)) {
                 let spot = ground.randomSpot();
                 for (let tries = 0; tries < 30 && !placed.every(o => distance(o, spot) > 27); tries++) spot = ground.randomSpot();
@@ -1053,12 +1079,13 @@ export async function create(container, component, options) {
             draw(nightLevel());
             return true;
         },
-        /** Pour les essais : la caméra (zone affichée, zoom) et la zone « Départ », en pixels de la carte. */
+        /** Pour les essais : la caméra (zone affichée, zoom), les zones « Départ » et « Parc » (en cases), en pixels de la carte. */
         view() {
             // Calculée ici : camera.worldView n'est mise à jour qu'au dessin (rare quand l'onglet est caché)
             const width = camera.width / k, height = camera.height / k;
             const x = camera.scrollX + (camera.width - width) / 2, y = camera.scrollY + (camera.height - height) / 2;
-            return { x, y, width, height, zoom: k, spriteK, start: ground.start, map: { width: ground.width, height: ground.height } };
+            return { x, y, width, height, zoom: k, spriteK, start: ground.start, area: ground.area, size,
+                map: { width: ground.width, height: ground.height } };
         },
         dispose() {
             observer.disconnect();

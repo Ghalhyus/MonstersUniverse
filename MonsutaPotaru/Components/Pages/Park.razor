@@ -8,6 +8,8 @@
 @using MonsutaPotaru.Data
 @using MonsutaPotaru.Services
 @inject ParkService Parks
+@inject InventoryService InventoryStore
+@inject WalletState Wallet
 @inject BankService BankStore
 @inject PokemonInfo Info
 @inject IJSRuntime JS
@@ -15,9 +17,9 @@
 
 <PageTitle>@(!Visitor ? "Parc" : player is null ? "Joueur introuvable" : $"Parc de {player.Pseudo}")</PageTitle>
 
-@* Jusqu'à 30 Pokémon de la collection se promènent sur une carte faite dans Tiled (wwwroot/parc/parc-1.json,
-   outils/carte-parc.py) : l'affichage (Phaser) et leur comportement sont dans wwwroot/js/parc.js, la page ne gère que
-   la liste et les fenêtres.
+@* De 25 à 100 Pokémon de la collection (selon les agrandissements achetés) se promènent sur une carte faite dans Tiled
+   (wwwroot/parc/parc-1-{taille}.json, outils/generer-parc.py et carte-parc.py) : l'affichage (Phaser) et leur comportement
+   sont dans wwwroot/js/parc.js, la page ne gère que la liste, l'agrandissement et les fenêtres.
    Parc d'un autre joueur (Multijoueurs, /joueurs/{pseudo}/parc) : on le regarde, sans choisir ni retirer de Pokémon. *@
 
 @if (Visitor && player is null)
@@ -33,7 +35,7 @@ else
 {
     <PlayerHeader Player="player" Current="PublicPages.Park" />
 }
-<PageHeader Title="Parc" Count="@($"{members.Count} / {ParkService.Capacity}")" Small="Visitor" Icon="@(Visitor ? null : "bi-tree-nav-menu")">
+<PageHeader Title="Parc" Count="@($"{members.Count} / {Capacity}")" Small="Visitor" Icon="@(Visitor ? null : "bi-tree-nav-menu")">
     <Description>
         @(Visitor ? $"Les Pokémon de {player!.Pseudo} vivent ici" : "Tes Pokémon vivent ici") : ils se promènent, se reposent,
         rendent visite à leur famille et dorment quand ils sont fatigués (plus tôt le soir). Clique sur l'un d'eux pour voir sa fiche,
@@ -45,6 +47,10 @@ else
             <button type="button" class="btn btn-outline-danger" @onclick="() => confirmClear = true"
                     disabled="@(busy || members.Count == 0)">Vider le parc</button>
             <button type="button" class="btn btn-primary" @onclick="OpenChooser">Choisir les Pokémon</button>
+            @if (expansions < ParkService.MaxExpansions)
+            {
+                <button type="button" class="btn btn-outline-success" @onclick="OpenExpand" disabled="@busy">Agrandir le parc</button>
+            }
         }
     </Actions>
 </PageHeader>
@@ -78,7 +84,7 @@ else
     <div class="dialog-backdrop" @onclick="CloseChooser"></div>
     <div class="dialog-panel card" role="dialog" aria-modal="true" aria-label="Pokémon du parc">
         <div class="card-body">
-            <h5>Pokémon du parc <small class="text-muted">· @chosen.Count / @ParkService.Capacity</small></h5>
+            <h5>Pokémon du parc <small class="text-muted">· @chosen.Count / @Capacity</small></h5>
             <p class="small text-muted">
                 Tes Pokémon du stockage interne et de tes sauvegardes stockées (💾) : clique pour en ajouter ou en retirer.
                 Ceux dont les sprites n'existent pas encore (🔒) ne peuvent pas venir.
@@ -153,6 +159,40 @@ else
     </div>
 }
 
+@* ---------- Agrandissement du parc ---------- *@
+@if (expandBalance is { } balance && !Visitor)
+{
+    var enough = balance >= ParkService.ExpansionPrice;
+    <div class="dialog-backdrop" @onclick="() => expandBalance = null"></div>
+    <div class="dialog-panel card" role="dialog" aria-modal="true" aria-label="Agrandir le parc">
+        <div class="card-body">
+            <h5>Agrandir le parc ?</h5>
+            <p>
+                La forêt recule et dévoile une nouvelle partie du parc : il accueille alors
+                <strong>@ParkService.CapacityOf(expansions + 1) Pokémon</strong> au lieu de @Capacity
+                (agrandissement @(expansions + 1) sur @ParkService.MaxExpansions).
+            </p>
+            <p class="mb-0">
+                Prix : <strong>@InventoryService.FormatMoney(ParkService.ExpansionPrice)</strong>, payé avec ton porte-monnaie
+                (@InventoryService.FormatMoney(balance)).
+                @if (!enough)
+                {
+                    <span class="text-danger">
+                        Il manque @InventoryService.FormatMoney(ParkService.ExpansionPrice - balance) : retire de l'argent d'une
+                        sauvegarde depuis <a href="inventaire">« Inventaire »</a>.
+                    </span>
+                }
+            </p>
+            <div class="d-flex justify-content-end gap-2 mt-3">
+                <button type="button" class="btn btn-outline-secondary" @onclick="() => expandBalance = null">Annuler</button>
+                <button type="button" class="btn btn-success" @onclick="Expand" disabled="@(busy || !enough)">
+                    Payer @InventoryService.FormatMoney(ParkService.ExpansionPrice)
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
 @* ---------- Fiche du Pokémon cliqué ---------- *@
 @if (selected is not null && selectedView is not null)
 {
@@ -184,6 +224,9 @@ else
 
     private string userId = "";
     private List<ParkPokemon> members = [];
+    private int expansions; // agrandissements achetés : la taille du parc (sa carte) et sa capacité
+    private int Capacity => ParkService.CapacityOf(expansions);
+    private long? expandBalance; // fenêtre « Agrandir le parc » ouverte : le solde du porte-monnaie
     private bool loaded;
     private bool busy;
     private string? message;
@@ -221,6 +264,7 @@ else
         else
             userId = (await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
         members = await Parks.ListAsync(userId);
+        expansions = await Parks.GetExpansionsAsync(userId);
         loaded = true;
     }
 
@@ -232,9 +276,46 @@ else
         engineStarted = true;
         selfRef = DotNetObjectReference.Create(this);
         module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/parc.js");
+        await StartEngine();
+    }
+
+    /// <summary>Démarre le parc dans le navigateur, avec la carte de sa taille (redémarré après un agrandissement).</summary>
+    private async Task StartEngine()
+    {
+        if (engine is not null)
+        {
+            await engine.InvokeVoidAsync("dispose");
+            await engine.DisposeAsync();
+            engine = null;
+        }
         // Seul le propriétaire peut déplacer ses Pokémon (dans son navigateur seulement : rien n'est enregistré)
-        engine = await module.InvokeAsync<IJSObjectReference>("create", stage, selfRef, new { canMove = !Visitor });
+        engine = await module!.InvokeAsync<IJSObjectReference>("create", stage, selfRef, new { canMove = !Visitor, size = expansions + 1 });
         await engine.InvokeVoidAsync("setPokemon", members);
+    }
+
+    private async Task OpenExpand()
+    {
+        if (Visitor)
+            return;
+        expandBalance = await InventoryStore.GetBalanceAsync(userId);
+    }
+
+    private async Task Expand()
+    {
+        if (Visitor)
+            return;
+        busy = true;
+        var result = await Parks.ExpandAsync(userId);
+        expandBalance = null;
+        expansions = result.Expansions == 0 ? expansions : result.Expansions;
+        Show(result.Message, !result.Ok);
+        if (result.Ok)
+        {
+            await Wallet.RefreshAsync(userId); // solde du menu
+            if (module is not null)
+                await StartEngine();
+        }
+        busy = false;
     }
 
     /// <summary>Clic sur un Pokémon du parc (il s'est tourné vers toi) : sa fiche, seulement s'il est dans ce parc.</summary>
@@ -312,8 +393,9 @@ else
             return;
         if (!c.HasSprites)
             chooserMessage = $"{c.SpeciesName} n'a pas encore de sprites Donjon Mystère : il ne peut pas venir au parc pour l'instant.";
-        else if (chosen.Count >= ParkService.Capacity)
-            chooserMessage = $"Le parc est plein ({ParkService.Capacity} Pokémon) : retires-en un avant d'en ajouter un autre.";
+        else if (chosen.Count >= Capacity && !c.InPark) // un parc déjà trop plein garde ses Pokémon : on peut les recocher
+            chooserMessage = $"Le parc est plein ({Capacity} Pokémon) : retires-en un avant d'en ajouter un autre" +
+                             (expansions < ParkService.MaxExpansions ? ", ou agrandis-le." : ".");
         else
             chosen.Add(c.Id);
     }

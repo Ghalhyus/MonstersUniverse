@@ -19,6 +19,8 @@ public enum WalletOperationKind
     WithdrawItemsFromSave = 3,
     /// <summary>Objets de l'inventaire déposés dans le sac d'une sauvegarde stockée (montant nul, liste dans les détails).</summary>
     DepositItemsToSave = 4,
+    /// <summary>Agrandissement du « Parc », payé avec le porte-monnaie.</summary>
+    ExpandPark = 5,
 }
 
 /// <summary>Ligne du journal des opérations de l'inventaire : argent et objets (jamais modifiée ni supprimée).</summary>

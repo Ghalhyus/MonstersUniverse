@@ -10,11 +10,13 @@ Carte du « Parc » : prend une carte faite dans Tiled avec le pack Cute Fantasy
 Ce que la carte doit avoir (README, « Parc ») : vue de dessus (orthogonale), tuiles de 16 px, taille fixe (pas
 « infinie »), jeux de tuiles incorporés à la carte, calques de tuiles « Sol », « Décors », « Devant » (feuillages,
 au-dessus de leur tronc) et « Collisions » (une tuile quelconque = case où l'on ne passe pas), et un calque d'objets « Zones » avec un
-rectangle « Départ » : la partie de la carte où vivent les Pokémon (le reste est assombri, à débloquer plus tard).
+rectangle « Départ » (vue de départ : sa hauteur remplit l'écran) et un rectangle « Parc » qui le contient : la partie de la
+carte où vivent les Pokémon (le reste est assombri). Sans « Parc », c'est « Départ ».
 
 Lancement (Python 3 seul) :
-  python outils/carte-parc.py <carte .tmx ou .tmj> [--nom parc-1] [--tiled <chemin de tiled.exe>]
-Un .tmx est d'abord exporté en JSON par Tiled lui-même (en ligne de commande).
+  python outils/carte-parc.py <carte .tmx ou .tmj> [--nom parc-1-1] [--tiled <chemin de tiled.exe>]
+Un .tmx est d'abord exporté en JSON par Tiled lui-même (en ligne de commande). Nom par défaut : celui du fichier en
+minuscules, « _ » remplacés par « - » (Parc_1-2.tmx → parc-1-2.json : parc n° 1, taille 2).
 """
 import json
 import os
@@ -30,12 +32,13 @@ def option(name, default):
         del args[i:i + 2]
         return value
     return default
-NAME = option("--nom", "parc-1")
+NAME = option("--nom", None)
 TILED = option("--tiled", shutil.which("tiled") or r"C:\Program Files\Tiled\tiled.exe")
 if len(args) != 1:
-    sys.exit("Usage : python outils/carte-parc.py <carte .tmx ou .tmj> [--nom parc-1] [--tiled <chemin de tiled.exe>]")
+    sys.exit("Usage : python outils/carte-parc.py <carte .tmx ou .tmj> [--nom parc-1-1] [--tiled <chemin de tiled.exe>]")
 
 SOURCE = os.path.abspath(args[0])
+NAME = NAME or os.path.splitext(os.path.basename(SOURCE))[0].lower().replace("_", "-")
 WWWROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "MonsutaPotaru", "wwwroot")
 MAP_OUT = os.path.join(WWWROOT, "parc", NAME + ".json")
 TILES_OUT = os.path.join(WWWROOT, "images", "parc", "tuiles")
@@ -78,6 +81,11 @@ zones = layers.get("Zones", {}).get("objects", [])
 start = next((o for o in zones if o.get("name") == "Départ"), None)
 if start is None:
     errors.append("rectangle « Départ » absent (calque d'objets « Zones »)")
+park = next((o for o in zones if o.get("name") == "Parc"), start)
+if start is not None and park is not None and not (
+        park["x"] <= start["x"] and park["y"] <= start["y"] and start["x"] + start["width"] <= park["x"] + park["width"]
+        and start["y"] + start["height"] <= park["y"] + park["height"]):
+    errors.append("le rectangle « Parc » doit contenir « Départ »")
 for tileset in data.get("tilesets", []):
     if "source" in tileset:
         errors.append(f"jeu de tuiles « {tileset['source']} » enregistré à part : l'incorporer à la carte "
@@ -106,5 +114,5 @@ with open(MAP_OUT, "w", encoding="utf-8", newline="\n") as f:
     json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
     f.write("\n")
 print(f"Carte écrite : {os.path.normpath(MAP_OUT)} ({data['width']} × {data['height']} tuiles, départ "
-      f"{int(start['width']) // 16} × {int(start['height']) // 16})")
+      f"{int(start['width']) // 16} × {int(start['height']) // 16}, parc {int(park['width']) // 16} × {int(park['height']) // 16})")
 print(f"{len(copied)} planches copiées dans {os.path.normpath(TILES_OUT)} (à envoyer sur le serveur : deploy\\fond-parc.cmd)")
